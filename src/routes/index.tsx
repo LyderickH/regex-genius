@@ -131,6 +131,81 @@ function Index() {
     [runSynth],
   );
 
+  const snapshot = useCallback(
+    (rs: string[], cols: OutputColumn[]): Snap => ({
+      rows: rs.slice(),
+      columns: cols.map((c) => ({ ...c, user: c.user.slice(), derived: c.derived.slice() })),
+      key: `${rs.join("\u0000")}||${cols
+        .map((c) => `${c.id}:${c.name}:${c.user.join("\u0001")}`)
+        .join("\u0002")}`,
+    }),
+    [],
+  );
+
+  useEffect(() => {
+    const snap = snapshot(rows, columns);
+    if (restoring.current) {
+      restoring.current = false;
+      lastSnap.current = snap;
+      return;
+    }
+    if (lastSnap.current && lastSnap.current.key !== snap.key) {
+      past.current.push(lastSnap.current);
+      if (past.current.length > 120) past.current.shift();
+      futureSnaps.current = [];
+    }
+    lastSnap.current = snap;
+  }, [rows, columns, snapshot]);
+
+  /** Restaure un état du tableau et relance la déduction. */
+  const restore = useCallback(
+    (snap: Snap) => {
+      restoring.current = true;
+      setRows(snap.rows);
+      setColumns(snap.columns);
+      setSel(null);
+      snap.columns.forEach((c) => {
+        if (c.user.some((v) => v != null)) runSynth(c.id, snap.rows, c.user);
+      });
+    },
+    [runSynth],
+  );
+
+  const undo = useCallback(() => {
+    const prev = past.current.pop();
+    if (!prev) {
+      toast("Rien à annuler");
+      return;
+    }
+    if (lastSnap.current) futureSnaps.current.push(lastSnap.current);
+    restore(prev);
+    toast.success("Annulé");
+  }, [restore]);
+
+  const redo = useCallback(() => {
+    const next = futureSnaps.current.pop();
+    if (!next) return;
+    if (lastSnap.current) past.current.push(lastSnap.current);
+    restore(next);
+    toast.success("Rétabli");
+  }, [restore]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (k === "y" || (k === "z" && e.shiftKey)) {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
+
   const handleChangeCell = (colId: string, row: number, value: string) => {
     setColumns((cols) =>
       cols.map((c) => {
