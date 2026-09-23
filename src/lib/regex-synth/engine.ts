@@ -102,7 +102,8 @@ function runsPattern(s: string, exact: boolean): string {
 
 function applyTransform(value: string, t: Transform): string {
   let v = value;
-  if (t.strip === "spaces") v = v.replace(/[\s\u00a0\u202f]/g, "");
+  if (t.strip === "trim") v = v.replace(/^[\s\u00a0\u202f]+|[\s\u00a0\u202f]+$/g, "");
+  else if (t.strip === "spaces") v = v.replace(/[\s\u00a0\u202f]/g, "");
   else if (t.strip === "digits") v = v.replace(/[^0-9]/g, "");
   if (t.dec === "dot") v = v.replace(/,/g, ".");
   else if (t.dec === "comma") v = v.replace(/\./g, ",");
