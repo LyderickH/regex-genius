@@ -767,7 +767,7 @@ function guessValues(
     ctxR.push(ngrams(ex.input.slice(pos + ex.output.length, pos + ex.output.length + 8)));
   }
 
-  const out: Example[] = [];
+  const out: { index: number; input: string; options: string[] }[] = [];
   for (const i of suspect) {
     const input = inputs[i] ?? "";
     if (!input) continue;
