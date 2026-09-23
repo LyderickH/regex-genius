@@ -157,13 +157,65 @@ function Index() {
 
   const loadSample = () => {
     const source = SAMPLE.split("\n");
-    const col = emptyColumn("Résultat 1", source.length);
-    col.user = ["1250,00", "980,50", null, null, null];
+    const fill = (vals: (string | null)[]) =>
+      source.map((_, i) => vals[i] ?? null) as (string | null)[];
+    const debit = emptyColumn("Débit", source.length);
+    debit.user = fill(["1250,00", "980,50"]);
+    const piece = emptyColumn("N° de pièce", source.length);
+    piece.user = fill(["FA-2024-0001", "FA/2024/87"]);
     setRows(source);
-    setColumns([col]);
-    setActiveId(col.id);
-    runSynth(col.id, source, col.user);
+    setColumns([debit, piece]);
+    setActiveId(debit.id);
+    runSynth(debit.id, source, debit.user);
+    runSynth(piece.id, source, piece.user);
   };
+
+  /** Colle un bloc Excel/TSV : soit tout le tableau, soit à partir de la cellule active. */
+  const pasteBlock = (text: string) => {
+    const matrix = parsePastedText(text);
+    if (!matrix.length) return;
+    const f = focus.current;
+    if (rows.length === 0 || !f) {
+      loadMatrix(matrix);
+      return;
+    }
+    const startCol = columns.findIndex((c) => c.id === f.colId);
+    if (startCol < 0) {
+      loadMatrix(matrix);
+      return;
+    }
+    const width = Math.max(...matrix.map((r) => r.length));
+    setColumns((cols) => {
+      const next = cols.map((c) => ({ ...c, user: c.user.slice() }));
+      while (next.length < startCol + width)
+        next.push(emptyColumn(`Résultat ${next.length + 1}`, rows.length));
+      matrix.forEach((r, ri) => {
+        r.forEach((v, ci) => {
+          const col = next[startCol + ci];
+          const row = f.row + ri;
+          if (!col || row >= rows.length) return;
+          col.user[row] = v === "" ? null : String(v);
+        });
+      });
+      for (let c = startCol; c < startCol + width && c < next.length; c++) {
+        const col = next[c]!;
+        col.pending = true;
+        runSynth(col.id, rows, col.user);
+      }
+      return next;
+    });
+    toast.success(`${matrix.length} valeurs collées`);
+  };
+
+  const copyTable = async () => {
+    if (!rows.length) return;
+    const header = ["Source", ...columns.map((c) => c.name)];
+    const matrix = rows.map((src, i) => [src, ...columns.map((c) => cellValue(c, i))]);
+    const ok = await copyToClipboard(toTsv(header, matrix));
+    if (ok) toast.success("Tableau copié — collez-le dans Excel");
+    else toast.error("Copie impossible");
+  };
+
 
   const addColumn = () => {
     const col = emptyColumn(`Résultat ${columns.length + 1}`, rows.length);
