@@ -236,9 +236,14 @@ export async function runSynthesisPipeline(
     };
   }
 
+  const failureReason =
+    lastValidation?.errors?.[0] ||
+    attempts[attempts.length - 1]?.error ||
+    "Le modèle n'a pas produit de motif conforme.";
+
   return {
     origin: "none",
-    error: "Aucune regex fiable n'a pu être déduite automatiquement après 3 tentatives.",
+    error: `Aucune regex fiable n'a pu être validée après 3 tentatives (${failureReason}).`,
     llmResult: {
       success: false,
       candidate: lastCandidate,

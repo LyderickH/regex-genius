@@ -12,6 +12,7 @@ RÈGLES FONDAMENTALES :
 1. Cherche une règle générale qui explique la structure des exemples plutôt que de mémoriser individuellement les valeurs.
 2. Si une extraction précise est demandée, utilise des parenthèses de capture () autour de la sous-chaîne cible (Groupe 1).
 3. Utilise une syntaxe purement compatible JavaScript RegExp (par exemple \\d, \\w, [A-Z], etc.).
+   Dans la chaîne JSON "pattern", double les barres obliques inverses si nécessaire (ex: "\\\\d+" ou classes comme "[0-9]+").
 4. N'entoure JAMAIS le champ "pattern" de délimiteurs /.../. Fournis uniquement l'intérieur de la regex.
 5. Respecte TOUS les exemples positifs sans exception.
 6. Rejette TOUS les exemples négatifs.
@@ -114,50 +115,90 @@ Réponds UNIQUEMENT avec l'objet JSON corrigé (aucun Markdown).`;
 }
 
 /**
- * Parse strictement la réponse JSON du LLM, en gérant le cas où le modèle
- * encapsule dans des blocs de code markdown ```json ... ```.
+ * Parse avec robustesse la réponse JSON du LLM, en gérant le cas où le modèle
+ * omet d'échapper les barres obliques inverses regex (\d, \w...), ajoute des balises
+ * markdown, ou répond sous une forme textuelle.
  */
 export function parseCandidateJSON(raw: string): RegexCandidate | null {
   if (!raw || typeof raw !== "string") return null;
 
-  // Nettoyage des balises markdown éventuelles
-  let cleaned = raw.trim();
-  if (cleaned.startsWith("```")) {
-    cleaned = cleaned.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  let text = raw.trim();
+
+  // 1. Nettoyage des balises markdown éventuelles
+  if (text.includes("```")) {
+    text = text.replace(/```(?:json)?([\s\S]*?)```/gi, "$1").trim();
   }
 
-  // Trouver le premier { et le dernier }
-  const firstBrace = cleaned.indexOf("{");
-  const lastBrace = cleaned.lastIndexOf("}");
-  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-    return null;
-  }
-
-  cleaned = cleaned.slice(firstBrace, lastBrace + 1);
-
-  try {
-    const parsed = JSON.parse(cleaned);
-    if (!parsed || typeof parsed !== "object") return null;
-
-    let pattern = parsed.pattern;
-    if (typeof pattern !== "string" || pattern.length === 0) return null;
-
-    // Supprimer les délimiteurs /.../ si le modèle les a inclus par erreur
-    if (pattern.startsWith("/") && pattern.endsWith("/")) {
-      pattern = pattern.slice(1, -1);
+  const sanitizeCandidate = (
+    pattern: string,
+    flags = "",
+    explanation = "Motif synthétisé",
+    confidence = 0.8,
+  ): RegexCandidate | null => {
+    let pat = pattern.trim();
+    if (!pat) return null;
+    // Supprimer les délimiteurs /.../ si le modèle les a inclus
+    if (pat.startsWith("/") && pat.length > 2) {
+      const lastSlash = pat.lastIndexOf("/");
+      if (lastSlash > 0) {
+        flags = flags || pat.slice(lastSlash + 1);
+        pat = pat.slice(1, lastSlash);
+      }
     }
-
-    const flags = typeof parsed.flags === "string" ? parsed.flags.replace(/[^gimsuy]/g, "") : "";
-    const explanation = typeof parsed.explanation === "string" ? parsed.explanation : "Motif synthétisé";
-    const confidence = typeof parsed.confidence === "number" ? Math.max(0, Math.min(1, parsed.confidence)) : 0.8;
-
+    const cleanFlags = flags.replace(/[^gimsuy]/g, "");
     return {
-      pattern,
-      flags,
+      pattern: pat,
+      flags: cleanFlags,
       explanation,
-      confidence,
+      confidence: Math.max(0, Math.min(1, confidence)),
     };
-  } catch {
-    return null;
+  };
+
+  // 2. Extraction du bloc JSON {...}
+  const firstBrace = text.indexOf("{");
+  const lastBrace = text.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    const jsonBlock = text.slice(firstBrace, lastBrace + 1);
+
+    // Essai 2.1: JSON.parse direct
+    try {
+      const parsed = JSON.parse(jsonBlock);
+      if (parsed && typeof parsed.pattern === "string") {
+        const res = sanitizeCandidate(parsed.pattern, parsed.flags, parsed.explanation, parsed.confidence);
+        if (res) return res;
+      }
+    } catch {}
+
+    // Essai 2.2: Réparation des barres obliques inverses non échappées dans le JSON (\d, \s, \w, etc.)
+    try {
+      const sanitized = jsonBlock.replace(/(?<!\\)\\(?!["\\/bfnrtu])/g, "\\\\");
+      const parsed = JSON.parse(sanitized);
+      if (parsed && typeof parsed.pattern === "string") {
+        const res = sanitizeCandidate(parsed.pattern, parsed.flags, parsed.explanation, parsed.confidence);
+        if (res) return res;
+      }
+    } catch {}
   }
+
+  // 3. Extraction par RegExp si le JSON est malformé mais contient "pattern": "..."
+  const patMatch = text.match(/["']?pattern["']?\s*:\s*["']([^"'\r\n]+)["']/i);
+  if (patMatch && patMatch[1]) {
+    const flagsMatch = text.match(/["']?flags["']?\s*:\s*["']([gimsuy]*)["']/i);
+    const explMatch = text.match(/["']?explanation["']?\s*:\s*["']([^"'\r\n]+)["']/i);
+    const res = sanitizeCandidate(
+      patMatch[1],
+      flagsMatch ? flagsMatch[1] : "",
+      explMatch ? explMatch[1] : "Motif synthétisé",
+    );
+    if (res) return res;
+  }
+
+  // 4. Extraction directe si le modèle a renvoyé un motif brut
+  const rawPatMatch = text.match(/(?:pattern|regex)\s*[:=]\s*[`"']?([^\r\n`"']+)[`"']?/i);
+  if (rawPatMatch && rawPatMatch[1]) {
+    const res = sanitizeCandidate(rawPatMatch[1]);
+    if (res) return res;
+  }
+
+  return null;
 }

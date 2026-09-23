@@ -138,10 +138,23 @@ describe("Parsing JSON strict et boucle de retroaction", () => {
     expect(parsed?.flags).toBe("i");
   });
 
+  it("parse avec succes des regex JSON ayant des barres obliques non doublees (ex: \\d, \\w)", () => {
+    // Un LLM renvoie souvent une chaîne JSON avec \d au lieu de \\d
+    const rawWithSingleBackslash = '{\n  "pattern": "(\\d{2}/\\d{2}/\\d{4})",\n  "flags": "",\n  "explanation": "Date"\n}';
+    const parsed = parseCandidateJSON(rawWithSingleBackslash);
+    expect(parsed?.pattern).toBe("(\\d{2}/\\d{2}/\\d{4})");
+  });
+
   it("nettoie les balises markdown ```json et /.../", () => {
     const raw = "```json\n{\n  \"pattern\": \"/([A-Z]{3})/\",\n  \"flags\": \"\",\n  \"explanation\": \"code\"\n}\n```";
     const parsed = parseCandidateJSON(raw);
     expect(parsed?.pattern).toBe("([A-Z]{3})");
+  });
+
+  it("recupere le motif meme si le LLM a repondu avec un format de texte libre", () => {
+    const rawText = "Voici la regex demandée :\n\"pattern\": \"([a-z]+@[a-z]+\\.[a-z]{2,})\"";
+    const parsed = parseCandidateJSON(rawText);
+    expect(parsed?.pattern).toBe("([a-z]+@[a-z]+\\.[a-z]{2,})");
   });
 
   it("construit un prompt de correction contenant les contre-exemples precis", () => {
