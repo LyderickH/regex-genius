@@ -35,10 +35,12 @@ export function buildInitialPrompt(
   positiveExamples: ExamplePair[],
   negativeExamples: NegativeExample[] = [],
   contextName?: string,
+  unlabeledInputs: string[] = [],
 ): string {
   // Limiter à max 12 exemples représentatifs pour économiser le contexte
   const sampledPositives = positiveExamples.slice(0, 12);
   const sampledNegatives = negativeExamples.slice(0, 8);
+  const sampledUnlabeled = unlabeledInputs.slice(0, 6);
 
   let prompt = `CONTEXTE DE SYNTHÈSE${contextName ? ` (Colonne: ${contextName})` : ""} :\n\n`;
 
@@ -51,6 +53,13 @@ export function buildInitialPrompt(
     prompt += `\nEXEMPLES NÉGATIFS (l'expression ne doit PAS correspondre à ces lignes) :\n`;
     sampledNegatives.forEach((neg, idx) => {
       prompt += `  ${idx + 1}. Entrée interdite: "${neg.input}"\n`;
+    });
+  }
+
+  if (sampledUnlabeled.length > 0) {
+    prompt += `\nAUTRES LIGNES DU FICHIER (la regex doit idéalement être assez générale pour extraire la même entité sur ces lignes) :\n`;
+    sampledUnlabeled.forEach((line, idx) => {
+      prompt += `  ${idx + 1}. Ligne: "${line}"\n`;
     });
   }
 

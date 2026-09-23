@@ -192,6 +192,7 @@ function Index() {
       try {
         const outcome = await runSynthesisPipeline(rowsRef.current, col.user, {
           colName: col.name,
+          forceLLM: true,
         });
 
         if (outcome.origin === "llm") {

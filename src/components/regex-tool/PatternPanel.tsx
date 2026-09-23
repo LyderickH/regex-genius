@@ -383,6 +383,52 @@ export function PatternPanel({
               </div>
             )}
 
+            {column.failures.length > 0 && onTriggerLLM && (
+              <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-amber-400">
+                    <Sparkles className="size-4" />
+                    <span>Compléter avec l'IA locale (Fallback)</span>
+                  </div>
+                  <button
+                    onClick={() => setLlmDialogOpen(true)}
+                    className="text-[10px] text-muted-foreground hover:text-foreground underline underline-offset-2"
+                  >
+                    Gérer l'IA
+                  </button>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Le motif classique n'extrait rien sur {column.failures.length} ligne{column.failures.length > 1 ? "s" : ""}.
+                  Vous pouvez solliciter le LLM local (WebGPU) pour analyser l'ensemble des lignes et déduire une regex plus générale.
+                </p>
+
+                {isLLMRunning ? (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center gap-2 text-xs text-amber-300">
+                      <RefreshCw className="size-3.5 animate-spin" />
+                      <span>{llmReport?.text || "Synthèse LLM locale en cours..."}</span>
+                    </div>
+                    {llmReport && (llmReport.status === "downloading" || llmReport.status === "loading") && (
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
+                        <div
+                          className="h-full bg-amber-500 transition-all duration-300"
+                          style={{ width: `${llmReport.progressPercent}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    onClick={onTriggerLLM}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 px-3 py-2 text-xs font-semibold transition"
+                  >
+                    <Sparkles className="size-3.5" />
+                    ✦ Résoudre les échecs avec le LLM local (privé)
+                  </button>
+                )}
+              </div>
+            )}
+
             <div>
               <div className="mb-1.5 text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
                 Lecture du motif
@@ -434,6 +480,20 @@ export function PatternPanel({
                 </button>
               </div>
               {dialect.note && <p className="mt-2 text-xs text-muted-foreground">{dialect.note}</p>}
+
+              {!isLLMRule && onTriggerLLM && column.failures.length === 0 && (
+                <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
+                  <span className="text-[11px] text-muted-foreground">Besoin d'une alternative ?</span>
+                  <button
+                    onClick={onTriggerLLM}
+                    disabled={isLLMRunning}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-400 hover:text-amber-300 transition"
+                  >
+                    <Sparkles className="size-3.5" />
+                    <span>Synthétiser avec l'IA locale</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -26,6 +26,7 @@ export interface PipelineOptions {
   colName?: string;
   maxAttempts?: number;
   onAttempt?: (step: LLMFeedbackStep) => void;
+  forceLLM?: boolean;
 }
 
 export type PipelineOutcome =
@@ -44,11 +45,12 @@ export async function runSynthesisPipeline(
   expected: (string | null)[],
   options: PipelineOptions = {},
 ): Promise<PipelineOutcome> {
-  const { colName, maxAttempts = 3, onAttempt } = options;
+  const { colName, maxAttempts = 3, onAttempt, forceLLM = false } = options;
 
-  // 1. Extraire les exemples positifs
+  // 1. Extraire les exemples positifs et les lignes non encore renseignées
   const positiveExamples: ExamplePair[] = [];
   const negativeExamples: NegativeExample[] = [];
+  const unlabeledInputs: string[] = [];
 
   for (let i = 0; i < inputs.length; i++) {
     const inp = inputs[i] ?? "";
@@ -56,11 +58,7 @@ export async function runSynthesisPipeline(
     if (exp != null && exp !== "") {
       positiveExamples.push({ input: inp, expected: exp });
     } else if (inp.trim() !== "") {
-      // Les lignes où l'utilisateur n'a rien saisi peuvent servir de candidats négatifs
-      // (si l'utilisateur a saisi au moins 2 exemples et laissé d'autres lignes vides)
-      if (negativeExamples.length < 5) {
-        negativeExamples.push({ input: inp, reason: "Ligne non concernée dans le tableau" });
-      }
+      unlabeledInputs.push(inp);
     }
   }
 
@@ -78,28 +76,35 @@ export async function runSynthesisPipeline(
     };
   }
 
-  // 2. MOTEUR ALGORITHMIQUE D'ABORD
-  const algoResult = synthesize(inputs, expected);
+  // 2. MOTEUR ALGORITHMIQUE D'ABORD (sauf si forceLLM est expressément demandé)
+  let partialAlgoResult: SynthResult | null = null;
+  if (!forceLLM) {
+    const algoResult = synthesize(inputs, expected);
 
-  // Vérifier si le moteur algorithmique a expliqué 100% des exemples positifs
-  let algoExplainsAll = false;
-  if (algoResult.rule) {
-    algoExplainsAll = positiveExamples.every((ex) => {
-      const idx = inputs.findIndex((inp) => inp === ex.input);
-      if (idx < 0) return true;
-      return algoResult.values[idx] === ex.expected;
-    });
+    // Vérifier si le moteur algorithmique a expliqué 100% des exemples positifs
+    let algoExplainsAll = false;
+    if (algoResult.rule) {
+      algoExplainsAll = positiveExamples.every((ex) => {
+        const idx = inputs.findIndex((inp) => inp === ex.input);
+        if (idx < 0) return true;
+        return algoResult.values[idx] === ex.expected;
+      });
+    }
+
+    if (algoResult.rule && algoExplainsAll) {
+      // Si le résultat est parfait (0 échec sur toutes les lignes du fichier)
+      if (algoResult.failures.length === 0) {
+        return {
+          origin: "algorithmic",
+          result: algoResult,
+        };
+      }
+      // Si la règle est partielle (ex: 8/10), la garder en réserve comme fallback
+      partialAlgoResult = algoResult;
+    }
   }
 
-  if (algoResult.rule && algoExplainsAll) {
-    // Succès algorithmique parfait : AUCUN appel au LLM, performance instantanée
-    return {
-      origin: "algorithmic",
-      result: algoResult,
-    };
-  }
-
-  // 3. FALLBACK LLM LOCAL (si l'algorithme n'a pas réussi à couvrir tous les exemples)
+  // 3. FALLBACK LLM LOCAL (si l'algorithme n'a pas réussi ou est insuffisant)
   const attempts: LLMFeedbackStep[] = [];
   const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
     { role: "system", content: SYSTEM_PROMPT },
@@ -112,7 +117,7 @@ export async function runSynthesisPipeline(
     // Préparer le prompt
     let userPrompt: string;
     if (attempt === 1) {
-      userPrompt = buildInitialPrompt(positiveExamples, negativeExamples, colName);
+      userPrompt = buildInitialPrompt(positiveExamples, negativeExamples, colName, unlabeledInputs);
     } else {
       userPrompt = buildCorrectionPrompt(
         lastCandidate,
@@ -223,7 +228,14 @@ export async function runSynthesisPipeline(
     }
   }
 
-  // Si les 3 tentatives ont échoué
+  // Si les 3 tentatives ont échoué, mais qu'un résultat algorithmique partiel existait
+  if (partialAlgoResult && partialAlgoResult.rule) {
+    return {
+      origin: "algorithmic",
+      result: partialAlgoResult,
+    };
+  }
+
   return {
     origin: "none",
     error: "Aucune regex fiable n'a pu être déduite automatiquement après 3 tentatives.",
