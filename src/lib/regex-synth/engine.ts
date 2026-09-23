@@ -888,13 +888,13 @@ function selfTrain(
 
   // couverture gloutonne : d'abord les règles les plus sûres (peu d'erreurs),
   // puis celles qui apportent de nouvelles lignes
-  const chain: Rule[] = [];
+  const chain: Cand[] = [];
   const covered = new Set<number>();
-  for (let step = 0; step < 4; step++) {
+  for (let step = 0; step < 5; step++) {
     let pick: Cand | null = null;
     let pickGain = 0;
     for (const c of pool) {
-      if (chain.includes(c.rule)) continue;
+      if (chain.includes(c)) continue;
       let gain = 0;
       for (const i of c.good) if (!covered.has(i)) gain++;
       const value = gain - c.bad * 1.5;
@@ -904,17 +904,33 @@ function selfTrain(
       }
     }
     if (!pick) break;
-    chain.push(pick.rule);
+    chain.push(pick);
     for (const i of pick.good) covered.add(i);
   }
   if (chain.length === 0) return base;
 
-  const combined: Rule = { ...chain[0]!, extra: chain.slice(1) };
-  if (explains(combined, examples) < examples.length) return base;
-  const res = applyRule(combined, inputs);
+  // l'ordre compte : la règle la plus spécifique passe en premier, la plus
+  // générale en dernier (sinon elle capterait les lignes des autres)
+  const order = chain
+    .slice()
+    .sort((a, b) => a.bad - b.bad || a.good.size + a.bad - (b.good.size + b.bad));
+
   const scoreOf2 = (values: (string | null)[]): number =>
     values.reduce<number>((n, v, i) => n + (accepted(i, v) ? 1 : v != null && !plausible(v) ? -0.5 : 0), 0);
-  return scoreOf2(res.values) > scoreOf2(base.values) ? res : base;
+  const baseScore = scoreOf2(base.values);
+  let best = base;
+  let bestScore = baseScore;
+  for (const list of [order, chain]) {
+    const combined: Rule = { ...list[0]!.rule, extra: list.slice(1).map((c) => c.rule) };
+    if (explains(combined, examples) < examples.length) continue;
+    const res = applyRule(combined, inputs);
+    const s = scoreOf2(res.values);
+    if (s > bestScore) {
+      best = res;
+      bestScore = s;
+    }
+  }
+  return best;
 }
 
 export function synthesize(inputs: string[], expected: (string | null)[]): SynthResult {
