@@ -36,11 +36,15 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-const SAMPLE = `FR-2024-00123 / Paris — 1 250,00 EUR
-DE-2023-00987 / Berlin — 980,50 EUR
-ES-2024-00455 / Madrid — 3 410,90 EUR
-IT-2022-00042 / Milan — 77,00 EUR
-FR-2025-01890 / Lyon — 12 000,00 EUR`;
+/** Extrait de FEC (séparateur « | »), avec des cas volontairement piégeux. */
+const SAMPLE = `VE|Ventes|VT0001|20240131|411000|Clients divers|C0012|SARL DUPONT & FILS|FA-2024-0001|20240131|Facture FA-2024-0001 - SARL DUPONT|1 250,00|0,00|AA|20240215|20240131||EUR
+AC|Achats|AC0087|20240205|401000|Fournisseurs|F0031|ÉTS MARTIN|FA/2024/87|20240203|Achat fournitures - réf. 12/45| 980,50 |0,00|||20240205||EUR
+BQ|Banque|BQ0142|20240229|512000|Banque - compte courant|||REL-02|20240229|Virement client DUPONT|0,00|3 410,90|BB|20240301|20240229||EUR
+OD|Opérations diverses|OD0009|20241231|681100|Dotations amortissements|||DOT-2024|20241231|Amortissement matériel (5 ans)|77,00|0,00|||20241231||EUR
+VE|Ventes|VT0102|20250114|707000|Ventes de marchandises|C0007|LE COMPTOIR|FA-2025-0102|20250114|Facture - lot n°12 000 pièces|12 000,00|0,00|||20250114|13 200,00|USD
+AC|Achats|AC0203|20250220|607000|Achats marchandises|F0002|IMPORT & CO|FA-2025/203|20250218|Avoir sur facture 198|-45,90|0,00|||20250220||EUR
+BQ|Banque|BQ0311|20250331|627000|Services bancaires|||AGIOS-03|20250331|Agios trimestre 1|8,90|0,00|||20250331||EUR
+VE|Ventes|VT0115|20250402|707000|Ventes de marchandises|C0012|SARL DUPONT & FILS|FA-2025-0115|20250402|Facture - remise 10 %|2 300,00|0,00|CC|20250430|20250402||EUR`;
 
 function Index() {
   const [rows, setRows] = useState<string[]>([]);
