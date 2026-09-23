@@ -359,7 +359,10 @@ export function DataGrid({
         className="grid text-xs"
         style={{ gridTemplateColumns: template, transform: `translateX(${-scrollLeft}px)` }}
       >
-        <div className="grid-cell sticky left-0 z-20 bg-surface-2 px-2 py-2 text-center font-mono text-muted-foreground">
+        <div
+          className="grid-cell z-20 bg-surface-2 px-2 py-2 text-center font-mono text-muted-foreground"
+          style={{ transform: `translateX(${scrollLeft}px)` }}
+        >
           #
         </div>
         <div className="grid-cell relative px-3 py-2 font-semibold tracking-wide text-foreground">
