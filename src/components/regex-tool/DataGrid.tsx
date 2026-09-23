@@ -91,20 +91,25 @@ export function DataGrid({
       const next = w.slice(0, need);
       while (next.length < need) next.push(next.length === 0 ? DEFAULT_SOURCE_W : DEFAULT_OUT_W);
 
+      const sampleLimit = Math.min(rows.length, 100);
       if (!manuallyResized.current.has(SOURCE_COL)) {
-        next[0] = rows.length
-          ? Math.max(measure("Données source"), ...rows.map(measure))
-          : DEFAULT_SOURCE_W;
+        let maxSource = measure("Données source");
+        for (let r = 0; r < sampleLimit; r++) {
+          const l = rows[r]?.length ?? 0;
+          if (l * 8.2 + 32 > maxSource) maxSource = Math.min(800, l * 8.2 + 32);
+        }
+        next[0] = rows.length ? maxSource : DEFAULT_SOURCE_W;
       }
       for (let c = 0; c < columns.length; c++) {
         const col = columns[c];
         if (!col) continue;
         if (manuallyResized.current.has(col.id)) continue;
         let required = measure(col.name) + 52;
-        for (let r = 0; r < rows.length; r++) {
-          required = Math.max(required, measure(cellValue(col, r)));
+        for (let r = 0; r < sampleLimit; r++) {
+          const v = cellValue(col, r);
+          if (v) required = Math.max(required, measure(v));
         }
-        next[c + 1] = rows.length ? required : DEFAULT_OUT_W;
+        next[c + 1] = rows.length ? Math.min(600, required) : DEFAULT_OUT_W;
       }
 
       return next.some((value, index) => value !== w[index]) || w.length !== need ? next : w;
@@ -158,21 +163,24 @@ export function DataGrid({
     };
   }, []);
 
-  /** Double-clic sur la poignée : ajuste la colonne à son contenu le plus long. */
+  /** Double-clic sur la poignée : ajuste la colonne à son contenu (échantillon optimisé). */
   const autoFit = useCallback(
     (index: number) => {
       const key = index === 0 ? SOURCE_COL : columns[index - 1]?.id;
       if (key) manuallyResized.current.add(key);
+      const sampleLimit = Math.min(rows.length, 300);
       setWidths((ws) => {
         const next = ws.slice();
         if (index === 0) {
-          next[0] = rows.reduce((m, r) => Math.max(m, measure(r)), DEFAULT_SOURCE_W);
+          let max = DEFAULT_SOURCE_W;
+          for (let i = 0; i < sampleLimit; i++) max = Math.max(max, measure(rows[i] ?? ""));
+          next[0] = Math.min(900, max);
         } else {
           const col = columns[index - 1];
           if (!col) return next;
           let max = measure(col.name);
-          for (let i = 0; i < rows.length; i++) max = Math.max(max, measure(cellValue(col, i)));
-          next[index] = max;
+          for (let i = 0; i < sampleLimit; i++) max = Math.max(max, measure(cellValue(col, i)));
+          next[index] = Math.min(600, max);
         }
         return next;
       });
@@ -180,9 +188,23 @@ export function DataGrid({
     [rows, columns],
   );
 
-  const start = Math.max(0, Math.floor(scrollTop / ROW_H) - 8);
-  const end = Math.min(rows.length, Math.ceil((scrollTop + height) / ROW_H) + 8);
+  // Mise à l'échelle du conteneur de défilement pour les très grands volumes (1M+ lignes)
+  // afin de ne pas dépasser la limite de hauteur de pixel imposée par les moteurs de rendu navigateur.
+  const MAX_DOM_HEIGHT = 10_000_000;
+  const totalVirtualHeight = rows.length * ROW_H;
+  const isScaled = totalVirtualHeight > MAX_DOM_HEIGHT;
+  const scrollContainerHeight = isScaled ? MAX_DOM_HEIGHT : totalVirtualHeight;
+
+  const virtualScrollTop = isScaled && scrollContainerHeight > height
+    ? (scrollTop / (scrollContainerHeight - height)) * (totalVirtualHeight - height)
+    : scrollTop;
+
+  const start = Math.max(0, Math.floor(virtualScrollTop / ROW_H) - 8);
+  const end = Math.min(rows.length, Math.ceil((virtualScrollTop + height) / ROW_H) + 8);
   const visible = rows.slice(start, end);
+  const topOffset = isScaled
+    ? Math.max(0, scrollTop - ((virtualScrollTop / ROW_H - start) * ROW_H))
+    : start * ROW_H;
 
   const template = `${NUM_W}px ${wFor(0)}px ${columns.map((_, i) => `${wFor(i + 1)}px`).join(" ")} ${ADD_W}px`;
 
@@ -413,8 +435,8 @@ export function DataGrid({
           <Plus className="size-4" />
         </button>
       </div>
-        <div style={{ height: rows.length * ROW_H, position: "relative" }}>
-          <div style={{ position: "absolute", top: start * ROW_H, left: 0, right: 0 }}>
+        <div style={{ height: scrollContainerHeight, position: "relative" }}>
+          <div style={{ position: "absolute", top: topOffset, left: 0, right: 0 }}>
             {visible.map((source, k) => {
               const i = start + k;
               return (

@@ -832,7 +832,9 @@ export function applyRule(rule: Rule, inputs: string[]): SynthResult {
       matched++;
     } else {
       values.push(null);
-      if (input !== "") failures.push(i);
+      // Pour les très grands jeux de données (1M+ lignes), borner la liste des index en échec à 50
+      // pour éviter de saturer la sérialisation mémoire du Web Worker (la vue n'affiche que les 6 premières)
+      if (input !== "" && failures.length < 50) failures.push(i);
     }
   }
   return { rule, values, failures, matched, total: inputs.length };
@@ -1369,7 +1371,23 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
   };
   if (examples.length === 0) return empty;
 
-  const single = synthesizeRule(examples, inputs);
+  // Optimisation haute performance pour 1M+ de lignes :
+  // On échantillonne les lignes témoins pour la déduction heuristique (synthesizeRule et selfTrain)
+  // afin de garantir une déduction instantanée (<25ms) sur n'importe quel volume de données,
+  // puis on applique la règle trouvée sur l'intégralité du million de lignes en une passe RegExp native.
+  let synthInputs = inputs;
+  if (inputs.length > 2000) {
+    const sampleSet = new Set<number>();
+    examples.forEach((ex) => sampleSet.add(ex.index));
+    const step = Math.max(1, Math.floor(inputs.length / 500));
+    for (let i = 0; i < inputs.length && sampleSet.size < 1200; i += step) {
+      sampleSet.add(i);
+    }
+    const sampleIndices = Array.from(sampleSet).sort((a, b) => a - b);
+    synthInputs = sampleIndices.map((i) => inputs[i] ?? "");
+  }
+
+  const single = synthesizeRule(examples, synthInputs);
   const singleRes = single ? applyRule(single, inputs) : null;
   const singleOk = single ? explains(single, examples) : 0;
 
@@ -1387,11 +1405,12 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
     if (singleRes.matched >= totalLines || single.source.startsWith("^")) {
       return finalize(singleRes);
     }
-    const trained = selfTrain(singleRes, inputs, examples);
-    if (trained.matched >= totalLines || trained.rule?.source.startsWith("^")) {
-      return finalize(trained);
+    const trained = selfTrain(singleRes, synthInputs, examples);
+    const fullTrained = trained.rule ? applyRule(trained.rule, inputs) : trained;
+    if (fullTrained.matched >= totalLines || fullTrained.rule?.source.startsWith("^")) {
+      return finalize(fullTrained);
     }
-    return finalize(preferAlternation(trained, inputs, examples));
+    return finalize(preferAlternation(fullTrained, synthInputs, examples));
   }
 
   // sinon seulement : plusieurs motifs, ou une exception
@@ -1402,11 +1421,11 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
     const comboOk = explains(combined, examples);
     // on ne complique la règle que si elle explique réellement plus d'exemples
     if (comboOk > singleOk || (comboOk === singleOk && res.matched > (singleRes?.matched ?? -1)))
-      return finalize(preferAlternation(selfTrain(res, inputs, examples), inputs, examples));
+      return finalize(preferAlternation(selfTrain(res, synthInputs, examples), synthInputs, examples));
   }
-  if (singleRes) return finalize(preferAlternation(selfTrain(singleRes, inputs, examples), inputs, examples));
+  if (singleRes) return finalize(preferAlternation(selfTrain(singleRes, synthInputs, examples), synthInputs, examples));
   if (parts[0])
-    return finalize(preferAlternation(selfTrain(applyRule(parts[0].rule, inputs), inputs, examples), inputs, examples));
+    return finalize(preferAlternation(selfTrain(applyRule(parts[0].rule, inputs), synthInputs, examples), synthInputs, examples));
   return empty;
 }
 

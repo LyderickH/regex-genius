@@ -251,13 +251,42 @@ function Index() {
   triggerLLMFallbackRef.current = triggerLLMFallback;
 
   const snapshot = useCallback(
-    (rs: string[], cols: OutputColumn[]): Snap => ({
-      rows: rs.slice(),
-      columns: cols.map((c) => ({ ...c, user: c.user.slice(), derived: c.derived.slice() })),
-      key: `${rs.join("\u0000")}||${cols
-        .map((c) => `${c.id}:${c.name}:${c.user.join("\u0001")}`)
-        .join("\u0002")}`,
-    }),
+    (rs: string[], cols: OutputColumn[]): Snap => {
+      const isHuge = rs.length > 20_000;
+      let rsKey = "";
+      if (isHuge) {
+        rsKey = `${rs.length}:${rs[0] ?? ""}:${rs[1] ?? ""}:${rs[rs.length - 1] ?? ""}`;
+      } else {
+        rsKey = rs.join("\u0000");
+      }
+
+      const colsKey = cols
+        .map((c) => {
+          if (isHuge) {
+            let userCount = 0;
+            let sample = "";
+            for (let i = 0; i < c.user.length; i++) {
+              if (c.user[i] != null) {
+                userCount++;
+                if (userCount <= 8) sample += `${i}:${c.user[i]};`;
+              }
+            }
+            return `${c.id}:${c.name}:${userCount}:${sample}`;
+          }
+          return `${c.id}:${c.name}:${c.user.join("\u0001")}`;
+        })
+        .join("\u0002");
+
+      return {
+        rows: rs.slice(),
+        columns: cols.map((c) => ({
+          ...c,
+          user: c.user.slice(),
+          derived: c.derived.slice(),
+        })),
+        key: `${rsKey}||${colsKey}`,
+      };
+    },
     [],
   );
 
@@ -270,7 +299,8 @@ function Index() {
     }
     if (lastSnap.current && lastSnap.current.key !== snap.key) {
       past.current.push(lastSnap.current);
-      if (past.current.length > 120) past.current.shift();
+      const maxHistory = rows.length > 50_000 ? 10 : 120;
+      if (past.current.length > maxHistory) past.current.shift();
       futureSnaps.current = [];
     }
     lastSnap.current = snap;
@@ -344,7 +374,11 @@ function Index() {
       return;
     }
     const source = matrix.map((r) => (r[0] ?? "").toString());
-    const extra = Math.max(0, ...matrix.map((r) => r.length)) - 1;
+    let maxCols = 0;
+    for (let i = 0; i < matrix.length; i++) {
+      if (matrix[i].length > maxCols) maxCols = matrix[i].length;
+    }
+    const extra = Math.max(0, maxCols - 1);
     const cols: OutputColumn[] = [];
     const count = Math.max(1, extra);
     for (let c = 0; c < count; c++) {
@@ -365,7 +399,7 @@ function Index() {
     cols.forEach((c) => {
       if (c.user.some((v) => v != null)) runSynth(c.id, source, c.user);
     });
-    toast.success(`${source.length} lignes chargées`);
+    toast.success(`${source.length.toLocaleString("fr-FR")} lignes chargées`);
   };
 
   const handleFile = async (file: File) => {
@@ -487,13 +521,22 @@ function Index() {
       startCol = idx < 0 ? 0 : idx + 1;
       startRow = focus.current.row;
     }
-    const width = Math.max(...matrix.map((r) => r.length));
+    let width = 0;
+    for (let i = 0; i < matrix.length; i++) {
+      if (matrix[i].length > width) width = matrix[i].length;
+    }
     const needRows = Math.max(rows.length, startRow + matrix.length);
     const nextRows = rows.slice();
-    while (nextRows.length < needRows) nextRows.push("");
-    const pad = <T,>(a: T[], v: T) => {
-      const out = a.slice();
-      while (out.length < needRows) out.push(v);
+    if (nextRows.length < needRows) {
+      const curLen = nextRows.length;
+      nextRows.length = needRows;
+      nextRows.fill("", curLen);
+    }
+    const pad = <T,>(a: T[], v: T): T[] => {
+      if (a.length >= needRows) return a.slice();
+      const out = new Array<T>(needRows);
+      for (let i = 0; i < a.length; i++) out[i] = a[i];
+      for (let i = a.length; i < needRows; i++) out[i] = v;
       return out;
     };
     const next: OutputColumn[] = columns.map((c) => ({

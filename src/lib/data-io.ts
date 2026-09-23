@@ -14,7 +14,8 @@ export function parsePastedText(text: string): Matrix {
       return (parsed.data as Matrix).map((r) => r.map((c) => (c == null ? "" : String(c))));
   }
   // point-virgule uniquement : la virgule est trop souvent un séparateur décimal
-  if (lines.every((l) => l.includes(";"))) {
+  const sample = lines.length > 200 ? lines.slice(0, 200) : lines;
+  if (sample.length > 0 && sample.every((l) => l.includes(";"))) {
     const parsed = Papa.parse<string[]>(clean, { delimiter: ";", skipEmptyLines: true });
     if (parsed.data.length) return parsed.data as Matrix;
   }
