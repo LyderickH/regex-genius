@@ -168,7 +168,23 @@ function scoreOf(cap: string, left: string, right: string): number {
   if (left === "") s += 8;
   if (right === "") s += 8;
   if (left === "^" || right === "$") s -= 6;
+  // les motifs « n-ième champ d'une ligne délimitée » sont très fiables
+  if (left.startsWith("^(?:[^")) s -= left.length + 12;
   return s;
+}
+
+/** Préfixes « aller au n-ième champ » pour les lignes à délimiteur (| ; tab , /). */
+function fieldPrefixes(input: string, pos: number): string[] {
+  const out: string[] = [];
+  for (const d of ["|", ";", "\t", ",", "/"]) {
+    const total = input.split(d).length - 1;
+    if (total < 2) continue;
+    const n = input.slice(0, pos).split(d).length - 1;
+    const cls = `[^${escapeClass(d)}]`;
+    const lit = escapeRegex(d);
+    out.push(n === 0 ? "^" : `^(?:${cls}*${lit}){${n}}`);
+  }
+  return out;
 }
 
 function buildCandidates(ex: Example, transform: Transform): string[] {
@@ -181,6 +197,7 @@ function buildCandidates(ex: Example, transform: Transform): string[] {
 
     const lefts = new Set<string>([""]);
     if (pos === 0) lefts.add("^");
+    for (const p of fieldPrefixes(input, pos)) lefts.add(p);
     for (let l = 1; l <= 4 && l <= left.length; l++) {
       const chunk = left.slice(-l);
       lefts.add(escapeRegex(chunk));
@@ -190,6 +207,7 @@ function buildCandidates(ex: Example, transform: Transform): string[] {
         lefts.add("^" + runsPattern(chunk, true));
       }
     }
+
 
     const rights = new Set<string>([""]);
     if (right === "") rights.add("$");
