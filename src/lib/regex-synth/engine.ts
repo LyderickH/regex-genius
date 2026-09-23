@@ -1290,3 +1290,70 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
     return preferAlternation(selfTrain(applyRule(parts[0].rule, inputs), inputs, examples), inputs, examples);
   return empty;
 }
+
+/** Regex combinée : un seul motif avec un groupe par colonne de sortie. */
+export function combineColumns(
+  inputs: string[],
+  cols: { name: string; rule: Rule }[],
+): { source: string; names: string[]; covered: number; total: number } | null {
+  const usable = cols.filter((c) => c.rule && c.rule.source);
+  if (usable.length < 2) return null;
+  const rows = inputs.filter(Boolean);
+  if (rows.length === 0) return null;
+
+  // ordre des colonnes = ordre d'apparition de la capture dans la ligne
+  const posOf = (rule: Rule): number => {
+    let sum = 0;
+    let n = 0;
+    for (const input of rows) {
+      let m: RegExpExecArray | null = null;
+      try {
+        m = new RegExp(rule.source, rule.flags).exec(input);
+      } catch {
+        return Infinity;
+      }
+      if (!m) continue;
+      const g = firstGroup(m);
+      if (g === undefined) continue;
+      sum += input.indexOf(g, m.index);
+      n++;
+    }
+    return n === 0 ? Infinity : sum / n;
+  };
+  const ordered = usable
+    .map((c) => ({ ...c, at: posOf(c.rule) }))
+    .filter((c) => Number.isFinite(c.at))
+    .sort((a, b) => a.at - b.at);
+  if (ordered.length < 2) return null;
+
+  const strip = (src: string, first: boolean): string =>
+    first ? src : src.replace(/^\^/, "").replace(/^\(\?:\[\^[^\]]*\]\*[^)]*\)\{\d+\}/, "");
+
+  const build = (glue: string): string =>
+    ordered.map((c, i) => strip(c.rule.source, i === 0)).join(glue);
+
+  let best: { source: string; covered: number } | null = null;
+  for (const glue of ["", "[\\s\\S]*?", ".*?"]) {
+    const source = build(glue);
+    let re: RegExp;
+    try {
+      re = new RegExp(source);
+    } catch {
+      continue;
+    }
+    let covered = 0;
+    for (const input of rows) {
+      const m = re.exec(input);
+      if (m && ordered.every((_, i) => m[i + 1] !== undefined)) covered++;
+    }
+    if (!best || covered > best.covered) best = { source, covered };
+    if (covered === rows.length) break;
+  }
+  if (!best || best.covered === 0) return null;
+  return {
+    source: best.source,
+    names: ordered.map((c) => c.name),
+    covered: best.covered,
+    total: rows.length,
+  };
+}
