@@ -403,11 +403,28 @@ function buildCandidates(
       rights.add(runsPattern(chunk, true));
     }
 
-    const caps = capturePatterns(raw, right.length ? right.charAt(0) : null);
+    const caps = new Set(capturePatterns(raw, right.length ? right.charAt(0) : null));
+    // motifs anti-unifiés : prioritaires car déduits de TOUS les exemples
+    const generalized = new Set<string>();
+    for (const c of shared?.caps ?? []) {
+      let ok = false;
+      try {
+        ok = new RegExp(`^(?:${c})$`).test(raw);
+      } catch {
+        ok = false;
+      }
+      if (ok) {
+        caps.add(c);
+        generalized.add(c);
+      }
+    }
     for (const cap of caps)
       for (const l of lefts)
         for (const r of rights)
-          cands.push({ src: `${l}(${cap})${r}`, score: scoreOf(cap, l, r) });
+          cands.push({
+            src: `${l}(${cap})${r}`,
+            score: scoreOf(cap, l, r) - (generalized.has(cap) ? 30 : 0),
+          });
   }
   cands.sort((a, b) => a.score - b.score);
   const seen = new Set<string>();
