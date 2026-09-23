@@ -409,28 +409,28 @@ function buildCandidates(
     const left = input.slice(0, pos);
     const right = input.slice(pos + len);
 
-    const lefts = new Set<string>([""]);
-    if (pos === 0) lefts.add("^");
-    for (const p of fieldPrefixes(input, pos)) lefts.add(p);
-    for (const l of shared?.lefts ?? []) lefts.add(l);
+    // chaque repère garde son texte d'origine pour être qualifié (technique / mot de liaison)
+    const lefts = new Map<string, string | null>([["", null]]);
+    if (pos === 0) lefts.set("^", null);
+    for (const p of fieldPrefixes(input, pos)) lefts.set(p, "|");
+    for (const l of shared?.lefts ?? []) lefts.set(l, null);
     for (let l = 1; l <= 8 && l <= left.length; l++) {
       const chunk = left.slice(-l);
-      lefts.add(escapeRegex(chunk));
-      lefts.add(runsPattern(chunk, true));
+      lefts.set(escapeRegex(chunk), chunk);
+      lefts.set(runsPattern(chunk, true), chunk);
       if (l === left.length) {
-        lefts.add("^" + escapeRegex(chunk));
-        lefts.add("^" + runsPattern(chunk, true));
+        lefts.set("^" + escapeRegex(chunk), chunk);
+        lefts.set("^" + runsPattern(chunk, true), chunk);
       }
     }
 
-
-    const rights = new Set<string>([""]);
-    if (right === "") rights.add("$");
-    for (const r of shared?.rights ?? []) rights.add(r);
+    const rights = new Map<string, string | null>([["", null]]);
+    if (right === "") rights.set("$", null);
+    for (const r of shared?.rights ?? []) rights.set(r, null);
     for (let r = 1; r <= 4 && r <= right.length; r++) {
       const chunk = right.slice(0, r);
-      rights.add(escapeRegex(chunk));
-      rights.add(runsPattern(chunk, true));
+      rights.set(escapeRegex(chunk), chunk);
+      rights.set(runsPattern(chunk, true), chunk);
     }
 
     const caps = new Set(capturePatterns(raw, right.length ? right.charAt(0) : null));
@@ -448,13 +448,22 @@ function buildCandidates(
         generalized.add(c);
       }
     }
-    for (const cap of caps)
-      for (const l of lefts)
-        for (const r of rights)
-          cands.push({
-            src: `${l}(${cap})${r}`,
-            score: scoreOf(cap, l, r) - (generalized.has(cap) ? 30 : 0),
-          });
+    for (const cap of caps) {
+      const isLit = literalCapture(cap) && cap === escapeRegex(raw);
+      for (const [l, lLit] of lefts)
+        for (const [r, rLit] of rights) {
+          const anchored =
+            l.startsWith("^") || r === "$" || strongDelimiter(lLit) || strongDelimiter(rLit);
+          let score = scoreOf(cap, l, r) - (generalized.has(cap) ? 30 : 0);
+          // 1. une constante brute sans ancre forte est du sur-apprentissage
+          if (isLit && !anchored) score += 45;
+          // 2. un mot de liaison ou un bout de mot n'est pas un repère fiable
+          if (weakDelimiter(lLit)) score += 25;
+          if (weakDelimiter(rLit)) score += 15;
+          if (strongDelimiter(lLit)) score -= 10;
+          cands.push({ src: `${l}(${cap})${r}`, score });
+        }
+    }
   }
   cands.sort((a, b) => a.score - b.score);
   const seen = new Set<string>();
@@ -683,8 +692,28 @@ function partitionRules(examples: Example[], maxGroups = 3): { rule: Rule; size:
     }
     rules.push({ rule, group, conflicts });
   }
-  // les règles les plus spécifiques passent en premier
-  rules.sort((a, b) => a.conflicts - b.conflicts || b.group.length - a.group.length);
+  // 4. ordre strict : les règles les plus contraintes d'abord, les constantes en dernier
+  const level = (rule: Rule): number => {
+    const src = rule.source;
+    const i = src.indexOf("(");
+    const j = src.lastIndexOf(")");
+    const cap = i >= 0 && j > i ? src.slice(i + 1, j) : "";
+    const before = i > 0 ? src.slice(0, i) : "";
+    const after = j >= 0 ? src.slice(j + 1) : "";
+    const leftAnchor = before.startsWith("^") || before.length > 0;
+    const rightAnchor = after === "$" || after.length > 0;
+    const typed = /\\d|\[A-Za-z|\\w/.test(cap);
+    let lv = leftAnchor && rightAnchor ? 0 : (leftAnchor || rightAnchor) && typed ? 1 : 2;
+    // une règle qui extrait une constante ne doit jamais servir de règle générale
+    if (literalCapture(cap)) lv += 5;
+    return lv;
+  };
+  rules.sort(
+    (a, b) =>
+      a.conflicts - b.conflicts ||
+      level(a.rule) - level(b.rule) ||
+      b.group.length - a.group.length,
+  );
   return rules.map((r) => ({ rule: r.rule, size: r.group.length }));
 }
 
