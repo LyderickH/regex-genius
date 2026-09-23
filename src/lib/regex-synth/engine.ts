@@ -393,20 +393,33 @@ export function synthesizeRule(
  * Permet de gérer deux (ou plus) motifs différents, et les exceptions.
  */
 function partitionRules(examples: Example[], maxGroups = 3): { rule: Rule; size: number }[] {
+  const deadline = Date.now() + 1200; // budget : la déduction doit rester instantanée
   const groups: Example[][] = [];
-  let rest = examples.slice(0, 14);
-  while (rest.length > 0 && groups.length < maxGroups) {
+  let rest = examples.slice(0, 10);
+  while (rest.length > 0 && groups.length < maxGroups && Date.now() < deadline) {
     let bestGroup: Example[] = [];
-    for (let s = 0; s < rest.length; s++) {
+    const seeds = Math.min(rest.length, 4);
+    for (let s = 0; s < seeds; s++) {
       let group: Example[] = [rest[s]!];
-      if (!synthesizeRule(group)) continue;
+      let rule = synthesizeRule(group);
+      if (!rule) continue;
       for (let j = 0; j < rest.length; j++) {
         if (j === s) continue;
-        const trial = [...group, rest[j]!];
-        if (synthesizeRule(trial)) group = trial;
+        const cand = rest[j]!;
+        // essai rapide : la règle courante explique-t-elle déjà cet exemple ?
+        if (validate(rule.source, rule.transform, [cand])) {
+          group = [...group, cand];
+          continue;
+        }
+        if (Date.now() > deadline) break;
+        const r2 = synthesizeRule([...group, cand]);
+        if (r2) {
+          group = [...group, cand];
+          rule = r2;
+        }
       }
       if (group.length > bestGroup.length) bestGroup = group;
-      if (bestGroup.length === rest.length) break;
+      if (bestGroup.length === rest.length || Date.now() > deadline) break;
     }
     if (bestGroup.length === 0) break;
     groups.push(bestGroup);
