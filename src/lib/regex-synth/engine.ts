@@ -241,6 +241,36 @@ function capturePatterns(raw: string, rightChar: string | null): string[] {
   return [...set];
 }
 
+
+/** Ponctuation technique : un vrai point d'ancrage (« : », « = », « | »…). */
+const TECH_DELIM = /[:=#|[\]()<>{},;\t"']/;
+
+/** Repère faible : uniquement des espaces, ou un mot de liaison de 1-2 lettres. */
+function weakDelimiter(lit: string | null): boolean {
+  if (lit == null || lit === "") return false;
+  if (lit.trim() === "") return true;
+  const t = lit.trim();
+  if (/^[A-Za-zÀ-ÿ]{1,2}$/.test(t) && /^\s|\s$/.test(lit)) return true;
+  // repère qui coupe un mot en deux : « eur » dans « utilisateur »
+  return /[A-Za-zÀ-ÿ]$/.test(lit) && !/(^|[^A-Za-zÀ-ÿ])[A-Za-zÀ-ÿ]+$/.test(lit);
+}
+
+function strongDelimiter(lit: string | null): boolean {
+  return lit != null && TECH_DELIM.test(lit);
+}
+
+/** Le groupe capturé est-il une constante brute (aucune classe de caractères) ? */
+function literalCapture(cap: string): boolean {
+  return !/[\\[\]+*?{}|.]/.test(cap);
+}
+
+/** Première capture définie : permet les motifs à deux branches (pivot avant/après). */
+function firstGroup(m: RegExpExecArray | null): string | undefined {
+  if (!m) return undefined;
+  for (let i = 1; i < m.length; i++) if (m[i] !== undefined) return m[i];
+  return undefined;
+}
+
 function scoreOf(cap: string, left: string, right: string): number {
   let s = cap.length + left.length + right.length;
   if (cap.includes("[^\\n]")) s += 60;
@@ -446,9 +476,9 @@ function validate(source: string, transform: Transform, examples: Example[]): bo
     return false;
   }
   for (const ex of examples) {
-    const m = re.exec(ex.input);
-    if (!m || m[1] === undefined) return false;
-    if (applyTransform(m[1], transform) !== ex.output) return false;
+    const g = firstGroup(re.exec(ex.input));
+    if (g === undefined) return false;
+    if (applyTransform(g, transform) !== ex.output) return false;
   }
   return true;
 }
@@ -483,7 +513,7 @@ function coverageFit(
   let fit = 0;
   for (const input of inputs) {
     if (!input) continue;
-    const g = re.exec(input)?.[1];
+    const g = firstGroup(re.exec(input));
     if (g === undefined) continue;
     cov++;
     if (shapes.size === 0 || shapes.has(shapeOf(applyTransform(g, transform)))) fit++;
@@ -501,7 +531,7 @@ function avoids(src: string, transform: Transform, negatives: Example[]): boolea
     return false;
   }
   for (const n of negatives) {
-    const g = re.exec(n.input)?.[1];
+    const g = firstGroup(re.exec(n.input));
     if (g !== undefined && applyTransform(g, transform) !== n.output) return false;
   }
   return true;
@@ -648,7 +678,7 @@ function partitionRules(examples: Example[], maxGroups = 3): { rule: Rule; size:
     if (!rule) continue;
     let conflicts = 0;
     for (const o of others) {
-      const g = new RegExp(rule.source, rule.flags).exec(o.input)?.[1];
+      const g = firstGroup(new RegExp(rule.source, rule.flags).exec(o.input));
       if (g !== undefined && applyTransform(g, rule.transform) !== o.output) conflicts++;
     }
     rules.push({ rule, group, conflicts });
@@ -671,7 +701,7 @@ export function applyRule(rule: Rule, inputs: string[]): SynthResult {
     const input = inputs[i] ?? "";
     let value: string | null = null;
     for (const { re, transform } of chain) {
-      const g = re.exec(input)?.[1];
+      const g = firstGroup(re.exec(input));
       if (g !== undefined) {
         value = applyTransform(g, transform);
         break;
