@@ -378,13 +378,22 @@ export function DataGrid({
                     onMouseDown={(e) => onCellMouseDown(0, i, e)}
                     onMouseEnter={() => onCellMouseEnter(0, i)}
                     className={cn(
-                      "grid-cell flex cursor-cell items-center truncate px-3 font-mono text-[13px] text-foreground",
+                      "grid-cell flex cursor-cell items-center",
                       inSel(0, i) && "bg-primary/10",
                     )}
                     title={source}
                   >
-                    {source}
+                    <input
+                      data-cell={`0:${i}`}
+                      value={source}
+                      onFocus={() => onFocusCell?.(SOURCE_COL, i)}
+                      onChange={(e) => onChangeSource?.(i, e.target.value)}
+                      readOnly={!onChangeSource}
+                      placeholder="donnée source…"
+                      className="h-full w-full bg-transparent px-3 font-mono text-[13px] text-foreground outline-none placeholder:text-muted-foreground/50 focus:bg-primary/15"
+                    />
                   </div>
+
                   {columns.map((col) => {
                     const cIdx = columns.indexOf(col) + 1;
                     const isUser = col.user[i] != null && col.user[i] !== "";
