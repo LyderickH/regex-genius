@@ -9,6 +9,8 @@ import {
   Trash2,
   Regex,
   Sparkles,
+  Plus,
+
 } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
