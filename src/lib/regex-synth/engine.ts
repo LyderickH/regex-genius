@@ -950,7 +950,13 @@ function selfTrain(
  * Délimiteurs gauches qui isolent exactement la valeur sur cette ligne :
  * le plus court, et le plus court contenant un mot (repère plus fiable).
  */
-function minimalLefts(input: string, pos: number, cap: string, raw: string): string[] {
+function minimalLefts(
+  input: string,
+  pos: number,
+  cap: string,
+  raw: string,
+  values: string[] = [],
+): string[] {
   const before = input.slice(0, pos);
   if (pos === 0) {
     // valeur en tout début de ligne : l'ancre ^ fait office de délimiteur
@@ -970,6 +976,8 @@ function minimalLefts(input: string, pos: number, cap: string, raw: string): str
     if (prev && /[A-Za-z0-9]/.test(prev) && /[A-Za-z0-9]/.test(tail[0]!)) continue;
     // un délimiteur chiffré sans mot n'est qu'une donnée voisine, pas un repère
     if (/\d/.test(tail) && !/[A-Za-z]{2}/.test(tail)) continue;
+    // un repère ne peut pas être une valeur extraite ailleurs : c'est un hasard
+    if (values.some((v) => v.length >= 3 && tail.includes(v))) continue;
     let re: RegExp;
     try {
       re = new RegExp(`${escapeRegex(tail)}(${cap})`);
@@ -1016,6 +1024,7 @@ function alternationRule(
     for (const base of ["[a-z]", "[A-Z]", "[A-Za-z]", "\\w", "[A-Za-z0-9]", "\\S"])
       caps.add(`${base}{${minLen},}`);
   const wanted = new Map(known.map((k) => [k.index, k.value] as const));
+  const allValues = hits.map((h) => h.raw);
 
   let best: { rule: Rule; score: number } | null = null;
   for (const cap of caps) {
@@ -1029,7 +1038,7 @@ function alternationRule(
 
     const perLine: string[][] = [];
     for (const h of hits) {
-      const l = minimalLefts(inputs[h.i] ?? "", h.pos, cap, h.raw);
+      const l = minimalLefts(inputs[h.i] ?? "", h.pos, cap, h.raw, allValues);
       // une ligne sans repère exploitable est simplement laissée de côté
       if (l.length) perLine.push(l);
     }
