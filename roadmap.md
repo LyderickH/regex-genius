@@ -21,3 +21,4 @@
 - [x] Ctrl+Z / Ctrl+Y : annuler et rétablir les modifications du tableau
 - [ ] Regex combinée : une seule expression qui extrait toutes les colonnes d'un coup
 - [ ] Moteur — 4 principes : pénaliser les motifs littéraux, qualifier les délimiteurs (pas de mots de liaison), pivots avant/après, ordre strict des règles multiples
+- [ ] GitHub : créer un nouveau dépôt et y synchroniser le code (action utilisateur via le menu + > GitHub)
