@@ -166,10 +166,33 @@ function Index() {
 
   const handleFile = async (file: File) => {
     try {
-      loadMatrix(await parseFile(file));
+      const matrix = await parseFile(file);
+      if (matrix.length > 1) setHeaderAsk(matrix);
+      else loadMatrix(matrix);
     } catch {
       toast.error("Impossible de lire ce fichier");
     }
+  };
+
+  /** Utilise la 1re ligne du tableau comme noms de colonnes. */
+  const promoteHeader = () => {
+    if (rows.length < 2) return;
+    setColumns((cols) =>
+      cols.map((c) => ({
+        ...c,
+        name: (c.user[0] ?? "").trim() || c.name,
+        user: c.user.slice(1),
+        derived: c.derived.slice(1),
+      })),
+    );
+    const next = rows.slice(1);
+    setRows(next);
+    setSel(null);
+    columns.forEach((c) => {
+      const user = c.user.slice(1);
+      if (user.some((v) => v != null)) scheduleSynth(c.id, next, user);
+    });
+    toast.success("Première ligne promue en en-tête");
   };
 
   const loadSample = () => {
