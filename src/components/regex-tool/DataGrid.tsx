@@ -155,7 +155,7 @@ export function DataGrid({
             key={col.id}
             onClick={() => onSelect(col.id)}
             className={cn(
-              "grid-cell group flex cursor-pointer items-center gap-1 px-2 py-1.5",
+              "grid-cell group relative flex cursor-pointer items-center gap-1 px-2 py-1.5",
               activeId === col.id && "bg-primary/10 ring-1 ring-inset ring-primary/40",
             )}
           >
