@@ -87,6 +87,20 @@ export interface Rule {
   transform: Transform;
   /** règles alternatives, essayées dans l'ordre quand la principale ne s'applique pas */
   extra?: Rule[];
+  /** Origine de la règle : algorithmique ou IA locale validée */
+  origin?: "algorithmic" | "llm";
+  llmMetadata?: {
+    modelName: string;
+    runtime: "webgpu" | "wasm" | "unsupported";
+    explanation?: string;
+    verified: boolean;
+    securityRisk: "low" | "medium" | "high";
+    positivePassed: number;
+    positiveTotal: number;
+    negativePassed: number;
+    negativeTotal: number;
+    attemptsCount: number;
+  };
 }
 
 export interface Example {
@@ -1333,8 +1347,15 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
 
   // la règle simple explique tous les exemples : on n'ajoute rien.
   // (des lignes non couvertes restent acceptables : on garde le maximum de lignes)
+  const finalize = (res: SynthResult): SynthResult => {
+    if (res.rule) {
+      res.rule.origin = "algorithmic";
+    }
+    return res;
+  };
+
   if (single && singleRes && singleOk >= examples.length)
-    return preferAlternation(selfTrain(singleRes, inputs, examples), inputs, examples);
+    return finalize(preferAlternation(selfTrain(singleRes, inputs, examples), inputs, examples));
 
   // sinon seulement : plusieurs motifs, ou une exception
   const parts = partitionRules(examples);
@@ -1344,11 +1365,11 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
     const comboOk = explains(combined, examples);
     // on ne complique la règle que si elle explique réellement plus d'exemples
     if (comboOk > singleOk || (comboOk === singleOk && res.matched > (singleRes?.matched ?? -1)))
-      return preferAlternation(selfTrain(res, inputs, examples), inputs, examples);
+      return finalize(preferAlternation(selfTrain(res, inputs, examples), inputs, examples));
   }
-  if (singleRes) return preferAlternation(selfTrain(singleRes, inputs, examples), inputs, examples);
+  if (singleRes) return finalize(preferAlternation(selfTrain(singleRes, inputs, examples), inputs, examples));
   if (parts[0])
-    return preferAlternation(selfTrain(applyRule(parts[0].rule, inputs), inputs, examples), inputs, examples);
+    return finalize(preferAlternation(selfTrain(applyRule(parts[0].rule, inputs), inputs, examples), inputs, examples));
   return empty;
 }
 

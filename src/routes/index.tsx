@@ -17,6 +17,10 @@ import { toast } from "sonner";
 import { DataGrid, type GridSel } from "@/components/regex-tool/DataGrid";
 import { PatternPanel } from "@/components/regex-tool/PatternPanel";
 import { WelcomeHero } from "@/components/regex-tool/WelcomeHero";
+import { LLMControlDialog } from "@/components/regex-tool/LLMControlDialog";
+import { localLLM } from "@/lib/llm/webllm-service";
+import { runSynthesisPipeline } from "@/lib/llm/pipeline";
+import type { ModelProgressReport } from "@/lib/llm/types";
 import { emptyColumn, cellValue, type OutputColumn } from "@/components/regex-tool/types";
 import { combineColumns, type SynthResult } from "@/lib/regex-synth/engine";
 import {
@@ -68,6 +72,19 @@ function Index() {
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [headerAsk, setHeaderAsk] = useState<Matrix | null>(null);
+
+  // --- IA Locale (Fallback WebLLM / WebGPU)
+  const [llmReport, setLlmReport] = useState<ModelProgressReport>({
+    status: "idle",
+    progressPercent: 0,
+    text: "En attente",
+  });
+  const [isLLMRunning, setIsLLMRunning] = useState(false);
+  const [llmControlOpen, setLlmControlOpen] = useState(false);
+
+  useEffect(() => {
+    return localLLM.subscribe(setLlmReport);
+  }, []);
 
   const workerRef = useRef<Worker | null>(null);
   const pending = useRef(new Map<number, string>());
@@ -130,6 +147,65 @@ function Index() {
       );
     },
     [runSynth],
+  );
+
+  const triggerLLMFallback = useCallback(
+    async (colId: string) => {
+      const col = columns.find((c) => c.id === colId);
+      if (!col) return;
+      setIsLLMRunning(true);
+      toast.info("Lancement du fallback IA locale (WebGPU)...", { id: "llm-status" });
+      try {
+        const outcome = await runSynthesisPipeline(rows, col.user, {
+          colName: col.name,
+        });
+
+        if (outcome.origin === "llm") {
+          setColumns((cols) =>
+            cols.map((c) =>
+              c.id === colId
+                ? {
+                    ...c,
+                    pending: false,
+                    rule: outcome.result.rule,
+                    derived: outcome.result.values,
+                    matched: outcome.result.matched,
+                    failures: outcome.result.failures,
+                  }
+                : c,
+            ),
+          );
+          toast.success("✓ Regex déduite par IA locale et vérifiée par les algorithmes !", {
+            id: "llm-status",
+          });
+        } else if (outcome.origin === "algorithmic") {
+          setColumns((cols) =>
+            cols.map((c) =>
+              c.id === colId
+                ? {
+                    ...c,
+                    pending: false,
+                    rule: outcome.result.rule,
+                    derived: outcome.result.values,
+                    matched: outcome.result.matched,
+                    failures: outcome.result.failures,
+                  }
+                : c,
+            ),
+          );
+          toast.success("⚙ Règle déduite par le moteur algorithmique.", { id: "llm-status" });
+        } else {
+          toast.error(outcome.error, { id: "llm-status" });
+        }
+      } catch (err) {
+        toast.error(`Erreur IA locale : ${err instanceof Error ? err.message : String(err)}`, {
+          id: "llm-status",
+        });
+      } finally {
+        setIsLLMRunning(false);
+      }
+    },
+    [columns, rows],
   );
 
   const snapshot = useCallback(
@@ -553,11 +629,25 @@ function Index() {
           )}
         </div>
 
-        {rows.length > 0 && (
-          <div className="ml-auto font-mono text-[11px] text-muted-foreground">
-            {rows.length} lignes · {columns.length} colonnes de sortie
-          </div>
-        )}
+        <div className="ml-auto flex items-center gap-3">
+          <button
+            onClick={() => setLlmControlOpen(true)}
+            className="flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-400 hover:bg-amber-500/20 transition cursor-pointer"
+            title="IA locale (WebGPU/WASM) — Aucune donnée envoyée sur serveur"
+          >
+            <Sparkles className="size-3" />
+            <span>IA locale : {localLLM.getCurrentModelConfig().name}</span>
+            {llmReport.status === "ready" && (
+              <span className="size-1.5 rounded-full bg-emerald-400" title="Modèle chargé" />
+            )}
+          </button>
+
+          {rows.length > 0 && (
+            <div className="font-mono text-[11px] text-muted-foreground">
+              {rows.length} lignes · {columns.length} colonnes de sortie
+            </div>
+          )}
+        </div>
       </header>
 
       <div className="relative flex min-h-0 flex-1">
@@ -600,10 +690,15 @@ function Index() {
                 if (idx < 0) return;
                 setSel({ ac: idx + 1, ar: row, cc: idx + 1, cr: row });
               }}
+              onTriggerLLM={() => activeId && triggerLLMFallback(activeId)}
+              isLLMRunning={isLLMRunning}
+              llmReport={llmReport}
             />
           </>
         )}
       </div>
+
+      <LLMControlDialog open={llmControlOpen} onClose={() => setLlmControlOpen(false)} />
 
       {headerAsk && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6">
