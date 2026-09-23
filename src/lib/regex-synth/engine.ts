@@ -1220,6 +1220,10 @@ function alternationRule(
     for (const lefts of variants) {
       const uniq = [...new Set(lefts)].sort((a, b) => b.length - a.length);
       if (uniq.length > 8) continue;
+      // Ne jamais construire d'alternance sur des mots ordinaires ou noms (cas particuliers) :
+      // une alternance n'est acceptable que sur des délimiteurs ou symboles courts
+      const hasProperWords = uniq.some((u) => /[A-Za-zÀ-ÿ]{3,}/.test(u));
+      if (uniq.length > 1 && hasProperWords) continue;
       // des repères longs et tous différents = du hasard, pas un motif
       const limit = uniq.every((u) => /[A-Za-z]{3}/.test(u) && !/\d/.test(u)) ? 18 : 12;
       if (uniq.length > 1 && uniq.some((u) => u.length > limit)) continue;
@@ -1266,6 +1270,12 @@ function alternationRule(
  */
 function preferAlternation(res: SynthResult, inputs: string[], examples: Example[]): SynthResult {
   if (!res.rule) return res;
+  // Ne JAMAIS remplacer une règle sans alternatives (extra) qui couvre déjà toutes les lignes ou est structurelle
+  if (!res.rule.extra || res.rule.extra.length === 0) {
+    if (res.matched >= inputs.filter(Boolean).length || res.rule.source.startsWith("^")) {
+      return res;
+    }
+  }
   const shapes = new Set(examples.map((e) => shapeOf(e.output)));
   const given = new Map(examples.map((e) => [e.index, e.output] as const));
   const known: { index: number; value: string }[] = examples.map((e) => ({
@@ -1354,8 +1364,17 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
     return res;
   };
 
-  if (single && singleRes && singleOk >= examples.length)
-    return finalize(preferAlternation(selfTrain(singleRes, inputs, examples), inputs, examples));
+  if (single && singleRes && singleOk >= examples.length) {
+    const totalLines = inputs.filter(Boolean).length;
+    if (singleRes.matched >= totalLines || single.source.startsWith("^")) {
+      return finalize(singleRes);
+    }
+    const trained = selfTrain(singleRes, inputs, examples);
+    if (trained.matched >= totalLines || trained.rule?.source.startsWith("^")) {
+      return finalize(trained);
+    }
+    return finalize(preferAlternation(trained, inputs, examples));
+  }
 
   // sinon seulement : plusieurs motifs, ou une exception
   const parts = partitionRules(examples);
