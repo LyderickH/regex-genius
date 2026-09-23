@@ -951,6 +951,9 @@ function minimalLeft(input: string, pos: number, cap: string, raw: string): stri
   const before = input.slice(0, pos);
   for (let len = 1; len <= 18 && len <= before.length; len++) {
     const tail = before.slice(before.length - len);
+    // un délimiteur ne doit pas couper un mot ou un nombre en deux
+    const prev = before[before.length - len - 1];
+    if (prev && /[A-Za-z0-9]/.test(prev) && /[A-Za-z0-9]/.test(tail[0]!)) continue;
     let re: RegExp;
     try {
       re = new RegExp(`${escapeRegex(tail)}(${cap})`);
@@ -1035,7 +1038,7 @@ function alternationRule(
       if (v === w) good++;
       else bad++;
     }
-    const score = good - bad * 1.5 - src.length / 400;
+    const score = good - bad * 1.5 - (uniq.length - 1) * 0.3 - src.length / 400;
     if (!best || score > best.score) best = { rule: { source: src, flags: "", transform }, score };
   }
   return best?.rule ?? null;
