@@ -1399,8 +1399,21 @@ export function combineColumns(
 
   let best: { source: string; covered: number } | null = null;
   const fieldVariant = buildFields() ?? buildEmpirical();
+  if (fieldVariant) {
+    try {
+      const re = new RegExp(fieldVariant);
+      let covered = 0;
+      for (const input of rows) {
+        const m = re.exec(input);
+        if (m && ordered.every((_, i) => m[i + 1] !== undefined)) covered++;
+      }
+      best = { source: fieldVariant, covered };
+    } catch {
+      /* variante invalide */
+    }
+  }
   for (const glue of ["[\\s\\S]*?", ".*?", ""]) {
-    const source = glue === "[\\s\\S]*?" && fieldVariant ? fieldVariant : build(glue);
+    const source = build(glue);
     let re: RegExp;
     try {
       re = new RegExp(source);
