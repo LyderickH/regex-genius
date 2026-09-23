@@ -303,12 +303,14 @@ function Index() {
           </label>
           {rows.length > 0 && (
             <>
+              <ToolbarButton icon={ClipboardCopy} label="Copier" onClick={copyTable} />
               <ToolbarButton icon={FileText} label="CSV" onClick={() => doExport("csv")} />
               <ToolbarButton
                 icon={FileSpreadsheet}
                 label="Excel"
                 onClick={() => doExport("xlsx")}
               />
+
               <ToolbarButton
                 icon={Trash2}
                 label="Vider"
