@@ -23,7 +23,7 @@ export interface GridSel {
 
 /** Largeur approximative d'une chaîne en police mono 13px. */
 function measure(text: string): number {
-  return Math.min(1200, Math.max(MIN_W, text.length * 7.8 + 28));
+  return Math.max(MIN_W, text.length * 8.2 + 32);
 }
 
 interface Props {
