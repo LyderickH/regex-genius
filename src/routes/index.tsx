@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ClipboardPaste,
+  ClipboardCopy,
   Upload,
   FileSpreadsheet,
   FileText,
@@ -14,7 +15,15 @@ import { DataGrid } from "@/components/regex-tool/DataGrid";
 import { PatternPanel } from "@/components/regex-tool/PatternPanel";
 import { emptyColumn, cellValue, type OutputColumn } from "@/components/regex-tool/types";
 import type { SynthResult } from "@/lib/regex-synth/engine";
-import { parseFile, parsePastedText, exportCsv, exportXlsx, type Matrix } from "@/lib/data-io";
+import {
+  parseFile,
+  parsePastedText,
+  exportCsv,
+  exportXlsx,
+  toTsv,
+  copyToClipboard,
+  type Matrix,
+} from "@/lib/data-io";
 
 export const Route = createFileRoute("/")({
   head: () => ({
