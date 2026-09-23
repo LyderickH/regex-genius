@@ -4,7 +4,46 @@
  * validation sur tous les exemples fournis, sélection de la plus simple.
  */
 
-export type Transform = "none" | "upper" | "lower";
+/** Nettoyage appliqué après extraction. */
+export interface Transform {
+  /** suppression : rien, tous les espaces (y compris insécables), tout sauf les chiffres */
+  strip: "none" | "spaces" | "digits";
+  /** séparateur décimal : inchangé, virgule -> point, point -> virgule */
+  dec: "none" | "dot" | "comma";
+  casing: "none" | "upper" | "lower";
+}
+
+export const NO_TRANSFORM: Transform = { strip: "none", dec: "none", casing: "none" };
+
+export function isIdentity(t: Transform): boolean {
+  return t.strip === "none" && t.dec === "none" && t.casing === "none";
+}
+
+/** Description lisible du nettoyage, ou null s'il n'y en a pas. */
+export function describeTransform(t: Transform): string | null {
+  const parts: string[] = [];
+  if (t.strip === "spaces") parts.push("suppression des espaces");
+  if (t.strip === "digits") parts.push("conservation des chiffres uniquement");
+  if (t.dec === "dot") parts.push("virgule décimale remplacée par un point");
+  if (t.dec === "comma") parts.push("point décimal remplacé par une virgule");
+  if (t.casing === "upper") parts.push("mise en MAJUSCULES");
+  if (t.casing === "lower") parts.push("mise en minuscules");
+  return parts.length ? parts.join(", ") : null;
+}
+
+const TRANSFORMS: Transform[] = (() => {
+  const out: Transform[] = [];
+  for (const strip of ["none", "spaces", "digits"] as const)
+    for (const dec of ["none", "dot", "comma"] as const)
+      for (const casing of ["none", "upper", "lower"] as const)
+        out.push({ strip, dec, casing });
+  // les nettoyages les plus simples d'abord
+  const cost = (t: Transform) =>
+    (t.strip === "none" ? 0 : t.strip === "spaces" ? 1 : 3) +
+    (t.dec === "none" ? 0 : 2) +
+    (t.casing === "none" ? 0 : 1);
+  return out.sort((a, b) => cost(a) - cost(b));
+})();
 
 export interface Rule {
   /** source de l'expression régulière, le groupe 1 contient la valeur extraite */
