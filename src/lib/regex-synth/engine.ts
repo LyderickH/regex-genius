@@ -253,8 +253,24 @@ function validate(source: string, transform: Transform, examples: Example[]): bo
   return true;
 }
 
+/** Nombre de lignes où la règle produit une valeur (sert à départager les candidats). */
+function coverage(src: string, inputs: string[]): number {
+  let re: RegExp;
+  try {
+    re = new RegExp(src);
+  } catch {
+    return 0;
+  }
+  let n = 0;
+  for (const input of inputs) {
+    if (!input) continue;
+    if (re.exec(input)?.[1] !== undefined) n++;
+  }
+  return n;
+}
+
 /** Trouve une règle qui explique 100% des exemples fournis. */
-export function synthesizeRule(examples: Example[]): Rule | null {
+export function synthesizeRule(examples: Example[], allInputs?: string[]): Rule | null {
   const valid = examples.filter((e) => e.output !== "" && e.input !== "");
   if (valid.length === 0) return null;
 
@@ -266,15 +282,29 @@ export function synthesizeRule(examples: Example[]): Rule | null {
       return { source: `(${lit})`, flags: "", transform: NO_TRANSFORM };
   }
 
+  const inputs = (allInputs ?? examples.map((e) => e.input)).filter(Boolean);
+  const target = inputs.length;
   const seed = valid.slice().sort((a, b) => a.input.length - b.input.length)[0]!;
   for (const transform of TRANSFORMS) {
     const candidates = buildCandidates(seed, transform);
+    let best: Rule | null = null;
+    let bestCov = -1;
+    let seen = 0;
     for (const src of candidates) {
-      if (validate(src, transform, valid)) return { source: src, flags: "", transform };
+      if (!validate(src, transform, valid)) continue;
+      const cov = coverage(src, inputs);
+      if (cov > bestCov) {
+        best = { source: src, flags: "", transform };
+        bestCov = cov;
+      }
+      if (bestCov >= target) break;
+      if (++seen >= 40) break; // on ne scanne qu'un petit lot de variantes valides
     }
+    if (best) return best;
   }
   return null;
 }
+
 
 export function applyRule(rule: Rule, inputs: string[]): SynthResult {
   const re = new RegExp(rule.source, rule.flags);
