@@ -9,6 +9,9 @@ const ADD_W = 52;
 const MIN_W = 100;
 const DEFAULT_SOURCE_W = 460;
 const DEFAULT_OUT_W = 190;
+/** Identifiant fictif de la colonne « Données source ». */
+export const SOURCE_COL = "__source__";
+
 
 /** Sélection façon Excel : ancre (ac,ar) + coin opposé (cc,cr). Colonne 0 = source. */
 export interface GridSel {
@@ -29,7 +32,10 @@ interface Props {
   activeId: string | null;
   onSelect: (id: string) => void;
   onChangeCell: (colId: string, row: number, value: string) => void;
+  onChangeSource?: (row: number, value: string) => void;
+  onAddRow?: () => void;
   onFocusCell?: (colId: string, row: number) => void;
+
   onRename: (colId: string, name: string) => void;
   onAddColumn: () => void;
   onRemoveColumn: (colId: string) => void;
@@ -43,7 +49,10 @@ export function DataGrid({
   activeId,
   onSelect,
   onChangeCell,
+  onChangeSource,
+  onAddRow,
   onFocusCell,
+
   onRename,
   onAddColumn,
   onRemoveColumn,
@@ -176,7 +185,10 @@ export function DataGrid({
     if (col) {
       onSelect(col.id);
       onFocusCell?.(col.id, r);
+    } else {
+      onFocusCell?.(SOURCE_COL, r);
     }
+
   };
 
   const onCellMouseDown = (c: number, row: number, e: React.MouseEvent) => {
@@ -247,12 +259,16 @@ export function DataGrid({
     }
     if (e.key === "F2") {
       e.preventDefault();
-      if (a.c >= 1) focusInput(a.c, a.r);
+      focusInput(a.c, a.r);
       return;
     }
     if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault();
-      for (let c = Math.max(1, c0); c <= c1; c++) {
+      for (let c = c0; c <= c1; c++) {
+        if (c === 0) {
+          for (let r = r0; r <= r1; r++) onChangeSource?.(r, "");
+          continue;
+        }
         const col = columns[c - 1];
         if (!col) continue;
         for (let r = r0; r <= r1; r++) onChangeCell(col.id, r, "");
@@ -260,14 +276,22 @@ export function DataGrid({
       return;
     }
     // saisie directe : remplace le contenu de la cellule active puis passe en édition
-    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && a.c >= 1) {
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && a.r < rows.length) {
+      if (a.c === 0) {
+        if (!onChangeSource) return;
+        e.preventDefault();
+        onChangeSource(a.r, e.key);
+        focusInput(0, a.r);
+        return;
+      }
       const col = columns[a.c - 1];
-      if (col && a.r < rows.length) {
+      if (col) {
         e.preventDefault();
         onChangeCell(col.id, a.r, e.key);
         focusInput(a.c, a.r);
       }
     }
+
   };
 
   const sb = selection
@@ -372,13 +396,22 @@ export function DataGrid({
                     onMouseDown={(e) => onCellMouseDown(0, i, e)}
                     onMouseEnter={() => onCellMouseEnter(0, i)}
                     className={cn(
-                      "grid-cell flex cursor-cell items-center truncate px-3 font-mono text-[13px] text-foreground",
+                      "grid-cell flex cursor-cell items-center",
                       inSel(0, i) && "bg-primary/10",
                     )}
                     title={source}
                   >
-                    {source}
+                    <input
+                      data-cell={`0:${i}`}
+                      value={source}
+                      onFocus={() => onFocusCell?.(SOURCE_COL, i)}
+                      onChange={(e) => onChangeSource?.(i, e.target.value)}
+                      readOnly={!onChangeSource}
+                      placeholder="donnée source…"
+                      className="h-full w-full bg-transparent px-3 font-mono text-[13px] text-foreground outline-none placeholder:text-muted-foreground/50 focus:bg-primary/15"
+                    />
                   </div>
+
                   {columns.map((col) => {
                     const cIdx = columns.indexOf(col) + 1;
                     const isUser = col.user[i] != null && col.user[i] !== "";
@@ -433,7 +466,17 @@ export function DataGrid({
             />
           )}
         </div>
+        {rows.length > 0 && onAddRow && (
+          <button
+            onClick={onAddRow}
+            className="flex w-full items-center gap-2 border-t border-grid-line px-3 py-2 text-left text-xs text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
+          >
+            <Plus className="size-3.5" />
+            Ajouter une ligne
+          </button>
+        )}
       </div>
+
     </div>
   );
 }
