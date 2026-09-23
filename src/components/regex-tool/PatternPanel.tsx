@@ -172,6 +172,37 @@ export function PatternPanel({
             </span>
           </div>
 
+          {column.failures.length > 0 && (
+            <div>
+              <div className="mb-1.5 text-[11px] uppercase tracking-[0.15em] text-warn">
+                Pourquoi ces lignes échouent
+              </div>
+              <p className="mb-2 text-xs text-muted-foreground">
+                Le motif ci-dessus ne retrouve pas son contexte dans ces lignes : le texte qui
+                entoure la valeur y est écrit autrement. Saisissez le résultat attendu sur l'une
+                d'elles : un motif supplémentaire sera déduit pour les couvrir.
+              </p>
+              <ul className="space-y-1">
+                {column.failures.slice(0, 6).map((r) => (
+                  <li key={r}>
+                    <button
+                      onClick={() => onGoToRow?.(r)}
+                      className="flex w-full gap-2 rounded-md border border-border bg-background px-2 py-1 text-left text-[11px] transition hover:border-warn"
+                    >
+                      <span className="shrink-0 font-mono text-muted-foreground">{r + 1}</span>
+                      <span className="truncate font-mono text-foreground">{rows[r] ?? ""}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {column.failures.length > 6 && (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  et {column.failures.length - 6} autre(s).
+                </p>
+              )}
+            </div>
+          )}
+
           <div>
             <div className="mb-1.5 text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
               Lecture du motif
