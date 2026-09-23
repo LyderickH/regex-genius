@@ -19,3 +19,5 @@
 - [x] Multi-motifs : ne pas dégrader la regex simple, éviter de partir en exceptions (max 3 motifs, on ne découpe que si le gain est réel)
 
 - [x] Ctrl+Z / Ctrl+Y : annuler et rétablir les modifications du tableau
+- [ ] Regex combinée : une seule expression qui extrait toutes les colonnes d'un coup
+- [ ] Moteur — 4 principes : pénaliser les motifs littéraux, qualifier les délimiteurs (pas de mots de liaison), pivots avant/après, ordre strict des règles multiples
