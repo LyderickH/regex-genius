@@ -1,9 +1,19 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Plus, Trash2, AlertTriangle, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { cellValue, type OutputColumn } from "./types";
 
 const ROW_H = 34;
+const NUM_W = 56;
+const ADD_W = 52;
+const MIN_W = 100;
+const DEFAULT_SOURCE_W = 460;
+const DEFAULT_OUT_W = 190;
+
+/** Largeur approximative d'une chaîne en police mono 13px. */
+function measure(text: string): number {
+  return Math.min(1200, Math.max(MIN_W, text.length * 7.8 + 28));
+}
 
 interface Props {
   rows: string[];
