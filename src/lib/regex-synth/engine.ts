@@ -1324,7 +1324,6 @@ export function combineColumns(
     .map((c) => ({ ...c, at: posOf(c.rule) }))
     .filter((c) => Number.isFinite(c.at))
     .sort((a, b) => a.at - b.at);
-  console.error("DBG2", usable.length, rows.length, ordered.map(o=>o.at));
   if (ordered.length < 2) return null;
 
   const FIELD = /^\^\(\?:\[\^(.)\]\*\\?(.)\)\{(\d+)\}/;
@@ -1333,7 +1332,7 @@ export function combineColumns(
     return m ? { delim: m[1]!, n: Number(m[3]) } : null;
   };
   const strip = (src: string, first: boolean): string =>
-    first ? src : src.replace(/^\^/, "").replace(FIELD, "");
+    first ? src : src.replace(FIELD, "").replace(/^\^/, "");
 
   const build = (glue: string): string =>
     ordered.map((c, i) => strip(c.rule.source, i === 0)).join(glue);
@@ -1384,7 +1383,6 @@ export function combineColumns(
       /* variante invalide */
     }
   }
-  console.error("DBG", ordered.length, best);
   if (!best || best.covered === 0) return null;
   return {
     source: best.source,
