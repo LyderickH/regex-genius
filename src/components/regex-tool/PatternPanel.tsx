@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { explain } from "@/lib/regex-synth/explain";
 import { DIALECTS } from "@/lib/regex-synth/dialects";
+import { describeTransform } from "@/lib/regex-synth/engine";
 import type { OutputColumn } from "./types";
 
 const TOK_COLOR: Record<string, string> = {
@@ -78,9 +79,10 @@ export function PatternPanel({ column, rowCount }: { column: OutputColumn | null
                 </span>
               ))}
             </div>
-            {rule.transform !== "none" && (
+            {describeTransform(rule.transform) && (
               <p className="mt-1.5 text-xs text-muted-foreground">
-                + mise en {rule.transform === "upper" ? "MAJUSCULES" : "minuscules"} du résultat.
+                Puis, sur la valeur extraite : {describeTransform(rule.transform)}. Cette étape
+                n'est pas incluse dans l'expression ci-dessous.
               </p>
             )}
           </div>
