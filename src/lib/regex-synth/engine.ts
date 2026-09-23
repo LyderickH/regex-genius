@@ -1115,9 +1115,9 @@ function preferAlternation(res: SynthResult, inputs: string[], examples: Example
     if (w !== undefined) return v === w ? 1.5 : -2;
     if (v == null) return 0;
     const opts = ranked.get(i);
-    if (opts?.[0] === v) return 1;
-    if (opts?.includes(v)) return 0.6;
-    return shapes.has(shapeOf(v)) ? 0.3 : -0.6;
+    // toutes les hypothèses d'une ligne pèsent pareil : leur ordre est incertain
+    if (opts?.includes(v)) return 0.8;
+    return shapes.has(shapeOf(v)) ? 0.5 : -0.6;
   };
   const score = (values: (string | null)[]): number =>
     values.reduce<number>((n, v, i) => n + (inputs[i] ? rate(i, v) : 0), 0);
