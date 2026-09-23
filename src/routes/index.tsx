@@ -247,9 +247,36 @@ function Index() {
 
   const active = columns.find((c) => c.id === activeId) ?? null;
 
+  const handleRootPaste = (e: React.ClipboardEvent) => {
+    if (pasteOpen) return;
+    const text = e.clipboardData.getData("text");
+    if (!text) return;
+    if (!text.includes("\t") && !text.includes("\n")) return; // valeur simple : collage normal
+    e.preventDefault();
+    pasteBlock(text);
+  };
+
+  const handleRootCopy = (e: React.ClipboardEvent) => {
+    if (pasteOpen || !rows.length) return;
+    const el = document.activeElement as HTMLInputElement | null;
+    const inField =
+      el?.tagName === "INPUT" && el.selectionStart !== el.selectionEnd;
+    if (inField || window.getSelection()?.toString()) return;
+    e.preventDefault();
+    const header = ["Source", ...columns.map((c) => c.name)];
+    const matrix = rows.map((src, i) => [src, ...columns.map((c) => cellValue(c, i))]);
+    e.clipboardData.setData("text/plain", toTsv(header, matrix));
+    toast.success("Tableau copié — collez-le dans Excel");
+  };
+
   return (
-    <div className="flex h-screen flex-col bg-background">
+    <div
+      className="flex h-screen flex-col bg-background"
+      onPaste={handleRootPaste}
+      onCopy={handleRootCopy}
+    >
       <Toaster position="bottom-right" />
+
 
       <header className="flex shrink-0 items-center gap-3 border-b border-grid-line bg-surface px-4 py-2.5">
         <div className="flex items-center gap-2">
