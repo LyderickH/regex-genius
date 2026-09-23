@@ -66,6 +66,7 @@ function Index() {
   const [sel, setSel] = useState<GridSel | null>(null);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
+  const [headerAsk, setHeaderAsk] = useState<Matrix | null>(null);
 
   const workerRef = useRef<Worker | null>(null);
   const pending = useRef(new Map<number, string>());
