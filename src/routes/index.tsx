@@ -539,6 +539,42 @@ function Index() {
 
       </div>
 
+      {headerAsk && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6">
+          <div className="w-full max-w-lg rounded-lg border border-border bg-surface p-4 shadow-2xl">
+            <div className="mb-2 text-sm font-semibold">
+              La première ligne contient-elle des en-têtes ?
+            </div>
+            <div className="mb-3 truncate rounded-md border border-border bg-background p-2 font-mono text-[12px] text-muted-foreground">
+              {(headerAsk[0] ?? []).join("  |  ")}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  const m = headerAsk;
+                  setHeaderAsk(null);
+                  loadMatrix(m);
+                }}
+                className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-surface-2"
+              >
+                Non, ce sont des données
+              </button>
+              <button
+                onClick={() => {
+                  const m = headerAsk;
+                  setHeaderAsk(null);
+                  loadMatrix(m.slice(1), m[0]);
+                }}
+                className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90"
+              >
+                Oui, ce sont des en-têtes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
       {pasteOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6">
           <div className="w-full max-w-2xl rounded-lg border border-border bg-surface p-4 shadow-2xl">
