@@ -1041,7 +1041,7 @@ function alternationRule(
       const uniq = [...new Set(lefts)].sort((a, b) => b.length - a.length);
       if (uniq.length > 8) continue;
       // des repères longs et tous différents = du hasard, pas un motif
-      const limit = uniq.every((u) => /[A-Za-z]{2}/.test(u)) ? 18 : 12;
+      const limit = uniq.every((u) => /[A-Za-z]{3}/.test(u) && !/\d/.test(u)) ? 18 : 12;
       if (uniq.length > 1 && uniq.some((u) => u.length > limit)) continue;
       const esc = (u: string): string => (u === "^" ? "^" : escapeRegex(u));
       const head = uniq.length === 1 ? esc(uniq[0]!) : `(?:${uniq.map(esc).join("|")})`;
@@ -1113,12 +1113,26 @@ function preferAlternation(res: SynthResult, inputs: string[], examples: Example
   const score = (values: (string | null)[]): number =>
     values.reduce<number>((n, v, i) => n + (inputs[i] ? rate(i, v) : 0), 0);
 
-  const alt = alternationRule(inputs, known, res.rule.transform, rate);
-  if (!alt) return res;
-  if (explains(alt, examples) < examples.length) return res;
-  const cand = applyRule(alt, inputs);
-  // à égalité, le regex unique gagne : il est copiable tel quel
-  return score(cand.values) >= score(res.values) ? cand : res;
+  // deuxième jeu de valeurs de départ : les hypothèses les mieux classées
+  const guessed: { index: number; value: string }[] = examples.map((e) => ({
+    index: e.index,
+    value: e.output,
+  }));
+  for (const [i, opts] of ranked) if (opts[0]) guessed.push({ index: i, value: opts[0] });
+
+  let out = res;
+  let bestScore = score(res.values);
+  for (const seed of [known, guessed]) {
+    const alt = alternationRule(inputs, seed, res.rule.transform, rate);
+    if (!alt || explains(alt, examples) < examples.length) continue;
+    const cand = applyRule(alt, inputs);
+    // à égalité, le regex unique gagne : il est copiable tel quel
+    if (score(cand.values) >= bestScore) {
+      out = cand;
+      bestScore = score(cand.values);
+    }
+  }
+  return out;
 }
 
 export function synthesize(inputs: string[], expected: (string | null)[]): SynthResult {
