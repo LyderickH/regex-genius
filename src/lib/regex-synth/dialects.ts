@@ -24,9 +24,9 @@ export const DIALECTS: Dialect[] = [
   {
     id: "python",
     label: "Python",
-    pattern: (s) => `r"${dq(s)}"`,
+    pattern: (s) => `r"${rawQ(s)}"`,
     snippet: (s, f) =>
-      `import re\nm = re.search(r"${dq(s)}", ${f})\nvalue = m.group(1) if m else None`,
+      `import re\nm = re.search(r"${rawQ(s)}", ${f})\nvalue = m.group(1) if m else None`,
   },
   {
     id: "excel",
