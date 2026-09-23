@@ -85,6 +85,8 @@ export interface Rule {
   source: string;
   flags: string;
   transform: Transform;
+  /** règles alternatives, essayées dans l'ordre quand la principale ne s'applique pas */
+  extra?: Rule[];
 }
 
 export interface Example {
@@ -327,20 +329,40 @@ function coverage(src: string, inputs: string[]): number {
   return n;
 }
 
+/** La règle ne doit pas produire une valeur fausse sur les exemples d'un autre motif. */
+function avoids(src: string, transform: Transform, negatives: Example[]): boolean {
+  let re: RegExp;
+  try {
+    re = new RegExp(src);
+  } catch {
+    return false;
+  }
+  for (const n of negatives) {
+    const g = re.exec(n.input)?.[1];
+    if (g !== undefined && applyTransform(g, transform) !== n.output) return false;
+  }
+  return true;
+}
+
 /** Trouve une règle qui explique 100% des exemples fournis. */
-export function synthesizeRule(examples: Example[], allInputs?: string[]): Rule | null {
+export function synthesizeRule(
+  examples: Example[],
+  allInputs?: string[],
+  negatives?: Example[],
+): Rule | null {
   const valid = examples.filter((e) => e.output !== "" && e.input !== "");
   if (valid.length === 0) return null;
+  const neg = negatives?.filter((n) => !valid.includes(n));
 
   // cas constant
   const first = valid[0]!;
   if (valid.every((e) => e.output === first.output) && valid.length > 1) {
     const lit = escapeRegex(first.output);
-    if (validate(`(${lit})`, NO_TRANSFORM, valid))
+    if (validate(`(${lit})`, NO_TRANSFORM, valid) && (!neg || avoids(`(${lit})`, NO_TRANSFORM, neg)))
       return { source: `(${lit})`, flags: "", transform: NO_TRANSFORM };
   }
 
-  const inputs = (allInputs ?? examples.map((e) => e.input)).filter(Boolean);
+  const inputs = (allInputs ?? examples.map((e) => e.input)).filter(Boolean).slice(0, 120);
   const target = inputs.length;
   const seed = valid.slice().sort((a, b) => a.input.length - b.input.length)[0]!;
   for (const transform of TRANSFORMS) {
@@ -350,6 +372,7 @@ export function synthesizeRule(examples: Example[], allInputs?: string[]): Rule 
     let seen = 0;
     for (const src of candidates) {
       if (!validate(src, transform, valid)) continue;
+      if (neg && neg.length > 0 && !avoids(src, transform, neg)) continue;
       const cov = coverage(src, inputs);
       if (cov > bestCov) {
         best = { source: src, flags: "", transform };
@@ -364,17 +387,87 @@ export function synthesizeRule(examples: Example[], allInputs?: string[]): Rule 
 }
 
 
+/**
+ * Découpe les exemples en groupes cohérents : on cherche d'abord le plus grand
+ * sous-ensemble expliqué par une même règle, puis on recommence sur le reste.
+ * Permet de gérer deux (ou plus) motifs différents, et les exceptions.
+ */
+function partitionRules(examples: Example[], maxGroups = 3): { rule: Rule; size: number }[] {
+  const deadline = Date.now() + 3000; // budget : la déduction doit rester instantanée
+  const groups: Example[][] = [];
+  let rest = examples.slice(0, 10);
+  while (rest.length > 0 && groups.length < maxGroups && Date.now() < deadline) {
+    let bestGroup: Example[] = [];
+    const seeds = Math.min(rest.length, 4);
+    for (let s = 0; s < seeds; s++) {
+      let group: Example[] = [rest[s]!];
+      let rule = synthesizeRule(group);
+      if (!rule) continue;
+      for (let j = 0; j < rest.length; j++) {
+        if (j === s) continue;
+        const cand = rest[j]!;
+        // essai rapide : la règle courante explique-t-elle déjà cet exemple ?
+        if (validate(rule.source, rule.transform, [cand])) {
+          group = [...group, cand];
+          continue;
+        }
+        if (Date.now() > deadline) break;
+        const r2 = synthesizeRule([...group, cand]);
+        if (r2) {
+          group = [...group, cand];
+          rule = r2;
+        }
+      }
+      if (group.length > bestGroup.length) bestGroup = group;
+      if (bestGroup.length === rest.length || Date.now() > deadline) break;
+    }
+    if (bestGroup.length === 0) break;
+    groups.push(bestGroup);
+    const used = new Set(bestGroup);
+    rest = rest.filter((e) => !used.has(e));
+  }
+
+  // chaque règle est re-synthétisée en évitant les exemples des autres groupes,
+  // pour qu'elle ne s'applique pas à tort aux lignes de l'autre motif
+  const rules: { rule: Rule; group: Example[]; conflicts: number }[] = [];
+  for (let i = 0; i < groups.length; i++) {
+    const group = groups[i]!;
+    const others = groups.filter((_, j) => j !== i).flat();
+    const rule = synthesizeRule(group, undefined, others) ?? synthesizeRule(group);
+    if (!rule) continue;
+    let conflicts = 0;
+    for (const o of others) {
+      const g = new RegExp(rule.source, rule.flags).exec(o.input)?.[1];
+      if (g !== undefined && applyTransform(g, rule.transform) !== o.output) conflicts++;
+    }
+    rules.push({ rule, group, conflicts });
+  }
+  // les règles les plus spécifiques passent en premier
+  rules.sort((a, b) => a.conflicts - b.conflicts || b.group.length - a.group.length);
+  return rules.map((r) => ({ rule: r.rule, size: r.group.length }));
+}
+
+function ruleChain(rule: Rule): Rule[] {
+  return [rule, ...(rule.extra ?? [])];
+}
+
 export function applyRule(rule: Rule, inputs: string[]): SynthResult {
-  const re = new RegExp(rule.source, rule.flags);
+  const chain = ruleChain(rule).map((r) => ({ re: new RegExp(r.source, r.flags), transform: r.transform }));
   const values: (string | null)[] = [];
   const failures: number[] = [];
   let matched = 0;
   for (let i = 0; i < inputs.length; i++) {
     const input = inputs[i] ?? "";
-    const m = re.exec(input);
-    const g = m?.[1];
-    if (g !== undefined) {
-      values.push(applyTransform(g, rule.transform));
+    let value: string | null = null;
+    for (const { re, transform } of chain) {
+      const g = re.exec(input)?.[1];
+      if (g !== undefined) {
+        value = applyTransform(g, transform);
+        break;
+      }
+    }
+    if (value !== null) {
+      values.push(value);
       matched++;
     } else {
       values.push(null);
@@ -384,13 +477,56 @@ export function applyRule(rule: Rule, inputs: string[]): SynthResult {
   return { rule, values, failures, matched, total: inputs.length };
 }
 
+/** Nombre d'exemples réellement reproduits par la chaîne de règles. */
+function explains(rule: Rule, examples: Example[]): number {
+  const chain = ruleChain(rule).map((r) => ({ re: new RegExp(r.source, r.flags), transform: r.transform }));
+  let n = 0;
+  for (const ex of examples) {
+    for (const { re, transform } of chain) {
+      const g = re.exec(ex.input)?.[1];
+      if (g !== undefined) {
+        if (applyTransform(g, transform) === ex.output) n++;
+        break;
+      }
+    }
+  }
+  return n;
+}
+
 export function synthesize(inputs: string[], expected: (string | null)[]): SynthResult {
   const examples: Example[] = [];
   for (let i = 0; i < inputs.length; i++) {
     const e = expected[i];
     if (e != null && e !== "") examples.push({ index: i, input: inputs[i] ?? "", output: e });
   }
-  const rule = synthesizeRule(examples, inputs);
-  if (!rule) return { rule: null, values: inputs.map(() => null), failures: [], matched: 0, total: inputs.length };
-  return applyRule(rule, inputs);
+  const empty: SynthResult = {
+    rule: null,
+    values: inputs.map(() => null),
+    failures: [],
+    matched: 0,
+    total: inputs.length,
+  };
+  if (examples.length === 0) return empty;
+
+  const single = synthesizeRule(examples, inputs);
+  const singleRes = single ? applyRule(single, inputs) : null;
+  const singleOk = single ? explains(single, examples) : 0;
+
+  // la règle simple explique tous les exemples : on n'ajoute rien.
+  // (des lignes non couvertes restent acceptables : on garde le maximum de lignes)
+  if (single && singleRes && singleOk >= examples.length) return singleRes;
+
+  // sinon seulement : plusieurs motifs, ou une exception
+  const parts = partitionRules(examples);
+  if (parts.length > 1) {
+    const combined: Rule = { ...parts[0]!.rule, extra: parts.slice(1).map((p) => p.rule) };
+    const res = applyRule(combined, inputs);
+    const comboOk = explains(combined, examples);
+    // on ne complique la règle que si elle explique réellement plus d'exemples
+    if (comboOk > singleOk || (comboOk === singleOk && res.matched > (singleRes?.matched ?? -1)))
+      return res;
+  }
+  if (singleRes) return singleRes;
+  if (parts[0]) return applyRule(parts[0].rule, inputs);
+  return empty;
 }

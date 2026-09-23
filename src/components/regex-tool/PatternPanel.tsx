@@ -114,6 +114,37 @@ export function PatternPanel({ column, rowCount }: { column: OutputColumn | null
                 n'est pas incluse dans l'expression ci-dessous.
               </p>
             )}
+            {rule.extra && rule.extra.length > 0 && (
+              <div className="mt-3 space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Vos lignes contiennent plusieurs motifs. Les expressions suivantes sont essayées
+                  dans l'ordre quand la première ne s'applique pas :
+                </p>
+                {rule.extra.map((alt, i) => (
+                  <div key={i}>
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+                        Motif {i + 2}
+                      </span>
+                      <button
+                        onClick={() => copy(alt.source, `alt${i}`)}
+                        className="flex items-center gap-1 text-xs text-muted-foreground transition hover:text-primary"
+                      >
+                        {copied === `alt${i}` ? <Check className="size-3" /> : <Copy className="size-3" />} copier
+                      </button>
+                    </div>
+                    <div className="break-all rounded-md border border-border bg-background p-2.5 font-mono text-[12px] leading-relaxed">
+                      {alt.source}
+                    </div>
+                    {describeTransform(alt.transform) && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Puis : {describeTransform(alt.transform)}.
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2 rounded-md border border-border bg-surface-2 px-3 py-2 text-xs">
