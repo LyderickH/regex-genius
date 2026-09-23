@@ -274,14 +274,16 @@ function fieldPrefixes(input: string, pos: number): string[] {
 function commonContexts(
   examples: Example[],
   transform: Transform,
-): { lefts: string[]; rights: string[] } {
+): { lefts: string[]; rights: string[]; caps: string[] } {
   const lefts: string[] = [];
   const rights: string[] = [];
+  const raws: string[] = [];
   for (const ex of examples) {
     const occ = occurrences(ex.input, ex.output, transform)[0];
-    if (!occ) return { lefts: [], rights: [] };
+    if (!occ) return { lefts: [], rights: [], caps: [] };
     lefts.push(ex.input.slice(0, occ.pos));
     rights.push(ex.input.slice(occ.pos + occ.len));
+    raws.push(ex.input.substr(occ.pos, occ.len));
   }
   const suffix = (() => {
     let n = 0;
