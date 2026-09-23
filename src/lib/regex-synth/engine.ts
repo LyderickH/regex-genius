@@ -997,6 +997,7 @@ function alternationRule(
   inputs: string[],
   known: { index: number; value: string }[],
   transform: Transform,
+  rate?: (index: number, value: string | null) => number,
 ): Rule | null {
   const hits: { i: number; raw: string; pos: number }[] = [];
   for (const k of known) {
@@ -1052,23 +1053,22 @@ function alternationRule(
         continue;
       }
 
-      let good = 0;
-      let bad = 0;
+      let quality = 0;
       for (let i = 0; i < inputs.length; i++) {
         const input = inputs[i] ?? "";
         if (!input) continue;
-        const w = wanted.get(i);
         const g = re.exec(input)?.[1];
-        if (g === undefined) {
-          if (w !== undefined) bad += 0.5;
+        const v = g === undefined ? null : applyTransform(g, transform);
+        if (rate) {
+          quality += rate(i, v);
           continue;
         }
-        const v = applyTransform(g, transform);
+        const w = wanted.get(i);
         if (w === undefined) continue;
-        if (v === w) good++;
-        else bad++;
+        if (v === null) quality -= 0.5;
+        else quality += v === w ? 1 : -1.5;
       }
-      const score = good - bad * 1.5 - (uniq.length - 1) * 0.3 - src.length / 400;
+      const score = quality - (uniq.length - 1) * 0.3 - src.length / 400;
       if (!best || score > best.score) best = { rule: { source: src, flags: "", transform }, score };
     }
   }
