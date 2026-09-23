@@ -371,7 +371,7 @@ export function synthesizeRule(examples: Example[], allInputs?: string[]): Rule 
  * sous-ensemble expliqué par une même règle, puis on recommence sur le reste.
  * Permet de gérer deux (ou plus) motifs différents, et les exceptions.
  */
-function partitionRules(examples: Example[], allInputs: string[], maxGroups = 4): Rule[] {
+function partitionRules(examples: Example[], maxGroups = 4): Rule[] {
   const rules: Rule[] = [];
   let rest = examples.slice(0, 14);
   while (rest.length > 0 && rules.length < maxGroups) {
@@ -379,12 +379,12 @@ function partitionRules(examples: Example[], allInputs: string[], maxGroups = 4)
     let bestGroup: Example[] = [];
     for (let s = 0; s < rest.length; s++) {
       let group: Example[] = [rest[s]!];
-      let rule = synthesizeRule(group, allInputs);
+      let rule = synthesizeRule(group);
       if (!rule) continue;
       for (let j = 0; j < rest.length; j++) {
         if (j === s) continue;
         const trial = [...group, rest[j]!];
-        const r2 = synthesizeRule(trial, allInputs);
+        const r2 = synthesizeRule(trial);
         if (r2) {
           group = trial;
           rule = r2;
@@ -473,7 +473,7 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
   }
 
   // une seule règle ne suffit pas (deux motifs, ou une exception) : on combine
-  const parts = partitionRules(examples, inputs);
+  const parts = partitionRules(examples);
   if (parts.length > 1) {
     const combined: Rule = { ...parts[0]!, extra: parts.slice(1) };
     const res = applyRule(combined, inputs);
