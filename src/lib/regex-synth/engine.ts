@@ -1419,7 +1419,8 @@ export function combineColumns(
         if (gap < 1) return null;
         out += `${cls}*${lit}(?:${cls}*${lit}){${gap - 1}}`;
       }
-      out += `(${caps[i]})`;
+      // le champ peut commencer par des espaces avant la valeur
+      out += `${cls}*?(${caps[i]})`;
     }
     return out;
   };
