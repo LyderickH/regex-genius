@@ -236,29 +236,34 @@ function Index() {
         )}
       </header>
 
-      {rows.length === 0 ? (
-        <EmptyState
-          onLoadSample={() => loadMatrix(parsePastedText(SAMPLE))}
-          onPaste={(text) => loadMatrix(parsePastedText(text))}
-          onFile={handleFile}
+      <div className="relative flex min-h-0 flex-1">
+        <DataGrid
+          rows={rows}
+          columns={columns}
+          activeId={activeId}
+          onSelect={setActiveId}
+          onChangeCell={handleChangeCell}
+          onRename={(id, name) =>
+            setColumns((cols) => cols.map((c) => (c.id === id ? { ...c, name } : c)))
+          }
+          onAddColumn={addColumn}
+          onRemoveColumn={removeColumn}
         />
-      ) : (
-        <div className="flex min-h-0 flex-1">
-          <DataGrid
-            rows={rows}
-            columns={columns}
-            activeId={activeId}
-            onSelect={setActiveId}
-            onChangeCell={handleChangeCell}
-            onRename={(id, name) =>
-              setColumns((cols) => cols.map((c) => (c.id === id ? { ...c, name } : c)))
-            }
-            onAddColumn={addColumn}
-            onRemoveColumn={removeColumn}
-          />
-          <PatternPanel column={active} rowCount={rows.length} />
-        </div>
-      )}
+        <PatternPanel column={active} rowCount={rows.length} />
+        {rows.length === 0 && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background/70 backdrop-blur-[2px]">
+            <p className="text-sm text-muted-foreground">
+              Collez ou importez vos données, ou…
+            </p>
+            <button
+              onClick={loadSample}
+              className="rounded-md border border-border px-3 py-1.5 text-xs transition hover:border-primary hover:text-primary"
+            >
+              Essayer avec un exemple
+            </button>
+          </div>
+        )}
+      </div>
 
       {pasteOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6">
