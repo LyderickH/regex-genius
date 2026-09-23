@@ -69,6 +69,7 @@ export function DataGrid({
   // widths[0] = colonne source, widths[1..n] = colonnes de résultat
   const [widths, setWidths] = useState<number[]>([]);
   const resizing = useRef<{ index: number; startX: number; startW: number } | null>(null);
+  const manuallyResized = useRef(new Set<string>());
   const anchor = useRef<{ c: number; r: number } | null>(null);
   const dragging = useRef(false);
 
@@ -90,19 +91,20 @@ export function DataGrid({
       const next = w.slice(0, need);
       while (next.length < need) next.push(next.length === 0 ? DEFAULT_SOURCE_W : DEFAULT_OUT_W);
 
-      next[0] = Math.max(
-        next[0] ?? DEFAULT_SOURCE_W,
-        measure("Données source"),
-        ...rows.map(measure),
-      );
+      if (!manuallyResized.current.has(SOURCE_COL)) {
+        next[0] = rows.length
+          ? Math.max(measure("Données source"), ...rows.map(measure))
+          : DEFAULT_SOURCE_W;
+      }
       for (let c = 0; c < columns.length; c++) {
         const col = columns[c];
         if (!col) continue;
+        if (manuallyResized.current.has(col.id)) continue;
         let required = measure(col.name) + 52;
         for (let r = 0; r < rows.length; r++) {
           required = Math.max(required, measure(cellValue(col, r)));
         }
-        next[c + 1] = Math.max(next[c + 1] ?? DEFAULT_OUT_W, required);
+        next[c + 1] = rows.length ? required : DEFAULT_OUT_W;
       }
 
       return next.some((value, index) => value !== w[index]) || w.length !== need ? next : w;
@@ -124,6 +126,8 @@ export function DataGrid({
   const startResize = (index: number, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    const key = index === 0 ? SOURCE_COL : columns[index - 1]?.id;
+    if (key) manuallyResized.current.add(key);
     resizing.current = { index, startX: e.clientX, startW: wFor(index) };
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
@@ -157,6 +161,8 @@ export function DataGrid({
   /** Double-clic sur la poignée : ajuste la colonne à son contenu le plus long. */
   const autoFit = useCallback(
     (index: number) => {
+      const key = index === 0 ? SOURCE_COL : columns[index - 1]?.id;
+      if (key) manuallyResized.current.add(key);
       setWidths((ws) => {
         const next = ws.slice();
         if (index === 0) {
