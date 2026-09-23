@@ -9,9 +9,9 @@ export function parsePastedText(text: string): Matrix {
   if (!clean) return [];
   const lines = clean.split("\n");
   if (lines.some((l) => l.includes("\t"))) return lines.map((l) => l.split("\t"));
-  const commas = lines.filter((l) => l.includes(";") || l.includes(",")).length;
-  if (commas === lines.length && lines.length > 0) {
-    const parsed = Papa.parse<string[]>(clean, { skipEmptyLines: true });
+  // point-virgule uniquement : la virgule est trop souvent un séparateur décimal
+  if (lines.every((l) => l.includes(";"))) {
+    const parsed = Papa.parse<string[]>(clean, { delimiter: ";", skipEmptyLines: true });
     if (parsed.data.length) return parsed.data as Matrix;
   }
   return lines.map((l) => [l]);
