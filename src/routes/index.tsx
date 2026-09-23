@@ -725,6 +725,7 @@ function Index() {
             />
             <PatternPanel
               combined={combined}
+              hasMultipleRules={columns.filter((c) => c.rule).length >= 2}
               column={active}
               rowCount={rows.length}
               rows={rows}

@@ -1575,23 +1575,82 @@ export function combineColumns(
     if (!best || covered > best.covered) best = { source, covered };
     if (covered === rows.length) break;
   }
-  if (fieldVariant) {
-    try {
-      const re = new RegExp(fieldVariant);
-      let covered = 0;
-      for (const input of rows) {
-        const m = re.exec(input);
-        if (m && ordered.every((_, i) => m[i + 1] !== undefined)) covered++;
+  // Variante par assertion prospective (lookahead) : supporte l'ordre arbitraire des champs
+  const buildLookahead = (columnsList: typeof ordered): string => {
+    return "^" + columnsList.map((c) => `(?=.*?${strip(c.rule.source, false)})`).join("");
+  };
+
+  try {
+    const lookaheadSource = buildLookahead(ordered);
+    const re = new RegExp(lookaheadSource);
+    let covered = 0;
+    for (const input of rows) {
+      const m = re.exec(input);
+      if (m && ordered.every((_, i) => m[i + 1] !== undefined)) covered++;
+    }
+    if (!best || covered > best.covered) best = { source: lookaheadSource, covered };
+  } catch {
+    /* lookahead invalide */
+  }
+
+  let selectedColumns = ordered;
+
+  // Si aucune combinaison n'a couvert de lignes avec toutes les colonnes,
+  // rechercher le meilleur sous-ensemble de colonnes (au moins 2)
+  if (!best || best.covered === 0) {
+    const getSubsets = <T>(arr: T[], size: number): T[][] => {
+      if (size === 0) return [[]];
+      if (arr.length === 0) return [];
+      const head = arr[0]!;
+      const tail = arr.slice(1);
+      const withHead = getSubsets(tail, size - 1).map((sub) => [head, ...sub]);
+      const withoutHead = getSubsets(tail, size);
+      return [...withHead, ...withoutHead];
+    };
+
+    for (let k = ordered.length - 1; k >= 2; k--) {
+      const subsets = getSubsets(ordered, k);
+      for (const sub of subsets) {
+        // Tester les glues séquentielles sur le sous-ensemble
+        for (const glue of ["[\\s\\S]*?", ".*?", ""]) {
+          const subSource = sub.map((c, i) => strip(c.rule.source, i === 0)).join(glue);
+          try {
+            const re = new RegExp(subSource);
+            let covered = 0;
+            for (const input of rows) {
+              const m = re.exec(input);
+              if (m && sub.every((_, i) => m[i + 1] !== undefined)) covered++;
+            }
+            if (covered > 0 && (!best || covered > best.covered)) {
+              best = { source: subSource, covered };
+              selectedColumns = sub;
+            }
+          } catch {}
+        }
+
+        // Tester lookahead sur le sous-ensemble
+        try {
+          const subLookahead = buildLookahead(sub);
+          const re = new RegExp(subLookahead);
+          let covered = 0;
+          for (const input of rows) {
+            const m = re.exec(input);
+            if (m && sub.every((_, i) => m[i + 1] !== undefined)) covered++;
+          }
+          if (covered > 0 && (!best || covered > best.covered)) {
+            best = { source: subLookahead, covered };
+            selectedColumns = sub;
+          }
+        } catch {}
       }
-      if (!best || covered > best.covered) best = { source: fieldVariant, covered };
-    } catch {
-      /* variante invalide */
+      if (best && best.covered > 0) break;
     }
   }
+
   if (!best || best.covered === 0) return null;
   return {
     source: best.source,
-    names: ordered.map((c) => c.name),
+    names: selectedColumns.map((c) => c.name),
     covered: best.covered,
     total: rows.length,
   };

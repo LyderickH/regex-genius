@@ -37,6 +37,7 @@ export function PatternPanel({
   rows = [],
   onGoToRow,
   combined,
+  hasMultipleRules,
   onTriggerLLM,
   isLLMRunning,
   llmReport,
@@ -46,6 +47,7 @@ export function PatternPanel({
   rows?: string[];
   onGoToRow?: (row: number) => void;
   combined?: { source: string; names: string[]; covered: number; total: number } | null;
+  hasMultipleRules?: boolean;
   onTriggerLLM?: () => void;
   isLLMRunning?: boolean;
   llmReport?: ModelProgressReport;
@@ -124,11 +126,11 @@ export function PatternPanel({
           </div>
         </div>
 
-        {combined && (
+        {combined ? (
           <div className="border-b border-grid-line bg-surface-2/40 p-4">
             <div className="mb-1.5 flex items-center justify-between">
               <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
-                Regex combinée — toutes les colonnes
+                Regex combinée — {combined.names.length > 2 ? `${combined.names.length} colonnes` : "toutes les colonnes"}
               </span>
               <button
                 onClick={() => copy(combined.source, "combined")}
@@ -147,7 +149,16 @@ export function PatternPanel({
               lignes.
             </p>
           </div>
-        )}
+        ) : hasMultipleRules ? (
+          <div className="border-b border-grid-line bg-surface-2/20 p-3.5">
+            <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+              <span>Regex combinée non disponible</span>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+              Les colonnes ne coexistent pas toujours sur les mêmes lignes ou changent d'ordre selon les lignes. Chaque colonne conserve sa regex dédiée ci-dessous.
+            </p>
+          </div>
+        ) : null}
 
         {!rule ? (
           <div className="space-y-4 p-4 text-sm text-muted-foreground">
