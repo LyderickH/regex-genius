@@ -419,6 +419,8 @@ function Index() {
           onSelectionChange={setSel}
           onSelect={setActiveId}
           onChangeCell={handleChangeCell}
+          onChangeSource={handleChangeSource}
+          onAddRow={addRow}
           onFocusCell={(colId, row) => {
             focus.current = { colId, row };
           }}
@@ -450,6 +452,13 @@ function Index() {
                 Coller du texte
               </button>
               <button
+                onClick={startBlank}
+                className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-4 py-2 text-sm transition hover:border-primary hover:text-primary"
+              >
+                <Plus className="size-4" />
+                Tableau vierge
+              </button>
+              <button
                 onClick={loadSample}
                 className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
               >
@@ -459,6 +468,7 @@ function Index() {
             </div>
           </div>
         )}
+
       </div>
 
       {pasteOpen && (
