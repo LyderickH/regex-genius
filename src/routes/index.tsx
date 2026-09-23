@@ -435,6 +435,11 @@ function Index() {
           {rows.length > 0 && (
             <>
               <ToolbarButton icon={ClipboardCopy} label="Copier le tableau" onClick={copyTable} />
+              <ToolbarButton
+                icon={ArrowUpToLine}
+                label="1re ligne en en-tête"
+                onClick={promoteHeader}
+              />
               <ToolbarButton icon={FileText} label="CSV" onClick={() => doExport("csv")} />
               <ToolbarButton
                 icon={FileSpreadsheet}
