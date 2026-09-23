@@ -1011,23 +1011,19 @@ function alternationRule(
     if (!hits.every((h) => full.test(h.raw))) continue;
 
     const lefts: string[] = [];
-    let complete = true;
     for (const h of hits) {
       const l = minimalLeft(inputs[h.i] ?? "", h.pos, cap, h.raw);
-      if (l == null) {
-        complete = false;
-        break;
-      }
-      lefts.push(l);
+      // une ligne sans repère exploitable est simplement laissée de côté
+      if (l != null) lefts.push(l);
     }
-    if (!complete) continue;
+    if (lefts.length < 2 || lefts.length < hits.length * 0.6) continue;
 
     const uniq = [...new Set(lefts)].sort((a, b) => b.length - a.length);
-    if (uniq.length > 6) continue;
+    if (uniq.length > 8) continue;
     // des repères longs et tous différents = du hasard, pas un motif
     if (uniq.length > 1 && uniq.some((u) => u.length > 12)) continue;
-    const head =
-      uniq.length === 1 ? escapeRegex(uniq[0]!) : `(?:${uniq.map(escapeRegex).join("|")})`;
+    const esc = (u: string): string => (u === "^" ? "^" : escapeRegex(u));
+    const head = uniq.length === 1 ? esc(uniq[0]!) : `(?:${uniq.map(esc).join("|")})`;
     const src = `${head}(${cap})`;
     let re: RegExp;
     try {
