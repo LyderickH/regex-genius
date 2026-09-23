@@ -954,6 +954,8 @@ function minimalLeft(input: string, pos: number, cap: string, raw: string): stri
     // un délimiteur ne doit pas couper un mot ou un nombre en deux
     const prev = before[before.length - len - 1];
     if (prev && /[A-Za-z0-9]/.test(prev) && /[A-Za-z0-9]/.test(tail[0]!)) continue;
+    // un délimiteur chiffré sans mot n'est qu'une donnée voisine, pas un repère
+    if (/\d/.test(tail) && !/[A-Za-z]{2}/.test(tail)) continue;
     let re: RegExp;
     try {
       re = new RegExp(`${escapeRegex(tail)}(${cap})`);
