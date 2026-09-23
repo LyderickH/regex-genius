@@ -22,7 +22,8 @@ export async function parseFile(file: File): Promise<Matrix> {
   if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf, { type: "array" });
-    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const sheet = wb.Sheets[wb.SheetNames[0] ?? ""];
+    if (!sheet) return [];
     const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, blankrows: false, raw: false });
     return rows.map((r) => (r as unknown[]).map((c) => (c == null ? "" : String(c))));
   }
