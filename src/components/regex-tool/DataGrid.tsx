@@ -353,16 +353,20 @@ export function DataGrid({
       className="flex min-h-0 flex-1 flex-col overflow-hidden outline-none"
       onKeyDown={onGridKeyDown}
     >
-      {/* en-têtes : suivent le défilement horizontal du corps */}
-      <div className="shrink-0 overflow-hidden border-b border-grid-line bg-surface-2">
+      {/* corps (l'en-tête défile avec lui, en restant collé en haut) */}
       <div
-        className="grid text-xs"
-        style={{ gridTemplateColumns: template, transform: `translateX(${-scrollLeft}px)` }}
+        ref={scroller}
+        onScroll={(e) => {
+          setScrollTop(e.currentTarget.scrollTop);
+          setScrollLeft(e.currentTarget.scrollLeft);
+        }}
+        className="min-h-0 flex-1 overflow-auto"
       >
-        <div
-          className="grid-cell z-20 bg-surface-2 px-2 py-2 text-center font-mono text-muted-foreground"
-          style={{ transform: `translateX(${scrollLeft}px)` }}
-        >
+      <div
+        className="sticky top-0 z-30 grid w-max border-b border-grid-line bg-surface-2 text-xs"
+        style={{ gridTemplateColumns: template }}
+      >
+        <div className="grid-cell sticky left-0 z-40 bg-surface-2 px-2 py-2 text-center font-mono text-muted-foreground">
           #
         </div>
         <div className="grid-cell relative px-3 py-2 font-semibold tracking-wide text-foreground">
@@ -411,17 +415,6 @@ export function DataGrid({
           <Plus className="size-4" />
         </button>
       </div>
-      </div>
-
-      {/* corps */}
-      <div
-        ref={scroller}
-        onScroll={(e) => {
-          setScrollTop(e.currentTarget.scrollTop);
-          setScrollLeft(e.currentTarget.scrollLeft);
-        }}
-        className="min-h-0 flex-1 overflow-auto"
-      >
         <div style={{ height: rows.length * ROW_H, position: "relative" }}>
           <div style={{ position: "absolute", top: start * ROW_H, left: 0, right: 0 }}>
             {visible.map((source, k) => {
