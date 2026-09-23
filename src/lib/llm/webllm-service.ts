@@ -21,7 +21,7 @@ export type ProgressSubscriber = (report: ModelProgressReport) => void;
 class LocalLLMService {
   private engine: WebWorkerMLCEngine | null = null;
   private worker: Worker | null = null;
-  private currentModelId: string = "Qwen3.5-0.8B-q4f16_1-MLC";
+  private currentModelId: string = "Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC";
   private device: RuntimeDevice = "webgpu";
   private isInitializing: boolean = false;
   private isLoadedState: boolean = false;
@@ -53,8 +53,8 @@ class LocalLLMService {
       }
     }
     this.device = "wasm";
-    // Si mobile / WASM, recommander le modèle le plus léger par défaut
-    if (this.currentModelId.includes("2B") || this.currentModelId.includes("0.8B")) {
+    // Si mobile / WASM, basculer sur le modèle ultra-léger par défaut
+    if (this.currentModelId.includes("Coder-1.5B") || this.currentModelId.includes("2B") || this.currentModelId.includes("0.8B")) {
       this.currentModelId = "SmolLM2-360M-Instruct-q4f16_1-MLC";
     }
     return "wasm";
@@ -210,8 +210,20 @@ class LocalLLMService {
         messages,
         temperature,
         max_tokens: 512,
-        // @ts-expect-error MLC engine response_format supports json_object
-        response_format: { type: "json_object" },
+        // @ts-expect-error MLC engine response_format supports schema / json_object
+        response_format: {
+          type: "json_object",
+          schema: JSON.stringify({
+            type: "object",
+            properties: {
+              pattern: { type: "string" },
+              flags: { type: "string" },
+              explanation: { type: "string" },
+              confidence: { type: "number" },
+            },
+            required: ["pattern", "explanation", "confidence"],
+          }),
+        },
       });
 
       const responseText = completion.choices[0]?.message?.content || "";

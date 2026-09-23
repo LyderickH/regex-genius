@@ -4,6 +4,8 @@
  * validation sur tous les exemples fournis, sélection de la plus simple.
  */
 
+import { sanitizeAndCheckReDoS } from "../llm/security";
+
 /** Transformations classiques appliquées après extraction. */
 export type Fmt =
   | "none"
@@ -623,6 +625,176 @@ function avoids(src: string, transform: Transform, negatives: Example[]): boolea
     if (g !== undefined && applyTransform(g, transform) !== n.output) return false;
   }
   return true;
+}
+
+function longestCommonPrefix(strs: string[]): string {
+  if (!strs.length) return "";
+  let prefix = strs[0]!;
+  for (let i = 1; i < strs.length; i++) {
+    while (!strs[i]!.startsWith(prefix)) {
+      prefix = prefix.slice(0, prefix.length - 1);
+      if (!prefix) return "";
+    }
+  }
+  return prefix;
+}
+
+function longestCommonSuffix(strs: string[]): string {
+  if (!strs.length) return "";
+  const reversed = strs.map((s) => s.split("").reverse().join(""));
+  const revPrefix = longestCommonPrefix(reversed);
+  return revPrefix.split("").reverse().join("");
+}
+
+/**
+ * Synthèse par alignement de séparateurs et DSL d'ancrage (LCS / Needleman-Wunsch & VSA style FlashFill).
+ * Détecte les invariants structurels (ex: colonnes | d'un FEC, CSV, séparateurs de date / tirets)
+ * et classe les candidats par score MDL (Minimum Description Length).
+ */
+export function synthesizeStructuredAnchorRule(
+  examples: Example[],
+  inputs: string[],
+): Rule | null {
+  const valid = examples.filter((e) => e.input && e.output);
+  if (valid.length === 0) return null;
+
+  const CANDIDATE_DELIMITERS = ["|", ";", "\t", ",", "/", "-", ":"];
+  let bestRule: Rule | null = null;
+  let bestScore = -Infinity;
+
+  for (const sep of CANDIDATE_DELIMITERS) {
+    // 1. Tous les exemples doivent contenir ce séparateur
+    if (!valid.every((e) => e.input.includes(sep))) continue;
+
+    const escapedSep = escapeRegex(sep);
+
+    // Tester les transformations (directe d'abord, puis nettoyages)
+    for (const transform of TRANSFORMS.slice(0, 8)) {
+      // Trouver pour chaque exemple si l'output correspond à un segment d'indice k
+      const indicesPerExample: number[][] = [];
+      let possible = true;
+
+      for (const ex of valid) {
+        const parts = ex.input.split(sep);
+        const matchingIndices: number[] = [];
+        for (let idx = 0; idx < parts.length; idx++) {
+          const rawPart = parts[idx]!;
+          if (
+            applyTransform(rawPart.trim(), transform) === ex.output ||
+            applyTransform(rawPart, transform) === ex.output
+          ) {
+            matchingIndices.push(idx);
+          }
+        }
+        if (matchingIndices.length === 0) {
+          possible = false;
+          break;
+        }
+        indicesPerExample.push(matchingIndices);
+      }
+
+      if (!possible || indicesPerExample.length === 0) continue;
+
+      // Chercher une intersection d'indice commune
+      let commonIndices = indicesPerExample[0]!;
+      for (let i = 1; i < indicesPerExample.length; i++) {
+        commonIndices = commonIndices.filter((idx) => indicesPerExample[i]!.includes(idx));
+      }
+
+      for (const k of commonIndices) {
+        // Motif de champ délimité direct
+        // ^(?:[^sep]*sep){k}\s*([^sep]+?)\s*(?:sep|$)
+        const pattern = `^(?:[^${escapedSep}]*${escapedSep}){${k}}\\s*([^${escapedSep}]+?)\\s*(?:${escapedSep}|$)`;
+
+        // Vérifier ReDoS
+        const { pattern: sanitizedPat, analysis } = sanitizeAndCheckReDoS(pattern);
+        if (analysis.hasCatastrophicBacktracking) continue;
+
+        if (validate(sanitizedPat, transform, valid)) {
+          // Évaluation sur l'échantillon d'inputs
+          const { cov, fit } = coverageFit(
+            sanitizedPat,
+            transform,
+            inputs,
+            new Set(valid.map((e) => shapeOf(e.output))),
+          );
+
+          // Score MDL (Minimum Description Length) :
+          // + points pour couverture et fit
+          // - coût proportionnel à la longueur du pattern
+          // + bonus pour simplicité structurelle
+          const mdlScore =
+            cov * 30 +
+            fit * 20 -
+            sanitizedPat.length * 0.1 +
+            (sep === "|" || sep === ";" ? 15 : 5);
+
+          if (mdlScore > bestScore) {
+            bestScore = mdlScore;
+            bestRule = { source: sanitizedPat, flags: "", transform };
+          }
+        }
+      }
+    }
+  }
+
+  // 2. DSL d'ancrage contextuel (LeftAnchor / RightAnchor) si aucun séparateur régulier n'a été trouvé
+  if (!bestRule && valid.length >= 2) {
+    for (const transform of TRANSFORMS.slice(0, 4)) {
+      // Trouver les occurrences de chaque exemple
+      const leftContexts: string[] = [];
+      const rightContexts: string[] = [];
+      let ok = true;
+      for (const ex of valid) {
+        const occ = occurrences(ex.input, ex.output, transform)[0];
+        if (!occ) {
+          ok = false;
+          break;
+        }
+        leftContexts.push(ex.input.slice(Math.max(0, occ.pos - 15), occ.pos));
+        rightContexts.push(
+          ex.input.slice(occ.pos + occ.len, Math.min(ex.input.length, occ.pos + occ.len + 15)),
+        );
+      }
+      if (!ok) continue;
+
+      // Plus long suffixe commun pour l'ancre gauche
+      const lSuffix = longestCommonSuffix(leftContexts);
+      // Plus long préfixe commun pour l'ancre droite
+      const rPrefix = longestCommonPrefix(rightContexts);
+
+      if (lSuffix.length >= 1 || rPrefix.length >= 1) {
+        const lEsc = lSuffix ? escapeRegex(lSuffix) : "";
+        const rEsc = rPrefix ? escapeRegex(rPrefix) : "";
+
+        // Choisir la classe de capture la plus étroite possible
+        const sampleOut = valid[0]!.output;
+        let captureClass = "[^\\r\\n]+?";
+        if (/^[A-Za-z0-9/_-]+$/.test(sampleOut)) captureClass = "[A-Za-z0-9/_-]+";
+        else if (/^[-+\d.,\s]+$/.test(sampleOut)) captureClass = "[-+\\d.,\\s]+";
+
+        const candidatePat = `${lEsc}(${captureClass})${rEsc}`;
+        const { pattern: sanitizedPat, analysis } = sanitizeAndCheckReDoS(candidatePat);
+        if (analysis.hasCatastrophicBacktracking) continue;
+
+        if (validate(sanitizedPat, transform, valid)) {
+          const { cov, fit } = coverageFit(
+            sanitizedPat,
+            transform,
+            inputs,
+            new Set(valid.map((e) => shapeOf(e.output))),
+          );
+          const mdlScore = cov * 25 + fit * 15 - sanitizedPat.length * 0.2;
+          if (mdlScore > bestScore) {
+            bestScore = mdlScore;
+            bestRule = { source: sanitizedPat, flags: "", transform };
+          }
+        }
+      }
+    }
+  }
+
+  return bestRule;
 }
 
 /** Trouve une règle qui explique 100% des exemples fournis. */
@@ -1387,18 +1559,26 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
     synthInputs = sampleIndices.map((i) => inputs[i] ?? "");
   }
 
-  const single = synthesizeRule(examples, synthInputs);
-  const singleRes = single ? applyRule(single, inputs) : null;
-  const singleOk = single ? explains(single, examples) : 0;
-
-  // la règle simple explique tous les exemples : on n'ajoute rien.
-  // (des lignes non couvertes restent acceptables : on garde le maximum de lignes)
   const finalize = (res: SynthResult): SynthResult => {
     if (res.rule) {
       res.rule.origin = "algorithmic";
     }
     return res;
   };
+
+  // 1. Étape d'alignement structurel & DSL d'ancrage VSA (LCS / Needleman-Wunsch / FlashFill)
+  // Détecte instantanément les motifs délimités (ex: | dans FEC, CSV, séparateurs invariants)
+  const structural = synthesizeStructuredAnchorRule(examples, synthInputs);
+  if (structural) {
+    const structRes = applyRule(structural, inputs);
+    if (explains(structural, examples) >= examples.length && structRes.matched >= inputs.filter(Boolean).length * 0.8) {
+      return finalize(structRes);
+    }
+  }
+
+  const single = synthesizeRule(examples, synthInputs);
+  const singleRes = single ? applyRule(single, inputs) : null;
+  const singleOk = single ? explains(single, examples) : 0;
 
   if (single && singleRes && singleOk >= examples.length) {
     const totalLines = inputs.filter(Boolean).length;

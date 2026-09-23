@@ -173,7 +173,8 @@ describe("Parsing JSON strict et boucle de retroaction", () => {
     const prompt = buildCorrectionPrompt(candidate, validation, [
       { input: "ABC 123", expected: "123" },
     ]);
-    expect(prompt).toContain("Ta proposition précédente a échoué");
-    expect(prompt).toContain("Échec sur exemple négatif");
+    expect(prompt).toContain("CEGIS");
+    expect(prompt).toContain("FORBIDDEN 456");
+    expect(prompt).toContain("CONTRE-EXEMPLE MINIMAL");
   });
 });

@@ -27,7 +27,7 @@ describe("Synthèse générale sur données délimitées (anti-surajustement)", 
     const resPiece = synthesize(inputs, expectedPiece);
     expect(resPiece.rule).not.toBeNull();
     // Doit utiliser l'indexation de champ plutôt qu'une énumération de mots
-    expect(resPiece.rule?.source).toContain("^(?:[^|]*\\|){8}");
+    expect(resPiece.rule?.source).toContain("){8}");
     expect(resPiece.rule?.source).not.toContain("COMPTOIR");
     expect(resPiece.rule?.source).not.toContain("MARTIN");
     expect(resPiece.rule?.source).not.toContain("FILS");

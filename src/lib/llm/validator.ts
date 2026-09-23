@@ -3,7 +3,7 @@
  * « Le LLM propose, les algorithmes vérifient. »
  */
 
-import { analyzeSecurity } from "./security";
+import { analyzeSecurity, sanitizeReDoS } from "./security";
 import type { ExamplePair, NegativeExample, RegexCandidate, RegexValidation } from "./types";
 
 /**
@@ -32,6 +32,9 @@ export function validateCandidate(
 ): RegexValidation {
   const errors: string[] = [];
   const failedExamples: RegexValidation["failedExamples"] = [];
+
+  // Pré-nettoyage ReDoS automatique (FlashRegex)
+  candidate.pattern = sanitizeReDoS(candidate.pattern);
 
   // Étape 1 : Compilation de la RegExp
   let re: RegExp;

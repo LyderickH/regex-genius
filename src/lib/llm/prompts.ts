@@ -72,7 +72,8 @@ Réponds UNIQUEMENT par l'objet JSON requis.`;
 }
 
 /**
- * Construit le prompt de correction pour la boucle de rétroaction
+ * Construit le prompt de correction formel CEGIS (Counter-Example Guided Inductive Synthesis)
+ * pour guider le LLM vers une résolution neuro-symbolique ciblée.
  */
 export function buildCorrectionPrompt(
   candidate: RegexCandidate | null,
@@ -80,36 +81,56 @@ export function buildCorrectionPrompt(
   positiveExamples: ExamplePair[],
   negativeExamples: NegativeExample[] = [],
 ): string {
-  let prompt = `Ta proposition précédente a échoué aux tests algorithmiques automatisés.\n\n`;
+  let prompt = `BOUCLE DE SYNTHÈSE GUIDÉE PAR CONTRE-EXEMPLES (CEGIS) :\n`;
+  prompt += `La proposition précédente a été réfutée par le vérificateur algorithmique.\n\n`;
 
   if (candidate) {
-    prompt += `REGEX TESTÉE :
+    prompt += `HYPOTHÈSE PRÉCÉDENTE :
   pattern: "${candidate.pattern}"
   flags: "${candidate.flags}"\n\n`;
   }
 
-  prompt += `ERREURS DÉTECTÉES PAR LE VALIDATEUR :\n`;
-  validation.errors.forEach((err, idx) => {
-    prompt += `  - ${err}\n`;
-  });
+  // 1. Isoler le contre-exemple minimal clé
+  const firstFail = validation.failedExamples?.[0];
+  if (firstFail) {
+    prompt += `CONTRE-EXEMPLE MINIMAL À RÉSOUDRE EN PRIORITÉ :\n`;
+    if (firstFail.type === "positive") {
+      prompt += `  - Entrée : "${firstFail.input}"\n`;
+      prompt += `  - Valeur attendue : "${firstFail.expected}"\n`;
+      prompt += `  - Valeur obtenue avec ton motif : ${
+        firstFail.got === null ? "null (aucun match)" : `"${firstFail.got}"`
+      }\n`;
+      prompt += `  -> DIAGNOSTIC : Ton motif est soit trop spécifique (ne matche pas cette variante), soit capture une mauvaise position.\n\n`;
+    } else {
+      prompt += `  - Entrée interdite qui a matché à tort : "${firstFail.input}"\n`;
+      prompt += `  -> DIAGNOSTIC : Ton motif est trop laxiste et déborde sur des données indésirables.\n\n`;
+    }
+  }
 
-  if (validation.failedExamples && validation.failedExamples.length > 0) {
-    prompt += `\nDÉTAIL DES ÉCHECS SUR LES DONNÉES :\n`;
-    validation.failedExamples.slice(0, 5).forEach((fail) => {
+  if (validation.security?.hasCatastrophicBacktracking) {
+    prompt += `ALERTE SÉCURITÉ (ReDoS) :\n`;
+    prompt += `  Ton motif précédent contient des quantifications imbriquées ou ambigües ((a+)+, (.*)*) provoquant un freeze du moteur.\n`;
+    prompt += `  Utilise des quantificateurs déterministes et bornés.\n\n`;
+  }
+
+  if (validation.failedExamples && validation.failedExamples.length > 1) {
+    prompt += `AUTRES CONTRE-EXEMPLES DÉTECTÉS :\n`;
+    validation.failedExamples.slice(1, 5).forEach((fail) => {
       if (fail.type === "positive") {
         prompt += `  * Entrée: "${fail.input}" | Attendu: "${fail.expected}" | Obtenu: ${
           fail.got === null ? "aucun match" : `"${fail.got}"`
         }\n`;
       } else {
-        prompt += `  * Entrée interdite reconnue à tort: "${fail.input}"\n`;
+        prompt += `  * Entrée interdite acceptée à tort: "${fail.input}"\n`;
       }
     });
+    prompt += `\n`;
   }
 
-  prompt += `\nINSTRUCTION DE CORRECTION :
-Corrige l'expression régulière en tenant compte précisément de ces erreurs.
-Assure-toi que la nouvelle expression fonctionne pour TOUS les exemples positifs et rejette les exemples négatifs.
-Réponds UNIQUEMENT avec l'objet JSON corrigé (aucun Markdown).`;
+  prompt += `DIRECTIVE DE REFORMULATION :
+1. Généralise ou ré-ancre la regex pour englober ce contre-exemple tout en maintenant la validité sur les autres exemples.
+2. N'énumère pas de disjonctions de valeurs littérales (ex: ne pas faire (VALEUR1|VALEUR2)). Trouve la règle structurelle (séparateurs, classes de caractères).
+3. Réponds UNIQUEMENT avec l'objet JSON requis.`;
 
   return prompt;
 }
