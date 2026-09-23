@@ -10,7 +10,7 @@ import {
   Regex,
   Sparkles,
   Plus,
-
+  ArrowUpToLine,
 } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
@@ -66,6 +66,7 @@ function Index() {
   const [sel, setSel] = useState<GridSel | null>(null);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
+  const [headerAsk, setHeaderAsk] = useState<Matrix | null>(null);
 
   const workerRef = useRef<Worker | null>(null);
   const pending = useRef(new Map<number, string>());
@@ -134,7 +135,7 @@ function Index() {
     );
   };
 
-  const loadMatrix = (matrix: Matrix) => {
+  const loadMatrix = (matrix: Matrix, names?: string[]) => {
     if (!matrix.length) {
       toast.error("Aucune donnée détectée");
       return;
@@ -144,7 +145,8 @@ function Index() {
     const cols: OutputColumn[] = [];
     const count = Math.max(1, extra);
     for (let c = 0; c < count; c++) {
-      const col = emptyColumn(`Résultat ${c + 1}`, source.length);
+      const given = names?.[c + 1]?.trim();
+      const col = emptyColumn(given ? given : `Résultat ${c + 1}`, source.length);
       if (c < extra) {
         col.user = matrix.map((r) => {
           const v = r[c + 1];
@@ -165,10 +167,33 @@ function Index() {
 
   const handleFile = async (file: File) => {
     try {
-      loadMatrix(await parseFile(file));
+      const matrix = await parseFile(file);
+      if (matrix.length > 1) setHeaderAsk(matrix);
+      else loadMatrix(matrix);
     } catch {
       toast.error("Impossible de lire ce fichier");
     }
+  };
+
+  /** Utilise la 1re ligne du tableau comme noms de colonnes. */
+  const promoteHeader = () => {
+    if (rows.length < 2) return;
+    setColumns((cols) =>
+      cols.map((c) => ({
+        ...c,
+        name: (c.user[0] ?? "").trim() || c.name,
+        user: c.user.slice(1),
+        derived: c.derived.slice(1),
+      })),
+    );
+    const next = rows.slice(1);
+    setRows(next);
+    setSel(null);
+    columns.forEach((c) => {
+      const user = c.user.slice(1);
+      if (user.some((v) => v != null)) scheduleSynth(c.id, next, user);
+    });
+    toast.success("Première ligne promue en en-tête");
   };
 
   const loadSample = () => {
@@ -410,6 +435,11 @@ function Index() {
           {rows.length > 0 && (
             <>
               <ToolbarButton icon={ClipboardCopy} label="Copier le tableau" onClick={copyTable} />
+              <ToolbarButton
+                icon={ArrowUpToLine}
+                label="1re ligne en en-tête"
+                onClick={promoteHeader}
+              />
               <ToolbarButton icon={FileText} label="CSV" onClick={() => doExport("csv")} />
               <ToolbarButton
                 icon={FileSpreadsheet}
@@ -459,7 +489,16 @@ function Index() {
           onAddColumn={addColumn}
           onRemoveColumn={removeColumn}
         />
-        <PatternPanel column={active} rowCount={rows.length} />
+        <PatternPanel
+          column={active}
+          rowCount={rows.length}
+          rows={rows}
+          onGoToRow={(row) => {
+            const idx = columns.findIndex((c) => c.id === activeId);
+            if (idx < 0) return;
+            setSel({ ac: idx + 1, ar: row, cc: idx + 1, cr: row });
+          }}
+        />
         {rows.length === 0 && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70 backdrop-blur-[2px]">
             <div className="flex items-center gap-2.5">
@@ -499,6 +538,42 @@ function Index() {
         )}
 
       </div>
+
+      {headerAsk && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6">
+          <div className="w-full max-w-lg rounded-lg border border-border bg-surface p-4 shadow-2xl">
+            <div className="mb-2 text-sm font-semibold">
+              La première ligne contient-elle des en-têtes ?
+            </div>
+            <div className="mb-3 truncate rounded-md border border-border bg-background p-2 font-mono text-[12px] text-muted-foreground">
+              {(headerAsk[0] ?? []).join("  |  ")}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  const m = headerAsk;
+                  setHeaderAsk(null);
+                  loadMatrix(m);
+                }}
+                className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-surface-2"
+              >
+                Non, ce sont des données
+              </button>
+              <button
+                onClick={() => {
+                  const m = headerAsk;
+                  setHeaderAsk(null);
+                  loadMatrix(m.slice(1), m[0]);
+                }}
+                className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90"
+              >
+                Oui, ce sont des en-têtes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {pasteOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6">
