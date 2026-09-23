@@ -1291,6 +1291,34 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
   return empty;
 }
 
+/** Contenu du groupe capturant d'un motif (en ignorant les groupes non capturants). */
+function capturedPart(src: string): string | null {
+  let depth = 0;
+  let start = -1;
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i]!;
+    if (ch === "\\") {
+      i++;
+      continue;
+    }
+    if (ch === "[") {
+      while (i < src.length && src[i] !== "]") {
+        if (src[i] === "\\") i++;
+        i++;
+      }
+      continue;
+    }
+    if (ch === "(") {
+      if (start < 0 && src[i + 1] !== "?") start = i;
+      depth++;
+    } else if (ch === ")") {
+      depth--;
+      if (start >= 0 && depth === 0) return src.slice(start + 1, i);
+    }
+  }
+  return null;
+}
+
 /** Regex combinée : un seul motif avec un groupe par colonne de sortie. */
 export function combineColumns(
   inputs: string[],
@@ -1378,10 +1406,9 @@ export function combineColumns(
       }
       if (seen.size !== 1) return null;
       idx.push([...seen][0]!);
-      const i = c.rule.source.indexOf("(");
-      const j = c.rule.source.lastIndexOf(")");
-      if (i < 0 || j <= i) return null;
-      caps.push(c.rule.source.slice(i + 1, j));
+      const cap = capturedPart(c.rule.source);
+      if (!cap) return null;
+      caps.push(cap);
     }
     const cls = `[^${escapeClass(d)}]`;
     const lit = escapeRegex(d);
