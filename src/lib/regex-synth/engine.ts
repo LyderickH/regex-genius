@@ -1122,12 +1122,14 @@ function preferAlternation(res: SynthResult, inputs: string[], examples: Example
 
   let out = res;
   let bestScore = score(res.values);
-  for (const seed of [known, guessed]) {
+  for (const [n, seed] of [known, guessed].entries()) {
     const alt = alternationRule(inputs, seed, res.rule.transform, rate);
     if (!alt || explains(alt, examples) < examples.length) continue;
     const cand = applyRule(alt, inputs);
-    // à égalité, le regex unique gagne : il est copiable tel quel
-    if (score(cand.values) >= bestScore) {
+    // à égalité, le regex unique gagne : il est copiable tel quel.
+    // les valeurs devinées, elles, doivent faire nettement mieux.
+    const need = n === 0 ? bestScore : bestScore + 0.75;
+    if (score(cand.values) >= need) {
       out = cand;
       bestScore = score(cand.values);
     }
