@@ -141,19 +141,22 @@ function capturePatterns(raw: string, rightChar: string | null): string[] {
   set.add(escapeRegex(raw));
   set.add(runsPattern(raw, true));
   set.add(runsPattern(raw, false));
-  if (/^\d+$/.test(raw)) {
-    set.add(`\\d{${raw.length}}`);
+  if (/^-?\d+$/.test(raw)) {
     set.add("\\d+");
+    set.add("-?\\d+");
+    if (!raw.startsWith("-")) set.add(`\\d{${raw.length}}`);
   }
   if (/^[A-Za-z]+$/.test(raw)) set.add("[A-Za-z]+");
   if (/^[A-Za-z0-9]+$/.test(raw)) set.add("[A-Za-z0-9]+");
   if (/^[A-Za-z0-9 ]+$/.test(raw)) set.add("[A-Za-z0-9 ]+");
-  // nombres formatés : "1 250,00", "3 410.90", "12 000"
-  if (/^[\d][\d\s\u00a0\u202f.,]*\d$/.test(raw)) {
+  // nombres formatés, éventuellement signés : "1 250,00", "-45,90", "3 410.90", "12 000"
+  if (/^[+-]?\s?[\d][\d\s\u00a0\u202f.,]*\d$/.test(raw)) {
+    set.add("[-+]?[\\d\\s\\u00a0.,]+");
+    set.add("[-+]?\\d[\\d\\s\\u00a0]*[.,]\\d+");
+    set.add("[-+]?\\d[\\d\\s\\u00a0]*(?:[.,]\\d+)?");
     set.add("[\\d\\s\\u00a0.,]+");
-    set.add("\\d[\\d\\s\\u00a0]*[.,]\\d+");
-    set.add("\\d[\\d\\s\\u00a0]*(?:[.,]\\d+)?");
   }
+
   if (rightChar && !/\s/.test(rightChar)) set.add(`[^${escapeClass(rightChar)}]+`);
   if (!/\s/.test(raw)) set.add("\\S+");
   set.add("[^\\n]+?");
