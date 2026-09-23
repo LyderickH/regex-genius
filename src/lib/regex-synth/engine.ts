@@ -1352,8 +1352,53 @@ export function combineColumns(
     return out;
   };
 
+  /**
+   * Variante empirique : on repère le n-ième champ de chaque capture directement
+   * dans les lignes, ce qui donne un motif exact même sans préfixe de champ.
+   */
+  const buildEmpirical = (): string | null => {
+    const d = ["|", ";", "\t", ","].find((c) => rows.every((r) => r.split(c).length >= 3));
+    if (!d) return null;
+    const idx: number[] = [];
+    const caps: string[] = [];
+    for (const c of ordered) {
+      const seen = new Set<number>();
+      let re: RegExp;
+      try {
+        re = new RegExp(c.rule.source, c.rule.flags);
+      } catch {
+        return null;
+      }
+      for (const input of rows) {
+        const m = re.exec(input);
+        const g = firstGroup(m);
+        if (g === undefined || m === null) continue;
+        const at = input.indexOf(g, m.index);
+        seen.add(input.slice(0, at).split(d).length - 1);
+      }
+      if (seen.size !== 1) return null;
+      idx.push([...seen][0]!);
+      const i = c.rule.source.indexOf("(");
+      const j = c.rule.source.lastIndexOf(")");
+      if (i < 0 || j <= i) return null;
+      caps.push(c.rule.source.slice(i + 1, j));
+    }
+    const cls = `[^${escapeClass(d)}]`;
+    const lit = escapeRegex(d);
+    let out = idx[0] === 0 ? "^" : `^(?:${cls}*${lit}){${idx[0]}}`;
+    for (let i = 0; i < caps.length; i++) {
+      if (i > 0) {
+        const gap = idx[i]! - idx[i - 1]!;
+        if (gap < 1) return null;
+        out += `${cls}*${lit}(?:${cls}*${lit}){${gap - 1}}`;
+      }
+      out += `(${caps[i]})`;
+    }
+    return out;
+  };
+
   let best: { source: string; covered: number } | null = null;
-  const fieldVariant = buildFields();
+  const fieldVariant = buildFields() ?? buildEmpirical();
   for (const glue of ["[\\s\\S]*?", ".*?", ""]) {
     const source = glue === "[\\s\\S]*?" && fieldVariant ? fieldVariant : build(glue);
     let re: RegExp;
