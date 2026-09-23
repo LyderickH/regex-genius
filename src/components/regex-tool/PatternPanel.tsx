@@ -15,7 +15,17 @@ const TOK_COLOR: Record<string, string> = {
   group: "text-tok-group",
 };
 
-export function PatternPanel({ column, rowCount }: { column: OutputColumn | null; rowCount: number }) {
+export function PatternPanel({
+  column,
+  rowCount,
+  rows = [],
+  onGoToRow,
+}: {
+  column: OutputColumn | null;
+  rowCount: number;
+  rows?: string[];
+  onGoToRow?: (row: number) => void;
+}) {
   const [dialectId, setDialectId] = useState("python");
   const [copied, setCopied] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
