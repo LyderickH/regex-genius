@@ -332,7 +332,7 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
     const e = expected[i];
     if (e != null && e !== "") examples.push({ index: i, input: inputs[i] ?? "", output: e });
   }
-  const rule = synthesizeRule(examples);
+  const rule = synthesizeRule(examples, inputs);
   if (!rule) return { rule: null, values: inputs.map(() => null), failures: [], matched: 0, total: inputs.length };
   return applyRule(rule, inputs);
 }
