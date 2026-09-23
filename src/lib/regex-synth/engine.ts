@@ -1127,11 +1127,15 @@ function preferAlternation(res: SynthResult, inputs: string[], examples: Example
     index: e.index,
     value: e.output,
   }));
-  for (const [i, opts] of ranked) if (opts[0]) guessed.push({ index: i, value: opts[0] });
+  const guessed2 = [...guessed];
+  for (const [i, opts] of ranked) {
+    if (opts[0]) guessed.push({ index: i, value: opts[0] });
+    if (opts[1] ?? opts[0]) guessed2.push({ index: i, value: (opts[1] ?? opts[0])! });
+  }
 
   let out = res;
   let bestScore = score(res.values);
-  for (const [n, seed] of [known, guessed].entries()) {
+  for (const [n, seed] of [known, guessed, guessed2].entries()) {
     const alt = alternationRule(inputs, seed, res.rule.transform, rate);
     if (!alt || explains(alt, examples) < examples.length) continue;
     const cand = applyRule(alt, inputs);
