@@ -205,6 +205,32 @@ function Index() {
     );
   };
 
+  /** Supprime les lignes r0 à r1 (incluses), puis relance la déduction. */
+  const removeRows = (r0: number, r1: number) => {
+    const keep = (i: number) => i < r0 || i > r1;
+    const next = rows.filter((_, i) => keep(i));
+    if (!next.length) {
+      // plus aucune ligne : retour à l'écran d'accueil
+      setRows([]);
+      setColumns([]);
+      setActiveId(null);
+      setSel(null);
+      return;
+    }
+    setRows(next);
+    setColumns((cols) =>
+      cols.map((c) => {
+        const user = c.user.filter((_, i) => keep(i));
+        if (user.some((v) => v != null)) scheduleSynth(c.id, next, user);
+        return { ...c, user, derived: c.derived.filter((_, i) => keep(i)) };
+      }),
+    );
+    setSel(null);
+    toast.success(
+      r0 === r1 ? "Ligne supprimée" : `${r1 - r0 + 1} lignes supprimées`,
+    );
+  };
+
   /** Démarre avec un tableau vierge. */
   const startBlank = () => {
     const src = Array.from({ length: 5 }, () => "");
