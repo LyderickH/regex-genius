@@ -1220,10 +1220,12 @@ function alternationRule(
     for (const lefts of variants) {
       const uniq = [...new Set(lefts)].sort((a, b) => b.length - a.length);
       if (uniq.length > 8) continue;
-      // Ne jamais construire d'alternance sur des mots ordinaires ou noms (cas particuliers) :
-      // une alternance n'est acceptable que sur des délimiteurs ou symboles courts
-      const hasProperWords = uniq.some((u) => /[A-Za-zÀ-ÿ]{3,}/.test(u));
-      if (uniq.length > 1 && hasProperWords) continue;
+      // Si tous les repères partagent un même suffixe délimiteur (ex: " | "), on ne doit pas alterner les mots précédents
+      const lastChars = uniq.map((u) => u.slice(-2));
+      if (uniq.length > 1 && lastChars.every((c) => c === lastChars[0] && /[|;,:\t\/-]\s*/.test(c))) {
+        // Un délimiteur commun existe déjà à la fin de chaque repère, pas besoin d'alterner les mots variables
+        continue;
+      }
       // des repères longs et tous différents = du hasard, pas un motif
       const limit = uniq.every((u) => /[A-Za-z]{3}/.test(u) && !/\d/.test(u)) ? 18 : 12;
       if (uniq.length > 1 && uniq.some((u) => u.length > limit)) continue;

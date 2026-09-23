@@ -51,4 +51,18 @@ describe("Synthèse générale sur données délimitées (anti-surajustement)", 
     expect(combined?.source).toContain("^(?:[^|]*\\|){8}");
     expect(combined?.covered).toBe(8);
   });
+
+  it("autorise les alternances pertinentes sur des mots-clés légitimes (ex: Facture|Avoir)", () => {
+    const inputs = [
+      "Facture n° 1024 du 01/01",
+      "Avoir n° 5012 du 02/01",
+      "Devis n° 9081 du 03/01",
+    ];
+    const expected = ["1024", "5012", "9081"];
+
+    const res = synthesize(inputs, expected);
+    expect(res.rule).not.toBeNull();
+    expect(res.matched).toBe(3);
+    expect(res.values).toEqual(["1024", "5012", "9081"]);
+  });
 });
