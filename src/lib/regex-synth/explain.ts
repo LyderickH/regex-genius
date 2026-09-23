@@ -71,11 +71,11 @@ export function explain(source: string): Segment[] {
       );
       i += text.length;
     } else if (c === ".") {
-      push(".", "class", CLASS_LABELS["."]);
+      push(".", "class", "n'importe quel caractère");
       i++;
     } else {
       let j = i;
-      while (j < source.length && !"^$()[]\\{}+*?.".includes(source[j])) j++;
+      while (j < source.length && !"^$()[]\\{}+*?.".includes(source.charAt(j))) j++;
       const text = source.slice(i, j);
       push(text, "literal", `le texte exact « ${text} »`);
       i = j;
