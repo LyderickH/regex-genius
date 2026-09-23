@@ -171,9 +171,10 @@ function scoreOf(cap: string, left: string, right: string): number {
 function buildCandidates(ex: Example, transform: Transform): string[] {
   const { input, output } = ex;
   const cands: { src: string; score: number }[] = [];
-  for (const pos of occurrences(input, output, transform)) {
+  for (const { pos, len } of occurrences(input, output, transform)) {
+    const raw = input.substr(pos, len);
     const left = input.slice(0, pos);
-    const right = input.slice(pos + output.length);
+    const right = input.slice(pos + len);
 
     const lefts = new Set<string>([""]);
     if (pos === 0) lefts.add("^");
