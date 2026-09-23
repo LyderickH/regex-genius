@@ -81,16 +81,33 @@ export function DataGrid({
     return () => ro.disconnect();
   }, []);
 
-  // Synchronise le nombre de largeurs avec le nombre de colonnes.
+  // Synchronise les largeurs et les agrandit automatiquement pour que le
+  // contenu le plus long reste entièrement visible. Un réglage manuel plus
+  // large est conservé.
   useEffect(() => {
     setWidths((w) => {
       const need = columns.length + 1;
-      if (w.length === need) return w;
       const next = w.slice(0, need);
       while (next.length < need) next.push(next.length === 0 ? DEFAULT_SOURCE_W : DEFAULT_OUT_W);
-      return next;
+
+      next[0] = Math.max(
+        next[0] ?? DEFAULT_SOURCE_W,
+        measure("Données source"),
+        ...rows.map(measure),
+      );
+      for (let c = 0; c < columns.length; c++) {
+        const col = columns[c];
+        if (!col) continue;
+        let required = measure(col.name) + 52;
+        for (let r = 0; r < rows.length; r++) {
+          required = Math.max(required, measure(cellValue(col, r)));
+        }
+        next[c + 1] = Math.max(next[c + 1] ?? DEFAULT_OUT_W, required);
+      }
+
+      return next.some((value, index) => value !== w[index]) || w.length !== need ? next : w;
     });
-  }, [columns.length]);
+  }, [rows, columns]);
 
   useEffect(() => {
     const up = () => (dragging.current = false);
