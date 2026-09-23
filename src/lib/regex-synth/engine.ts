@@ -192,13 +192,15 @@ export function applyRule(rule: Rule, inputs: string[]): SynthResult {
   const failures: number[] = [];
   let matched = 0;
   for (let i = 0; i < inputs.length; i++) {
-    const m = re.exec(inputs[i]);
-    if (m && m[1] !== undefined) {
-      values.push(applyTransform(m[1], rule.transform));
+    const input = inputs[i] ?? "";
+    const m = re.exec(input);
+    const g = m?.[1];
+    if (g !== undefined) {
+      values.push(applyTransform(g, rule.transform));
       matched++;
     } else {
       values.push(null);
-      if (inputs[i] !== "") failures.push(i);
+      if (input !== "") failures.push(i);
     }
   }
   return { rule, values, failures, matched, total: inputs.length };
