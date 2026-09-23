@@ -949,6 +949,16 @@ function selfTrain(
 /** Plus petit délimiteur gauche qui isole exactement la valeur sur cette ligne. */
 function minimalLeft(input: string, pos: number, cap: string, raw: string): string | null {
   const before = input.slice(0, pos);
+  if (pos === 0) {
+    // valeur en tout début de ligne : l'ancre ^ fait office de délimiteur
+    try {
+      const m = new RegExp(`^(${cap})`).exec(input);
+      if (m && m[1] === raw) return "^";
+    } catch {
+      return null;
+    }
+    return null;
+  }
   for (let len = 1; len <= 18 && len <= before.length; len++) {
     const tail = before.slice(before.length - len);
     // un délimiteur ne doit pas couper un mot ou un nombre en deux
