@@ -151,6 +151,16 @@ function Index() {
     }
   };
 
+  const loadSample = () => {
+    const source = SAMPLE.split("\n");
+    const col = emptyColumn("Résultat 1", source.length);
+    col.user = ["1250,00", "980,50", null, null, null];
+    setRows(source);
+    setColumns([col]);
+    setActiveId(col.id);
+    runSynth(col.id, source, col.user);
+  };
+
   const addColumn = () => {
     const col = emptyColumn(`Résultat ${columns.length + 1}`, rows.length);
     setColumns((c) => [...c, col]);
