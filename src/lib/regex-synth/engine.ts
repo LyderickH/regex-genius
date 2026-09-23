@@ -4,6 +4,16 @@
  * validation sur tous les exemples fournis, sélection de la plus simple.
  */
 
+/** Transformations classiques appliquées après extraction. */
+export type Fmt =
+  | "none"
+  | "date-fr" // AAAAMMJJ -> JJ/MM/AAAA
+  | "date-iso" // AAAAMMJJ -> AAAA-MM-JJ
+  | "day" // AAAAMMJJ -> jour de la semaine
+  | "time" // HHMM ou HHMMSS -> HH:MM[:SS]
+  | "div100" // centimes -> euros
+  | "mul1000"; // x 1000
+
 /** Nettoyage appliqué après extraction. */
 export interface Transform {
   /** suppression : rien, espaces de début/fin, tous les espaces, tout sauf les chiffres */
@@ -11,12 +21,14 @@ export interface Transform {
   /** séparateur décimal : inchangé, virgule -> point, point -> virgule */
   dec: "none" | "dot" | "comma";
   casing: "none" | "upper" | "lower";
+  /** transformation classique : date, heure, jour, multiplication… */
+  fmt: Fmt;
 }
 
-export const NO_TRANSFORM: Transform = { strip: "none", dec: "none", casing: "none" };
+export const NO_TRANSFORM: Transform = { strip: "none", dec: "none", casing: "none", fmt: "none" };
 
 export function isIdentity(t: Transform): boolean {
-  return t.strip === "none" && t.dec === "none" && t.casing === "none";
+  return t.strip === "none" && t.dec === "none" && t.casing === "none" && t.fmt === "none";
 }
 
 /** Description lisible du nettoyage, ou null s'il n'y en a pas. */
@@ -29,20 +41,38 @@ export function describeTransform(t: Transform): string | null {
   if (t.dec === "comma") parts.push("point décimal remplacé par une virgule");
   if (t.casing === "upper") parts.push("mise en MAJUSCULES");
   if (t.casing === "lower") parts.push("mise en minuscules");
+  if (t.fmt === "date-fr") parts.push("conversion de la date AAAAMMJJ en JJ/MM/AAAA");
+  if (t.fmt === "date-iso") parts.push("conversion de la date AAAAMMJJ en AAAA-MM-JJ");
+  if (t.fmt === "day") parts.push("jour de la semaine de la date AAAAMMJJ");
+  if (t.fmt === "time") parts.push("conversion de l'heure HHMM ou HHMMSS en HH:MM");
+  if (t.fmt === "div100") parts.push("division par 100 (centimes vers euros)");
+  if (t.fmt === "mul1000") parts.push("multiplication par 1 000");
   return parts.length ? parts.join(", ") : null;
 }
+
+const FMTS: { id: Fmt; cost: number }[] = [
+  { id: "none", cost: 0 },
+  { id: "date-fr", cost: 3 },
+  { id: "date-iso", cost: 3 },
+  { id: "time", cost: 3 },
+  { id: "day", cost: 4 },
+  { id: "div100", cost: 4 },
+  { id: "mul1000", cost: 4 },
+];
 
 const TRANSFORMS: Transform[] = (() => {
   const out: Transform[] = [];
   for (const strip of ["none", "trim", "spaces", "digits"] as const)
     for (const dec of ["none", "dot", "comma"] as const)
       for (const casing of ["none", "upper", "lower"] as const)
-        out.push({ strip, dec, casing });
+        for (const { id, cost: fc } of FMTS)
+          out.push({ strip, dec, casing, fmt: id });
   // les nettoyages les plus simples d'abord
   const cost = (t: Transform) =>
     (t.strip === "none" ? 0 : t.strip === "trim" ? 1 : t.strip === "spaces" ? 2 : 4) +
     (t.dec === "none" ? 0 : 2) +
-    (t.casing === "none" ? 0 : 1);
+    (t.casing === "none" ? 0 : 1) +
+    FMTS.find((f) => f.id === t.fmt)!.cost;
   return out.sort((a, b) => cost(a) - cost(b));
 })();
 
@@ -100,6 +130,29 @@ function runsPattern(s: string, exact: boolean): string {
     .join("");
 }
 
+/** Transformations classiques : date, heure, jour, opérations. */
+function applyFmt(v: string, f: Fmt): string {
+  if (f === "none") return v;
+  if (f === "date-fr" || f === "date-iso" || f === "day") {
+    const m = /^(\d{4})(\d{2})(\d{2})$/.exec(v.trim());
+    if (!m) return v;
+    if (f === "date-fr") return `${m[3]}/${m[2]}/${m[1]}`;
+    if (f === "date-iso") return `${m[1]}-${m[2]}-${m[3]}`;
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    const jours = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+    return jours[d.getDay()] ?? v;
+  }
+  if (f === "time") {
+    const m = /^(\d{2})(\d{2})(\d{2})?$/.exec(v.trim());
+    if (!m) return v;
+    return m[3] ? `${m[1]}:${m[2]}:${m[3]}` : `${m[1]}:${m[2]}`;
+  }
+  const n = Number(v.replace(/[\s\u00a0\u202f]/g, "").replace(",", "."));
+  if (!isFinite(n)) return v;
+  if (f === "div100") return (n / 100).toFixed(2).replace(".", ",");
+  return String(Math.round(n * 1000));
+}
+
 function applyTransform(value: string, t: Transform): string {
   let v = value;
   if (t.strip === "trim") v = v.replace(/^[\s\u00a0\u202f]+|[\s\u00a0\u202f]+$/g, "");
@@ -109,14 +162,15 @@ function applyTransform(value: string, t: Transform): string {
   else if (t.dec === "comma") v = v.replace(/\./g, ",");
   if (t.casing === "upper") v = v.toUpperCase();
   else if (t.casing === "lower") v = v.toLowerCase();
-  return v;
+  return applyFmt(v, t.fmt);
 }
 
 /** Positions et longueurs du texte brut donnant l'output une fois nettoyé. */
 function occurrences(input: string, output: string, t: Transform): { pos: number; len: number }[] {
   const res: { pos: number; len: number }[] = [];
   if (!output) return res;
-  const sameLength = t.strip === "none";
+  // une transformation change la longueur : on essaie toutes les longueurs
+  const sameLength = t.strip === "none" && t.fmt === "none";
   for (let i = 0; i < input.length; i++) {
     if (sameLength) {
       if (i + output.length > input.length) break;
