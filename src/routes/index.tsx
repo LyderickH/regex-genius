@@ -7,7 +7,6 @@ import {
   FileText,
   Trash2,
   Regex,
-  Wand2,
 } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
@@ -152,6 +151,16 @@ function Index() {
     }
   };
 
+  const loadSample = () => {
+    const source = SAMPLE.split("\n");
+    const col = emptyColumn("Résultat 1", source.length);
+    col.user = ["1250,00", "980,50", null, null, null];
+    setRows(source);
+    setColumns([col]);
+    setActiveId(col.id);
+    runSynth(col.id, source, col.user);
+  };
+
   const addColumn = () => {
     const col = emptyColumn(`Résultat ${columns.length + 1}`, rows.length);
     setColumns((c) => [...c, col]);
@@ -227,29 +236,31 @@ function Index() {
         )}
       </header>
 
-      {rows.length === 0 ? (
-        <EmptyState
-          onLoadSample={() => loadMatrix(parsePastedText(SAMPLE))}
-          onPaste={(text) => loadMatrix(parsePastedText(text))}
-          onFile={handleFile}
+      <div className="relative flex min-h-0 flex-1">
+        <DataGrid
+          rows={rows}
+          columns={columns}
+          activeId={activeId}
+          onSelect={setActiveId}
+          onChangeCell={handleChangeCell}
+          onRename={(id, name) =>
+            setColumns((cols) => cols.map((c) => (c.id === id ? { ...c, name } : c)))
+          }
+          onAddColumn={addColumn}
+          onRemoveColumn={removeColumn}
         />
-      ) : (
-        <div className="flex min-h-0 flex-1">
-          <DataGrid
-            rows={rows}
-            columns={columns}
-            activeId={activeId}
-            onSelect={setActiveId}
-            onChangeCell={handleChangeCell}
-            onRename={(id, name) =>
-              setColumns((cols) => cols.map((c) => (c.id === id ? { ...c, name } : c)))
-            }
-            onAddColumn={addColumn}
-            onRemoveColumn={removeColumn}
-          />
-          <PatternPanel column={active} rowCount={rows.length} />
-        </div>
-      )}
+        <PatternPanel column={active} rowCount={rows.length} />
+        {rows.length === 0 && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70 backdrop-blur-[2px]">
+            <button
+              onClick={loadSample}
+              className="rounded-md border border-border px-3 py-1.5 text-xs transition hover:border-primary hover:text-primary"
+            >
+              Essayer avec un exemple
+            </button>
+          </div>
+        )}
+      </div>
 
       {pasteOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6">
@@ -311,77 +322,3 @@ function ToolbarButton({
   );
 }
 
-function EmptyState({
-  onLoadSample,
-  onPaste,
-  onFile,
-}: {
-  onLoadSample: () => void;
-  onPaste: (text: string) => void;
-  onFile: (file: File) => void;
-}) {
-  const [text, setText] = useState("");
-  const [over, setOver] = useState(false);
-
-  return (
-    <div className="flex min-h-0 flex-1 items-center justify-center p-8">
-      <div className="w-full max-w-3xl">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Vos données d'un côté, le résultat attendu de l'autre.
-        </h1>
-        <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">
-          Remplissez deux ou trois lignes à la main : le motif est déduit localement et appliqué à
-          tout le reste. L'expression régulière s'exporte vers Excel, Python, SQL, Alteryx, KNIME…
-        </p>
-
-        <div
-          onDragOver={(e) => {
-            e.preventDefault();
-            setOver(true);
-          }}
-          onDragLeave={() => setOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setOver(false);
-            const f = e.dataTransfer.files?.[0];
-            if (f) onFile(f);
-          }}
-          className={`mt-6 rounded-lg border border-dashed p-1 transition ${
-            over ? "border-primary bg-primary/5" : "border-border"
-          }`}
-        >
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onPaste={(e) => {
-              const t = e.clipboardData.getData("text");
-              if (t) {
-                e.preventDefault();
-                onPaste(t);
-              }
-            }}
-            rows={9}
-            placeholder={"Collez ici vos lignes, ou déposez un fichier TXT / CSV / Excel…"}
-            className="w-full resize-none rounded-md bg-background p-4 font-mono text-[13px] outline-none placeholder:text-muted-foreground/60"
-          />
-        </div>
-
-        <div className="mt-3 flex items-center gap-2">
-          <button
-            onClick={() => onPaste(text)}
-            disabled={!text.trim()}
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-40"
-          >
-            <Wand2 className="size-3.5" /> Charger les données
-          </button>
-          <button
-            onClick={onLoadSample}
-            className="rounded-md border border-border px-3 py-1.5 text-xs transition hover:border-primary hover:text-primary"
-          >
-            Essayer avec un exemple
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
