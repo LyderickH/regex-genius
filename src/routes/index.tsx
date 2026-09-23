@@ -66,6 +66,7 @@ function Index() {
   const pending = useRef(new Map<number, string>());
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const reqId = useRef(0);
+  const focus = useRef<{ colId: string; row: number } | null>(null);
 
   useEffect(() => {
     const w = new Worker(new URL("../lib/regex-synth/synth.worker.ts", import.meta.url), {
