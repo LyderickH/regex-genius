@@ -238,11 +238,12 @@ export function synthesizeRule(examples: Example[]): Rule | null {
   const first = valid[0]!;
   if (valid.every((e) => e.output === first.output) && valid.length > 1) {
     const lit = escapeRegex(first.output);
-    if (validate(`(${lit})`, "none", valid)) return { source: `(${lit})`, flags: "", transform: "none" };
+    if (validate(`(${lit})`, NO_TRANSFORM, valid))
+      return { source: `(${lit})`, flags: "", transform: NO_TRANSFORM };
   }
 
   const seed = valid.slice().sort((a, b) => a.input.length - b.input.length)[0]!;
-  for (const transform of ["none", "upper", "lower"] as Transform[]) {
+  for (const transform of TRANSFORMS) {
     const candidates = buildCandidates(seed, transform);
     for (const src of candidates) {
       if (validate(src, transform, valid)) return { source: src, flags: "", transform };
