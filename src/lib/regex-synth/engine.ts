@@ -787,11 +787,8 @@ function guessValues(
       scored.push({ text, score: sim * 1.6 + rarity * 1.2 + ctx * 0.8 + casing });
     }
     scored.sort((a, b) => b.score - a.score);
-    const top = scored[0];
-    const second = scored[1];
-    // on n'accepte qu'un candidat nettement détaché : sinon on préfère ne rien dire
-    if (top && top.score > 1.1 && (!second || top.score - second.score > 0.12))
-      out.push({ index: i, input, output: top.text });
+    const options = scored.filter((s) => s.score > 0.9).slice(0, 3).map((s) => s.text);
+    if (options.length) out.push({ index: i, input, options });
   }
   return out;
 }
