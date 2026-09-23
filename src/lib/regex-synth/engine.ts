@@ -798,6 +798,43 @@ function guessValues(
 
 
 
+/**
+ * Auto-apprentissage : on repart des lignes non couvertes (ou dont la valeur
+ * extraite n'a pas la forme attendue) pour deviner leur valeur, puis on
+ * re-synthétise. On ne garde le résultat que s'il couvre plus de lignes SANS
+ * trahir un seul exemple saisi par l'utilisateur.
+ */
+function selfTrain(
+  base: SynthResult,
+  inputs: string[],
+  examples: Example[],
+): SynthResult {
+  if (!base.rule) return base;
+  const shapes = new Set(examples.map((e) => shapeOf(e.output)));
+  const given = new Set(examples.map((e) => e.index));
+  const suspect: number[] = [];
+  for (let i = 0; i < inputs.length; i++) {
+    if (!inputs[i] || given.has(i)) continue;
+    const v = base.values[i];
+    if (v == null || !shapes.has(shapeOf(v))) suspect.push(i);
+  }
+  if (suspect.length === 0) return base;
+
+  const guesses = guessValues(inputs, examples, suspect.slice(0, 12));
+  if (guesses.length === 0) return base;
+
+  const parts = partitionRules([...examples, ...guesses.slice(0, 6)]);
+  if (parts.length === 0) return base;
+  const rule: Rule =
+    parts.length > 1 ? { ...parts[0]!.rule, extra: parts.slice(1).map((p) => p.rule) } : parts[0]!.rule;
+  const res = applyRule(rule, inputs);
+  const okReal = explains(rule, examples);
+  const baseFit = base.values.filter((v) => v != null && shapes.has(shapeOf(v))).length;
+  const newFit = res.values.filter((v) => v != null && shapes.has(shapeOf(v))).length;
+  if (okReal >= examples.length && newFit > baseFit) return res;
+  return base;
+}
+
 export function synthesize(inputs: string[], expected: (string | null)[]): SynthResult {
   const examples: Example[] = [];
   for (let i = 0; i < inputs.length; i++) {
