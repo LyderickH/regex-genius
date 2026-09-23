@@ -100,6 +100,12 @@ function Index() {
   const restoring = useRef(false);
 
 
+  const colsRef = useRef(columns);
+  colsRef.current = columns;
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const triggerLLMFallbackRef = useRef<((colId: string) => Promise<void>) | null>(null);
+
   useEffect(() => {
     const w = new Worker(new URL("../lib/regex-synth/synth.worker.ts", import.meta.url), {
       type: "module",
@@ -109,20 +115,45 @@ function Index() {
       const colId = pending.current.get(id);
       pending.current.delete(id);
       if (!colId) return;
-      setColumns((cols) =>
-        cols.map((c) =>
-          c.id === colId
-            ? {
-                ...c,
-                pending: false,
-                rule: result.rule,
-                derived: result.values,
-                matched: result.matched,
-                failures: result.failures,
-              }
-            : c,
-        ),
-      );
+
+      if (result.rule) {
+        setColumns((cols) =>
+          cols.map((c) =>
+            c.id === colId
+              ? {
+                  ...c,
+                  pending: false,
+                  rule: result.rule,
+                  derived: result.values,
+                  matched: result.matched,
+                  failures: result.failures,
+                }
+              : c,
+          ),
+        );
+      } else {
+        const col = colsRef.current.find((c) => c.id === colId);
+        const hasExamples = col && col.user.some((v) => v != null && v !== "");
+        if (hasExamples) {
+          // Déclencher AUTOMATIQUEMENT le fallback IA locale lorsque l'algorithme échoue !
+          triggerLLMFallbackRef.current?.(colId);
+        } else {
+          setColumns((cols) =>
+            cols.map((c) =>
+              c.id === colId
+                ? {
+                    ...c,
+                    pending: false,
+                    rule: null,
+                    derived: result.values,
+                    matched: 0,
+                    failures: [],
+                  }
+                : c,
+            ),
+          );
+        }
+      }
     };
     workerRef.current = w;
     return () => w.terminate();
@@ -151,12 +182,15 @@ function Index() {
 
   const triggerLLMFallback = useCallback(
     async (colId: string) => {
-      const col = columns.find((c) => c.id === colId);
+      const col = colsRef.current.find((c) => c.id === colId);
       if (!col) return;
       setIsLLMRunning(true);
-      toast.info("Lancement du fallback IA locale (WebGPU)...", { id: "llm-status" });
+      setColumns((cols) =>
+        cols.map((c) => (c.id === colId ? { ...c, pending: true } : c)),
+      );
+      toast.info("Moteur classique insuffisant : activation de l'IA locale (WebGPU)...", { id: "llm-status" });
       try {
-        const outcome = await runSynthesisPipeline(rows, col.user, {
+        const outcome = await runSynthesisPipeline(rowsRef.current, col.user, {
           colName: col.name,
         });
 
@@ -195,9 +229,15 @@ function Index() {
           );
           toast.success("⚙ Règle déduite par le moteur algorithmique.", { id: "llm-status" });
         } else {
+          setColumns((cols) =>
+            cols.map((c) => (c.id === colId ? { ...c, pending: false } : c)),
+          );
           toast.error(outcome.error, { id: "llm-status" });
         }
       } catch (err) {
+        setColumns((cols) =>
+          cols.map((c) => (c.id === colId ? { ...c, pending: false } : c)),
+        );
         toast.error(`Erreur IA locale : ${err instanceof Error ? err.message : String(err)}`, {
           id: "llm-status",
         });
@@ -205,8 +245,9 @@ function Index() {
         setIsLLMRunning(false);
       }
     },
-    [columns, rows],
+    [],
   );
+  triggerLLMFallbackRef.current = triggerLLMFallback;
 
   const snapshot = useCallback(
     (rs: string[], cols: OutputColumn[]): Snap => ({
@@ -284,6 +325,7 @@ function Index() {
   }, [undo, redo]);
 
   const handleChangeCell = (colId: string, row: number, value: string) => {
+    setActiveId(colId);
     setColumns((cols) =>
       cols.map((c) => {
         if (c.id !== colId) return c;

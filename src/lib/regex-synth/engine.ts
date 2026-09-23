@@ -13,7 +13,9 @@ export type Fmt =
   | "day" // AAAAMMJJ -> jour de la semaine
   | "time" // HHMM ou HHMMSS -> HH:MM[:SS]
   | "div100" // centimes -> euros
-  | "mul1000"; // x 1000
+  | "mul1000" // x 1000
+  | "num-us" // 15420.50 -> 15,420.50
+  | "num-fr"; // 15420.50 -> 15 420,50
 
 /** Nettoyage appliqué après extraction. */
 export interface Transform {
@@ -49,6 +51,8 @@ export function describeTransform(t: Transform): string | null {
   if (t.fmt === "time") parts.push("conversion de l'heure HHMM ou HHMMSS en HH:MM");
   if (t.fmt === "div100") parts.push("division par 100 (centimes vers euros)");
   if (t.fmt === "mul1000") parts.push("multiplication par 1 000");
+  if (t.fmt === "num-us") parts.push("format avec séparateur de milliers par virgule");
+  if (t.fmt === "num-fr") parts.push("format avec séparateur de milliers par espace");
   return parts.length ? parts.join(", ") : null;
 }
 
@@ -61,6 +65,8 @@ const FMTS: { id: Fmt; cost: number }[] = [
   { id: "day", cost: 4 },
   { id: "div100", cost: 4 },
   { id: "mul1000", cost: 4 },
+  { id: "num-us", cost: 3 },
+  { id: "num-fr", cost: 3 },
 ];
 
 const TRANSFORMS: Transform[] = (() => {
@@ -166,6 +172,16 @@ function applyFmt(v: string, f: Fmt): string {
     const m = /^(\d{2})(\d{2})(\d{2})?$/.exec(v.trim());
     if (!m) return v;
     return m[3] ? `${m[1]}:${m[2]}:${m[3]}` : `${m[1]}:${m[2]}`;
+  }
+  if (f === "num-us" || f === "num-fr") {
+    const rawClean = v.replace(/[\s\u00a0\u202f]/g, "").replace(",", ".");
+    const n = Number(rawClean);
+    if (!isFinite(n)) return v;
+    const decMatch = rawClean.match(/\.(\d+)$/);
+    const decDigits = decMatch ? decMatch[1]!.length : 0;
+    const parts = n.toFixed(decDigits).split(".");
+    const intPart = parts[0]!.replace(/\B(?=(\d{3})+(?!\d))/g, f === "num-us" ? "," : " ");
+    return parts[1] !== undefined ? `${intPart}${f === "num-us" ? "." : ","}${parts[1]}` : intPart;
   }
   const n = Number(v.replace(/[\s\u00a0\u202f]/g, "").replace(",", "."));
   if (!isFinite(n)) return v;
