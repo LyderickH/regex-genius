@@ -259,12 +259,16 @@ export function DataGrid({
     }
     if (e.key === "F2") {
       e.preventDefault();
-      if (a.c >= 1) focusInput(a.c, a.r);
+      focusInput(a.c, a.r);
       return;
     }
     if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault();
-      for (let c = Math.max(1, c0); c <= c1; c++) {
+      for (let c = c0; c <= c1; c++) {
+        if (c === 0) {
+          for (let r = r0; r <= r1; r++) onChangeSource?.(r, "");
+          continue;
+        }
         const col = columns[c - 1];
         if (!col) continue;
         for (let r = r0; r <= r1; r++) onChangeCell(col.id, r, "");
@@ -272,14 +276,22 @@ export function DataGrid({
       return;
     }
     // saisie directe : remplace le contenu de la cellule active puis passe en édition
-    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && a.c >= 1) {
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && a.r < rows.length) {
+      if (a.c === 0) {
+        if (!onChangeSource) return;
+        e.preventDefault();
+        onChangeSource(a.r, e.key);
+        focusInput(0, a.r);
+        return;
+      }
       const col = columns[a.c - 1];
-      if (col && a.r < rows.length) {
+      if (col) {
         e.preventDefault();
         onChangeCell(col.id, a.r, e.key);
         focusInput(a.c, a.r);
       }
     }
+
   };
 
   const sb = selection
