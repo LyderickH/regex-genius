@@ -1324,6 +1324,7 @@ export function combineColumns(
     .map((c) => ({ ...c, at: posOf(c.rule) }))
     .filter((c) => Number.isFinite(c.at))
     .sort((a, b) => a.at - b.at);
+  console.error("DBG2", usable.length, rows.length, ordered.map(o=>o.at));
   if (ordered.length < 2) return null;
 
   const FIELD = /^\^\(\?:\[\^(.)\]\*\\?(.)\)\{(\d+)\}/;
@@ -1383,6 +1384,7 @@ export function combineColumns(
       /* variante invalide */
     }
   }
+  console.error("DBG", ordered.length, best);
   if (!best || best.covered === 0) return null;
   return {
     source: best.source,
