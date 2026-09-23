@@ -11,6 +11,7 @@ interface Props {
   activeId: string | null;
   onSelect: (id: string) => void;
   onChangeCell: (colId: string, row: number, value: string) => void;
+  onFocusCell?: (colId: string, row: number) => void;
   onRename: (colId: string, name: string) => void;
   onAddColumn: () => void;
   onRemoveColumn: (colId: string) => void;
