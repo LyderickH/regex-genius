@@ -265,6 +265,12 @@ export function DataGrid({
       focusInput(a.c, a.r);
       return;
     }
+    // Ctrl+« - » : supprime les lignes de la sélection (comme sous Excel)
+    if ((e.ctrlKey || e.metaKey) && e.key === "-" && onRemoveRows) {
+      e.preventDefault();
+      onRemoveRows(r0, r1);
+      return;
+    }
     if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault();
       for (let c = c0; c <= c1; c++) {
