@@ -946,20 +946,24 @@ function selfTrain(
   return best;
 }
 
-/** Plus petit délimiteur gauche qui isole exactement la valeur sur cette ligne. */
-function minimalLeft(input: string, pos: number, cap: string, raw: string): string | null {
+/**
+ * Délimiteurs gauches qui isolent exactement la valeur sur cette ligne :
+ * le plus court, et le plus court contenant un mot (repère plus fiable).
+ */
+function minimalLefts(input: string, pos: number, cap: string, raw: string): string[] {
   const before = input.slice(0, pos);
   if (pos === 0) {
     // valeur en tout début de ligne : l'ancre ^ fait office de délimiteur
     try {
       const m = new RegExp(`^(${cap})`).exec(input);
-      if (m && m[1] === raw) return "^";
+      if (m && m[1] === raw) return ["^"];
     } catch {
-      return null;
+      return [];
     }
-    return null;
+    return [];
   }
-  for (let len = 1; len <= 18 && len <= before.length; len++) {
+  const out: string[] = [];
+  for (let len = 1; len <= 20 && len <= before.length; len++) {
     const tail = before.slice(before.length - len);
     // un délimiteur ne doit pas couper un mot ou un nombre en deux
     const prev = before[before.length - len - 1];
@@ -970,12 +974,19 @@ function minimalLeft(input: string, pos: number, cap: string, raw: string): stri
     try {
       re = new RegExp(`${escapeRegex(tail)}(${cap})`);
     } catch {
-      return null;
+      return out;
     }
     const m = re.exec(input);
-    if (m && m.index + tail.length === pos && m[1] === raw) return tail;
+    if (m && m.index + tail.length === pos && m[1] === raw) {
+      const wordy = /[A-Za-z]{2}/.test(tail);
+      if (out.length === 0) out.push(tail);
+      if (wordy) {
+        if (!out.includes(tail)) out.push(tail);
+        return out;
+      }
+    }
   }
-  return null;
+  return out;
 }
 
 /**
