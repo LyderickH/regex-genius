@@ -811,12 +811,23 @@ function selfTrain(
 ): SynthResult {
   if (!base.rule) return base;
   const shapes = new Set(examples.map((e) => shapeOf(e.output)));
+  const lens = examples.map((e) => e.output.length);
+  const minLen = Math.min(...lens) - 2;
+  const maxLen = Math.max(...lens) + 3;
+  const allLower = examples.every((e) => e.output === e.output.toLowerCase());
+  // une valeur « plausible » a la forme, la longueur et la casse des exemples
+  const plausible = (v: string | null): boolean =>
+    v != null &&
+    shapes.has(shapeOf(v)) &&
+    v.length >= minLen &&
+    v.length <= maxLen &&
+    (!allLower || v === v.toLowerCase());
+
   const given = new Set(examples.map((e) => e.index));
   const suspect: number[] = [];
   for (let i = 0; i < inputs.length; i++) {
     if (!inputs[i] || given.has(i)) continue;
-    const v = base.values[i];
-    if (v == null || !shapes.has(shapeOf(v))) suspect.push(i);
+    if (!plausible(base.values[i] ?? null)) suspect.push(i);
   }
   if (suspect.length === 0) return base;
 
@@ -829,8 +840,8 @@ function selfTrain(
     parts.length > 1 ? { ...parts[0]!.rule, extra: parts.slice(1).map((p) => p.rule) } : parts[0]!.rule;
   const res = applyRule(rule, inputs);
   const okReal = explains(rule, examples);
-  const baseFit = base.values.filter((v) => v != null && shapes.has(shapeOf(v))).length;
-  const newFit = res.values.filter((v) => v != null && shapes.has(shapeOf(v))).length;
+  const baseFit = base.values.filter(plausible).length;
+  const newFit = res.values.filter(plausible).length;
   if (okReal >= examples.length && newFit > baseFit) return res;
   return base;
 }
