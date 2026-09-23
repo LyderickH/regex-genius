@@ -85,6 +85,8 @@ export interface Rule {
   source: string;
   flags: string;
   transform: Transform;
+  /** règles alternatives, essayées dans l'ordre quand la principale ne s'applique pas */
+  extra?: Rule[];
 }
 
 export interface Example {
