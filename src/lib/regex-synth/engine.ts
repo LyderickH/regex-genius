@@ -1009,6 +1009,11 @@ function alternationRule(
 
   const caps = new Set<string>(antiUnify(hits.map((h) => h.raw)));
   for (const c of capturePatterns(hits[0]!.raw, null)) caps.add(c);
+  // variantes à longueur minimale : évitent d'attraper « l » dans « l'agent »
+  const minLen = Math.min(...hits.map((h) => h.raw.length));
+  if (minLen >= 2)
+    for (const base of ["[a-z]", "[A-Z]", "[A-Za-z]", "\\w", "[A-Za-z0-9]", "\\S"])
+      caps.add(`${base}{${minLen},}`);
   const wanted = new Map(known.map((k) => [k.index, k.value] as const));
 
   let best: { rule: Rule; score: number } | null = null;
@@ -1021,46 +1026,51 @@ function alternationRule(
     }
     if (!hits.every((h) => full.test(h.raw))) continue;
 
-    const lefts: string[] = [];
+    const perLine: string[][] = [];
     for (const h of hits) {
-      const l = minimalLeft(inputs[h.i] ?? "", h.pos, cap, h.raw);
+      const l = minimalLefts(inputs[h.i] ?? "", h.pos, cap, h.raw);
       // une ligne sans repère exploitable est simplement laissée de côté
-      if (l != null) lefts.push(l);
+      if (l.length) perLine.push(l);
     }
-    if (lefts.length < 2 || lefts.length < hits.length * 0.6) continue;
+    if (perLine.length < 2 || perLine.length < hits.length * 0.6) continue;
 
-    const uniq = [...new Set(lefts)].sort((a, b) => b.length - a.length);
-    if (uniq.length > 8) continue;
-    // des repères longs et tous différents = du hasard, pas un motif
-    if (uniq.length > 1 && uniq.some((u) => u.length > 12)) continue;
-    const esc = (u: string): string => (u === "^" ? "^" : escapeRegex(u));
-    const head = uniq.length === 1 ? esc(uniq[0]!) : `(?:${uniq.map(esc).join("|")})`;
-    const src = `${head}(${cap})`;
-    let re: RegExp;
-    try {
-      re = new RegExp(src);
-    } catch {
-      continue;
-    }
-
-    let good = 0;
-    let bad = 0;
-    for (let i = 0; i < inputs.length; i++) {
-      const input = inputs[i] ?? "";
-      if (!input) continue;
-      const w = wanted.get(i);
-      const g = re.exec(input)?.[1];
-      if (g === undefined) {
-        if (w !== undefined) bad += 0.5;
+    // deux jeux de repères : les plus courts, et ceux qui contiennent un mot
+    const variants = [perLine.map((l) => l[0]!), perLine.map((l) => l[l.length - 1]!)];
+    for (const lefts of variants) {
+      const uniq = [...new Set(lefts)].sort((a, b) => b.length - a.length);
+      if (uniq.length > 8) continue;
+      // des repères longs et tous différents = du hasard, pas un motif
+      const limit = uniq.every((u) => /[A-Za-z]{2}/.test(u)) ? 18 : 12;
+      if (uniq.length > 1 && uniq.some((u) => u.length > limit)) continue;
+      const esc = (u: string): string => (u === "^" ? "^" : escapeRegex(u));
+      const head = uniq.length === 1 ? esc(uniq[0]!) : `(?:${uniq.map(esc).join("|")})`;
+      const src = `${head}(${cap})`;
+      let re: RegExp;
+      try {
+        re = new RegExp(src);
+      } catch {
         continue;
       }
-      const v = applyTransform(g, transform);
-      if (w === undefined) continue;
-      if (v === w) good++;
-      else bad++;
+
+      let good = 0;
+      let bad = 0;
+      for (let i = 0; i < inputs.length; i++) {
+        const input = inputs[i] ?? "";
+        if (!input) continue;
+        const w = wanted.get(i);
+        const g = re.exec(input)?.[1];
+        if (g === undefined) {
+          if (w !== undefined) bad += 0.5;
+          continue;
+        }
+        const v = applyTransform(g, transform);
+        if (w === undefined) continue;
+        if (v === w) good++;
+        else bad++;
+      }
+      const score = good - bad * 1.5 - (uniq.length - 1) * 0.3 - src.length / 400;
+      if (!best || score > best.score) best = { rule: { source: src, flags: "", transform }, score };
     }
-    const score = good - bad * 1.5 - (uniq.length - 1) * 0.3 - src.length / 400;
-    if (!best || score > best.score) best = { rule: { source: src, flags: "", transform }, score };
   }
   return best?.rule ?? null;
 }
