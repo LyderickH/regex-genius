@@ -831,52 +831,90 @@ function selfTrain(
   const guesses = guessValues(inputs, examples, suspect.slice(0, 12));
   if (guesses.length === 0) return base;
 
-  // vote : chaque hypothèse donne une règle candidate, on garde celle qui met
-  // le plus de lignes d'accord avec les hypothèses des AUTRES lignes
-  const agree = (values: (string | null)[]): number => {
-    let n = 0;
-    for (const g of guesses) if (g.options.includes(values[g.index] ?? "\u0000")) n++;
-    return n;
-  };
-  const baseScore = agree(base.values) + base.values.filter(plausible).length * 0.5;
-
   const deadline = Date.now() + 2500;
-  let best = base;
-  let bestScore = baseScore;
+  const optionsAt = new Map(guesses.map((g) => [g.index, g.options] as const));
+  const expectedAt = new Map(examples.map((e) => [e.index, e.output] as const));
+
+  // valeur « acceptée » pour une ligne : l'exemple saisi, ou une hypothèse
+  const accepted = (i: number, v: string | null): boolean => {
+    if (v == null) return false;
+    const want = expectedAt.get(i);
+    if (want !== undefined) return v === want;
+    const opts = optionsAt.get(i);
+    return opts ? opts.includes(v) : plausible(v);
+  };
+
+  type Cand = { rule: Rule; good: Set<number>; bad: number };
+  const evaluate = (rule: Rule): Cand | null => {
+    let re: RegExp;
+    try {
+      re = new RegExp(rule.source, rule.flags);
+    } catch {
+      return null;
+    }
+    const good = new Set<number>();
+    let bad = 0;
+    for (let i = 0; i < inputs.length; i++) {
+      const input = inputs[i] ?? "";
+      if (!input) continue;
+      const g = re.exec(input)?.[1];
+      if (g === undefined) continue;
+      const v = applyTransform(g, rule.transform);
+      if (accepted(i, v)) good.add(i);
+      else bad++;
+    }
+    return { rule, good, bad };
+  };
+
+  // réservoir de règles : la règle de base + une règle par hypothèse de ligne
+  const pool: Cand[] = [];
+  for (const r of ruleChain(base.rule)) {
+    const c = evaluate(r);
+    if (c) pool.push(c);
+  }
   for (const g of guesses) {
     for (const opt of g.options.slice(0, 2)) {
       if (Date.now() > deadline) break;
-      const rule = synthesizeRule([...examples, { index: g.index, input: g.input, output: opt }], inputs);
-      if (!rule || explains(rule, examples) < examples.length) continue;
-      const res = applyRule(rule, inputs);
-      const score = agree(res.values) + res.values.filter(plausible).length * 0.5;
-      if (score > bestScore) {
-        best = res;
-        bestScore = score;
-      }
+      const r =
+        synthesizeRule([{ index: g.index, input: g.input, output: opt }], inputs, examples) ??
+        synthesizeRule([{ index: g.index, input: g.input, output: opt }], inputs);
+      if (!r) continue;
+      const c = evaluate(r);
+      if (c && c.good.size > 0) pool.push(c);
     }
     if (Date.now() > deadline) break;
   }
+  if (pool.length === 0) return base;
 
-  // deuxième motif pour les lignes qui résistent encore
-  if (best.rule) {
-    const left = guesses.filter((g) => !plausible(best.values[g.index] ?? null));
-    for (const g of left.slice(0, 3)) {
-      if (Date.now() > deadline) break;
-      const opt = g.options[0]!;
-      const rule2 = synthesizeRule([{ index: g.index, input: g.input, output: opt }], inputs, examples);
-      if (!rule2) continue;
-      const combined: Rule = { ...best.rule, extra: [...(best.rule.extra ?? []), rule2] };
-      if (explains(combined, examples) < examples.length) continue;
-      const res = applyRule(combined, inputs);
-      const score = agree(res.values) + res.values.filter(plausible).length * 0.5;
-      if (score > bestScore) {
-        best = res;
-        bestScore = score;
+  // couverture gloutonne : d'abord les règles les plus sûres (peu d'erreurs),
+  // puis celles qui apportent de nouvelles lignes
+  const chain: Rule[] = [];
+  const covered = new Set<number>();
+  for (let step = 0; step < 4; step++) {
+    let pick: Cand | null = null;
+    let pickGain = 0;
+    for (const c of pool) {
+      if (chain.includes(c.rule)) continue;
+      let gain = 0;
+      for (const i of c.good) if (!covered.has(i)) gain++;
+      const value = gain - c.bad * 1.5;
+      if (gain > 0 && value > pickGain) {
+        pick = c;
+        pickGain = value;
       }
     }
+    if (!pick) break;
+    chain.push(pick.rule);
+    for (const i of pick.good) covered.add(i);
   }
-  return best;
+  if (chain.length === 0) return base;
+
+  const combined: Rule = { ...chain[0]!, extra: chain.slice(1) };
+  if (explains(combined, examples) < examples.length) return base;
+  const res = applyRule(combined, inputs);
+  const scoreOf2 = (values: (string | null)[]): number =>
+    values.reduce<number>((n, v, i) => n + (accepted(i, v) ? 1 : v != null && !plausible(v) ? -0.5 : 0), 0);
+  return scoreOf2(res.values) > scoreOf2(base.values) ? res : base;
 }
 
 export function synthesize(inputs: string[], expected: (string | null)[]): SynthResult {
