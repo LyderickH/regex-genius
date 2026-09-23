@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
-import { DataGrid } from "@/components/regex-tool/DataGrid";
+import { DataGrid, type GridSel } from "@/components/regex-tool/DataGrid";
 import { PatternPanel } from "@/components/regex-tool/PatternPanel";
 import { emptyColumn, cellValue, type OutputColumn } from "@/components/regex-tool/types";
 import type { SynthResult } from "@/lib/regex-synth/engine";
@@ -21,6 +21,7 @@ import {
   exportCsv,
   exportXlsx,
   toTsv,
+  cellsToTsv,
   copyToClipboard,
   type Matrix,
 } from "@/lib/data-io";
@@ -59,6 +60,7 @@ function Index() {
   const [rows, setRows] = useState<string[]>([]);
   const [columns, setColumns] = useState<OutputColumn[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [sel, setSel] = useState<GridSel | null>(null);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
 
@@ -151,6 +153,7 @@ function Index() {
     setRows(source);
     setColumns(cols);
     setActiveId(cols[0]?.id ?? null);
+    setSel(null);
     cols.forEach((c) => {
       if (c.user.some((v) => v != null)) runSynth(c.id, source, c.user);
     });
@@ -176,6 +179,7 @@ function Index() {
     setRows(source);
     setColumns([debit, piece]);
     setActiveId(debit.id);
+    setSel(null);
     runSynth(debit.id, source, debit.user);
     runSynth(piece.id, source, piece.user);
   };
@@ -236,6 +240,7 @@ function Index() {
   const removeColumn = (id: string) => {
     setColumns((cols) => cols.filter((c) => c.id !== id));
     setActiveId((a) => (a === id ? null : a));
+    setSel(null);
   };
 
   const doExport = (kind: "csv" | "xlsx") => {
@@ -262,6 +267,28 @@ function Index() {
     const inField =
       el?.tagName === "INPUT" && el.selectionStart !== el.selectionEnd;
     if (inField || window.getSelection()?.toString()) return;
+    // plage sélectionnée façon Excel : on copie uniquement les cellules choisies
+    if (sel) {
+      const c0 = Math.max(0, Math.min(sel.ac, sel.cc));
+      const c1 = Math.min(columns.length, Math.max(sel.ac, sel.cc));
+      const r0 = Math.min(sel.ar, sel.cr);
+      const r1 = Math.max(sel.ar, sel.cr);
+      const matrix: string[][] = [];
+      for (let r = r0; r <= r1 && r < rows.length; r++) {
+        const row: string[] = [];
+        for (let c = c0; c <= c1; c++)
+          row.push(c === 0 ? (rows[r] ?? "") : cellValue(columns[c - 1]!, r));
+        matrix.push(row);
+      }
+      e.preventDefault();
+      e.clipboardData.setData("text/plain", cellsToTsv(matrix));
+      toast.success(
+        matrix.length * (matrix[0]?.length ?? 0) > 1
+          ? "Plage copiée — collez-la dans Excel"
+          : "Cellule copiée",
+      );
+      return;
+    }
     e.preventDefault();
     const header = ["Source", ...columns.map((c) => c.name)];
     const matrix = rows.map((src, i) => [src, ...columns.map((c) => cellValue(c, i))]);
@@ -318,6 +345,7 @@ function Index() {
                   setRows([]);
                   setColumns([]);
                   setActiveId(null);
+                  setSel(null);
                 }}
               />
             </>
@@ -336,6 +364,8 @@ function Index() {
           rows={rows}
           columns={columns}
           activeId={activeId}
+          selection={sel}
+          onSelectionChange={setSel}
           onSelect={setActiveId}
           onChangeCell={handleChangeCell}
           onFocusCell={(colId, row) => {
