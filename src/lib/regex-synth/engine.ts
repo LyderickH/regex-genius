@@ -206,15 +206,32 @@ function capturePatterns(raw: string, rightChar: string | null): string[] {
     set.add("-?\\d+");
     if (!raw.startsWith("-")) set.add(`\\d{${raw.length}}`);
   }
-  if (/^[A-Za-z]+$/.test(raw)) set.add("[A-Za-z]+");
+  if (/^[A-Za-z]+$/.test(raw)) {
+    set.add("[A-Za-z]+");
+    if (raw === raw.toUpperCase()) set.add("[A-Z]+");
+    if (raw === raw.toLowerCase()) set.add("[a-z]+");
+    set.add("[A-Za-zÀ-ÿ'’-]+");
+  }
   if (/^[A-Za-z0-9]+$/.test(raw)) set.add("[A-Za-z0-9]+");
   if (/^[A-Za-z0-9 ]+$/.test(raw)) set.add("[A-Za-z0-9 ]+");
+  if (/^[\w.-]+$/.test(raw)) set.add("[\\w.-]+");
+  if (/^\w+$/.test(raw)) set.add("\\w+");
+  // identifiants, e-mails, dates, heures, IP : classes usuelles
+  if (/^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(raw)) set.add("[^\\s@]+@[^\\s@]+\\.[A-Za-z]{2,}");
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(raw)) set.add("\\d{1,3}(?:\\.\\d{1,3}){3}");
+  if (/^\d{2,4}[-/.]\d{1,2}[-/.]\d{1,4}$/.test(raw)) set.add("\\d{2,4}[-/.]\\d{1,2}[-/.]\\d{1,4}");
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(raw)) set.add("\\d{1,2}:\\d{2}(?::\\d{2})?");
+  if (/^[A-Za-z0-9][A-Za-z0-9_./-]*$/.test(raw)) set.add("[A-Za-z0-9][A-Za-z0-9_./-]*");
+  if (!/[\s|;,]/.test(raw)) set.add("[^\\s|;,]+");
   // nombres formatés, éventuellement signés : "1 250,00", "-45,90", "3 410.90", "12 000"
   if (/^[+-]?\s?[\d][\d\s\u00a0\u202f.,]*\d$/.test(raw)) {
+    // le signe doit faire partie de la classe, sinon un espace avant « - » le coupe
+    set.add("[-+\\d\\s\\u00a0.,]+");
     set.add("[-+]?[\\d\\s\\u00a0.,]+");
+    set.add("\\s*[-+]?[\\d\\s\\u00a0.,]+");
     set.add("[-+]?\\d[\\d\\s\\u00a0]*[.,]\\d+");
     set.add("[-+]?\\d[\\d\\s\\u00a0]*(?:[.,]\\d+)?");
-    set.add("[\\d\\s\\u00a0.,]+");
+    // pas de variante non signée : elle perdrait le « - » des montants négatifs
   }
 
   if (rightChar && !/\s/.test(rightChar)) set.add(`[^${escapeClass(rightChar)}]+`);
@@ -250,7 +267,55 @@ function fieldPrefixes(input: string, pos: number): string[] {
   return out;
 }
 
-function buildCandidates(ex: Example, transform: Transform): string[] {
+/**
+ * Contextes communs à TOUS les exemples : suffixe gauche et préfixe droit
+ * partagés. Ce sont les repères les plus fiables (« user= », « Montant : »…).
+ */
+function commonContexts(
+  examples: Example[],
+  transform: Transform,
+): { lefts: string[]; rights: string[] } {
+  const lefts: string[] = [];
+  const rights: string[] = [];
+  for (const ex of examples) {
+    const occ = occurrences(ex.input, ex.output, transform)[0];
+    if (!occ) return { lefts: [], rights: [] };
+    lefts.push(ex.input.slice(0, occ.pos));
+    rights.push(ex.input.slice(occ.pos + occ.len));
+  }
+  const suffix = (() => {
+    let n = 0;
+    const first = lefts[0]!;
+    while (n < 24 && n < first.length && lefts.every((l) => l.length > n && l.charAt(l.length - 1 - n) === first.charAt(first.length - 1 - n))) n++;
+    return first.slice(first.length - n);
+  })();
+  const prefix = (() => {
+    let n = 0;
+    const first = rights[0]!;
+    while (n < 12 && n < first.length && rights.every((r) => r.length > n && r.charAt(n) === first.charAt(n))) n++;
+    return first.slice(0, n);
+  })();
+  const outL: string[] = [];
+  const outR: string[] = [];
+  if (suffix) {
+    outL.push(escapeRegex(suffix));
+    outL.push(runsPattern(suffix, true));
+    // on coupe aussi au dernier mot : « utilisateur= » plutôt que la ligne entière
+    const word = /[A-Za-zÀ-ÿ0-9_]*[^A-Za-zÀ-ÿ0-9_]*$/.exec(suffix)?.[0];
+    if (word && word !== suffix) outL.push(escapeRegex(word));
+  }
+  if (prefix) {
+    outR.push(escapeRegex(prefix));
+    outR.push(runsPattern(prefix, true));
+  }
+  return { lefts: outL, rights: outR };
+}
+
+function buildCandidates(
+  ex: Example,
+  transform: Transform,
+  shared?: { lefts: string[]; rights: string[] },
+): string[] {
   const { input, output } = ex;
   const cands: { src: string; score: number }[] = [];
   for (const { pos, len } of occurrences(input, output, transform)) {
@@ -261,7 +326,8 @@ function buildCandidates(ex: Example, transform: Transform): string[] {
     const lefts = new Set<string>([""]);
     if (pos === 0) lefts.add("^");
     for (const p of fieldPrefixes(input, pos)) lefts.add(p);
-    for (let l = 1; l <= 4 && l <= left.length; l++) {
+    for (const l of shared?.lefts ?? []) lefts.add(l);
+    for (let l = 1; l <= 8 && l <= left.length; l++) {
       const chunk = left.slice(-l);
       lefts.add(escapeRegex(chunk));
       lefts.add(runsPattern(chunk, true));
@@ -274,7 +340,8 @@ function buildCandidates(ex: Example, transform: Transform): string[] {
 
     const rights = new Set<string>([""]);
     if (right === "") rights.add("$");
-    for (let r = 1; r <= 3 && r <= right.length; r++) {
+    for (const r of shared?.rights ?? []) rights.add(r);
+    for (let r = 1; r <= 4 && r <= right.length; r++) {
       const chunk = right.slice(0, r);
       rights.add(escapeRegex(chunk));
       rights.add(runsPattern(chunk, true));
@@ -313,21 +380,44 @@ function validate(source: string, transform: Transform, examples: Example[]): bo
   return true;
 }
 
-/** Nombre de lignes où la règle produit une valeur (sert à départager les candidats). */
-function coverage(src: string, inputs: string[]): number {
+/** Forme abstraite d'une valeur : « 1250,00 » -> « 9,9 », « FA-2024-1 » -> « A-9-9 ». */
+function shapeOf(s: string): string {
+  return s
+    .replace(/[0-9]+/g, "9")
+    .replace(/[A-Za-zÀ-ÿ]+/g, "A")
+    .replace(/\s+/g, " ")
+    .slice(0, 32);
+}
+
+/**
+ * Évalue un candidat sur l'ensemble des lignes : combien de lignes il couvre,
+ * et combien de valeurs extraites ont la même forme que les exemples fournis.
+ * C'est ce second signal qui évite les règles « qui matchent par hasard ».
+ */
+function coverageFit(
+  src: string,
+  transform: Transform,
+  inputs: string[],
+  shapes: Set<string>,
+): { cov: number; fit: number } {
   let re: RegExp;
   try {
     re = new RegExp(src);
   } catch {
-    return 0;
+    return { cov: 0, fit: 0 };
   }
-  let n = 0;
+  let cov = 0;
+  let fit = 0;
   for (const input of inputs) {
     if (!input) continue;
-    if (re.exec(input)?.[1] !== undefined) n++;
+    const g = re.exec(input)?.[1];
+    if (g === undefined) continue;
+    cov++;
+    if (shapes.size === 0 || shapes.has(shapeOf(applyTransform(g, transform)))) fit++;
   }
-  return n;
+  return { cov, fit };
 }
+
 
 /** La règle ne doit pas produire une valeur fausse sur les exemples d'un autre motif. */
 function avoids(src: string, transform: Transform, negatives: Example[]): boolean {
@@ -364,24 +454,69 @@ export function synthesizeRule(
 
   const inputs = (allInputs ?? examples.map((e) => e.input)).filter(Boolean).slice(0, 120);
   const target = inputs.length;
-  const seed = valid.slice().sort((a, b) => a.input.length - b.input.length)[0]!;
+  const shapes = new Set(valid.map((e) => shapeOf(e.output)));
+
+  // plusieurs exemples servent de base (la plus courte, la plus longue, une médiane)
+  const sorted = valid.slice().sort((a, b) => a.input.length - b.input.length);
+  const seeds: Example[] = [];
+  for (const e of [sorted[0]!, sorted[sorted.length - 1]!, sorted[Math.floor(sorted.length / 2)]!])
+    if (!seeds.includes(e)) seeds.push(e);
+
+  const deadline = Date.now() + 1200;
+  const seenOcc = new Set<string>();
   for (const transform of TRANSFORMS) {
-    const candidates = buildCandidates(seed, transform);
+    if (Date.now() > deadline) break;
+    // élagage rapide : le nettoyage doit pouvoir produire chaque sortie attendue,
+    // et deux nettoyages qui visent exactement les mêmes extraits sont redondants
+    let feasible = true;
+    const key: string[] = [];
+    for (const e of valid) {
+      const occ = occurrences(e.input, e.output, transform);
+      if (occ.length === 0) {
+        feasible = false;
+        break;
+      }
+      key.push(occ.map((o) => `${o.pos}:${o.len}`).join(","));
+    }
+    if (!feasible) continue;
+    const k = key.join("|");
+    if (seenOcc.has(k)) continue;
+    seenOcc.add(k);
+    const shared = valid.length > 1 ? commonContexts(valid, transform) : undefined;
+    // candidats des différentes graines, entrelacés pour rester dans l'ordre de simplicité
+    const lists = seeds.map((s) => buildCandidates(s, transform, shared));
+    const merged: string[] = [];
+    const seenSrc = new Set<string>();
+    const maxLen = Math.max(0, ...lists.map((l) => l.length));
+    for (let i = 0; i < maxLen; i++)
+      for (const l of lists) {
+        const src = l[i];
+        if (src && !seenSrc.has(src)) {
+          seenSrc.add(src);
+          merged.push(src);
+        }
+      }
+
     let best: Rule | null = null;
-    let bestCov = -1;
+    let bestScore = -1;
+    let bestLen = Infinity;
     let seen = 0;
-    for (const src of candidates) {
+    for (const src of merged) {
       if (!validate(src, transform, valid)) continue;
       if (neg && neg.length > 0 && !avoids(src, transform, neg)) continue;
-      const cov = coverage(src, inputs);
-      if (cov > bestCov) {
+      const { cov, fit } = coverageFit(src, transform, inputs, shapes);
+      // la cohérence de forme pèse plus lourd que la simple couverture
+      const score = fit * 3 + cov;
+      if (score > bestScore || (score === bestScore && src.length < bestLen)) {
         best = { source: src, flags: "", transform };
-        bestCov = cov;
+        bestScore = score;
+        bestLen = src.length;
       }
-      if (bestCov >= target) break;
-      if (++seen >= 40) break; // on ne scanne qu'un petit lot de variantes valides
+      if (fit >= target) break;
+      if (++seen >= 300 || Date.now() > deadline) break;
     }
     if (best) return best;
+    if (Date.now() > deadline) break;
   }
   return null;
 }
