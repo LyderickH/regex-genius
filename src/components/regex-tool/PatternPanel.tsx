@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Check, Copy, CircleAlert, CircleCheck } from "lucide-react";
+import { Check, Copy, CircleAlert, CircleCheck, ChevronRight, PanelLeft } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { explain } from "@/lib/regex-synth/explain";
@@ -18,6 +18,7 @@ const TOK_COLOR: Record<string, string> = {
 export function PatternPanel({ column, rowCount }: { column: OutputColumn | null; rowCount: number }) {
   const [dialectId, setDialectId] = useState("python");
   const [copied, setCopied] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
   const dialect = DIALECTS.find((d) => d.id === dialectId)!;
   const segments = useMemo(() => (column?.rule ? explain(column.rule.source) : []), [column?.rule]);
 
@@ -27,6 +28,25 @@ export function PatternPanel({ column, rowCount }: { column: OutputColumn | null
     toast.success("Copié dans le presse-papiers");
     setTimeout(() => setCopied(null), 1400);
   };
+
+  if (collapsed) {
+    return (
+      <aside className="flex w-9 shrink-0 flex-col items-center border-l border-grid-line bg-surface py-3">
+        <button
+          onClick={() => setCollapsed(false)}
+          title="Afficher le motif déduit"
+          className="rounded-md p-1 text-muted-foreground transition hover:bg-surface-2 hover:text-primary"
+        >
+          <PanelLeft className="size-4" />
+        </button>
+        <div className="mt-3 flex-1 [writing-mode:vertical-rl]">
+          <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+            Motif déduit{column ? ` — ${column.name}` : ""}
+          </span>
+        </div>
+      </aside>
+    );
+  }
 
   if (!column) {
     return (
@@ -41,9 +61,18 @@ export function PatternPanel({ column, rowCount }: { column: OutputColumn | null
 
   return (
     <aside className="flex w-[380px] shrink-0 flex-col overflow-y-auto border-l border-grid-line bg-surface">
-      <div className="border-b border-grid-line px-4 py-3">
-        <div className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Motif déduit</div>
-        <div className="mt-0.5 truncate text-sm font-semibold">{column.name}</div>
+      <div className="flex items-center justify-between border-b border-grid-line px-4 py-3">
+        <div className="min-w-0">
+          <div className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Motif déduit</div>
+          <div className="mt-0.5 truncate text-sm font-semibold">{column.name}</div>
+        </div>
+        <button
+          onClick={() => setCollapsed(true)}
+          title="Replier le panneau"
+          className="ml-2 shrink-0 rounded-md p-1 text-muted-foreground transition hover:bg-surface-2 hover:text-primary"
+        >
+          <ChevronRight className="size-4" />
+        </button>
       </div>
 
       {!rule ? (

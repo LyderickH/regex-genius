@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
-import { DataGrid } from "@/components/regex-tool/DataGrid";
+import { DataGrid, type GridSel } from "@/components/regex-tool/DataGrid";
 import { PatternPanel } from "@/components/regex-tool/PatternPanel";
 import { emptyColumn, cellValue, type OutputColumn } from "@/components/regex-tool/types";
 import type { SynthResult } from "@/lib/regex-synth/engine";
@@ -21,6 +21,7 @@ import {
   exportCsv,
   exportXlsx,
   toTsv,
+  cellsToTsv,
   copyToClipboard,
   type Matrix,
 } from "@/lib/data-io";
@@ -46,19 +47,20 @@ export const Route = createFileRoute("/")({
 });
 
 /** Extrait de FEC (séparateur « | »), avec des cas volontairement piégeux. */
-const SAMPLE = `VE|Ventes|VT0001|20240131|411000|Clients divers|C0012|SARL DUPONT & FILS|FA-2024-0001|20240131|Facture FA-2024-0001 - SARL DUPONT|1 250,00|0,00|AA|20240215|20240131||EUR
-AC|Achats|AC0087|20240205|401000|Fournisseurs|F0031|ÉTS MARTIN|FA/2024/87|20240203|Achat fournitures - réf. 12/45| 980,50 |0,00|||20240205||EUR
-BQ|Banque|BQ0142|20240229|512000|Banque - compte courant|||REL-02|20240229|Virement client DUPONT|0,00|3 410,90|BB|20240301|20240229||EUR
-OD|Opérations diverses|OD0009|20241231|681100|Dotations amortissements|||DOT-2024|20241231|Amortissement matériel (5 ans)|77,00|0,00|||20241231||EUR
-VE|Ventes|VT0102|20250114|707000|Ventes de marchandises|C0007|LE COMPTOIR|FA-2025-0102|20250114|Facture - lot n°12 000 pièces|12 000,00|0,00|||20250114|13 200,00|USD
-AC|Achats|AC0203|20250220|607000|Achats marchandises|F0002|IMPORT & CO|FA-2025/203|20250218|Avoir sur facture 198|-45,90|0,00|||20250220||EUR
-BQ|Banque|BQ0311|20250331|627000|Services bancaires|||AGIOS-03|20250331|Agios trimestre 1|8,90|0,00|||20250331||EUR
-VE|Ventes|VT0115|20250402|707000|Ventes de marchandises|C0012|SARL DUPONT & FILS|FA-2025-0115|20250402|Facture - remise 10 %|2 300,00|0,00|CC|20250430|20250402||EUR`;
+const SAMPLE = `VE | Ventes | VT0001 | 20240131 | 411000 | Clients divers | C0012 | SARL DUPONT & FILS | FA-2024-0001 | 20240131 | Facture FA-2024-0001 - SARL DUPONT | 1 250,00 | 0,00 | AA | 20240215 | 20240131 |  | EUR
+AC | Achats | AC0087 | 20240205 | 401000 | Fournisseurs | F0031 | ÉTS MARTIN | FA/2024/87 | 20240203 | Achat fournitures - réf. 12/45 | 980,50 | 0,00 |  |  | 20240205 |  | EUR
+BQ | Banque | BQ0142 | 20240229 | 512000 | Banque - compte courant |  |  | REL-02 | 20240229 | Virement client DUPONT | 0,00 | 3 410,90 | BB | 20240301 | 20240229 |  | EUR
+OD | Opérations diverses | OD0009 | 20241231 | 681100 | Dotations amortissements |  |  | DOT-2024 | 20241231 | Amortissement matériel (5 ans) | 77,00 | 0,00 |  |  | 20241231 |  | EUR
+VE | Ventes | VT0102 | 20250114 | 707000 | Ventes de marchandises | C0007 | LE COMPTOIR | FA-2025-0102 | 20250114 | Facture - lot n°12 000 pièces | 12 000,00 | 0,00 |  |  | 20250114 | 13 200,00 | USD
+AC | Achats | AC0203 | 20250220 | 607000 | Achats marchandises | F0002 | IMPORT & CO | FA-2025/203 | 20250218 | Avoir sur facture 198 | -45,90 | 0,00 |  |  | 20250220 |  | EUR
+BQ | Banque | BQ0311 | 20250331 | 627000 | Services bancaires |  |  | AGIOS-03 | 20250331 | Agios trimestre 1 | 8,90 | 0,00 |  |  | 20250331 |  | EUR
+VE | Ventes | VT0115 | 20250402 | 707000 | Ventes de marchandises | C0012 | SARL DUPONT & FILS | FA-2025-0115 | 20250402 | Facture - remise 10 % | 2 300,00 | 0,00 | CC | 20250430 | 20250402 |  | EUR`;
 
 function Index() {
   const [rows, setRows] = useState<string[]>([]);
   const [columns, setColumns] = useState<OutputColumn[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [sel, setSel] = useState<GridSel | null>(null);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
 
@@ -151,6 +153,7 @@ function Index() {
     setRows(source);
     setColumns(cols);
     setActiveId(cols[0]?.id ?? null);
+    setSel(null);
     cols.forEach((c) => {
       if (c.user.some((v) => v != null)) runSynth(c.id, source, c.user);
     });
@@ -176,6 +179,7 @@ function Index() {
     setRows(source);
     setColumns([debit, piece]);
     setActiveId(debit.id);
+    setSel(null);
     runSynth(debit.id, source, debit.user);
     runSynth(piece.id, source, piece.user);
   };
@@ -236,6 +240,7 @@ function Index() {
   const removeColumn = (id: string) => {
     setColumns((cols) => cols.filter((c) => c.id !== id));
     setActiveId((a) => (a === id ? null : a));
+    setSel(null);
   };
 
   const doExport = (kind: "csv" | "xlsx") => {
@@ -262,6 +267,28 @@ function Index() {
     const inField =
       el?.tagName === "INPUT" && el.selectionStart !== el.selectionEnd;
     if (inField || window.getSelection()?.toString()) return;
+    // plage sélectionnée façon Excel : on copie uniquement les cellules choisies
+    if (sel) {
+      const c0 = Math.max(0, Math.min(sel.ac, sel.cc));
+      const c1 = Math.min(columns.length, Math.max(sel.ac, sel.cc));
+      const r0 = Math.min(sel.ar, sel.cr);
+      const r1 = Math.max(sel.ar, sel.cr);
+      const matrix: string[][] = [];
+      for (let r = r0; r <= r1 && r < rows.length; r++) {
+        const row: string[] = [];
+        for (let c = c0; c <= c1; c++)
+          row.push(c === 0 ? (rows[r] ?? "") : cellValue(columns[c - 1]!, r));
+        matrix.push(row);
+      }
+      e.preventDefault();
+      e.clipboardData.setData("text/plain", cellsToTsv(matrix));
+      toast.success(
+        matrix.length * (matrix[0]?.length ?? 0) > 1
+          ? "Plage copiée — collez-la dans Excel"
+          : "Cellule copiée",
+      );
+      return;
+    }
     e.preventDefault();
     const header = ["Source", ...columns.map((c) => c.name)];
     const matrix = rows.map((src, i) => [src, ...columns.map((c) => cellValue(c, i))]);
@@ -318,6 +345,7 @@ function Index() {
                   setRows([]);
                   setColumns([]);
                   setActiveId(null);
+                  setSel(null);
                 }}
               />
             </>
@@ -336,6 +364,8 @@ function Index() {
           rows={rows}
           columns={columns}
           activeId={activeId}
+          selection={sel}
+          onSelectionChange={setSel}
           onSelect={setActiveId}
           onChangeCell={handleChangeCell}
           onFocusCell={(colId, row) => {
