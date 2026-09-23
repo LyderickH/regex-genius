@@ -466,7 +466,17 @@ export function DataGrid({
             />
           )}
         </div>
+        {rows.length > 0 && onAddRow && (
+          <button
+            onClick={onAddRow}
+            className="flex w-full items-center gap-2 border-t border-grid-line px-3 py-2 text-left text-xs text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
+          >
+            <Plus className="size-3.5" />
+            Ajouter une ligne
+          </button>
+        )}
       </div>
+
     </div>
   );
 }
