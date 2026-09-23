@@ -210,7 +210,7 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
   const examples: Example[] = [];
   for (let i = 0; i < inputs.length; i++) {
     const e = expected[i];
-    if (e != null && e !== "") examples.push({ index: i, input: inputs[i], output: e });
+    if (e != null && e !== "") examples.push({ index: i, input: inputs[i] ?? "", output: e });
   }
   const rule = synthesizeRule(examples);
   if (!rule) return { rule: null, values: inputs.map(() => null), failures: [], matched: 0, total: inputs.length };
