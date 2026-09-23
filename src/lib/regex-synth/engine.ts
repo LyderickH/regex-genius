@@ -946,6 +946,210 @@ function selfTrain(
   return best;
 }
 
+/**
+ * Délimiteurs gauches qui isolent exactement la valeur sur cette ligne :
+ * le plus court, et le plus court contenant un mot (repère plus fiable).
+ */
+function minimalLefts(
+  input: string,
+  pos: number,
+  cap: string,
+  raw: string,
+  values: string[] = [],
+): string[] {
+  const before = input.slice(0, pos);
+  if (pos === 0) {
+    // valeur en tout début de ligne : l'ancre ^ fait office de délimiteur
+    try {
+      const m = new RegExp(`^(${cap})`).exec(input);
+      if (m && m[1] === raw) return ["^"];
+    } catch {
+      return [];
+    }
+    return [];
+  }
+  const out: string[] = [];
+  for (let len = 1; len <= 20 && len <= before.length; len++) {
+    const tail = before.slice(before.length - len);
+    // un délimiteur ne doit pas couper un mot ou un nombre en deux
+    const prev = before[before.length - len - 1];
+    if (prev && /[A-Za-z0-9]/.test(prev) && /[A-Za-z0-9]/.test(tail[0]!)) continue;
+    // un délimiteur chiffré sans mot n'est qu'une donnée voisine, pas un repère
+    if (/\d/.test(tail) && !/[A-Za-z]{2}/.test(tail)) continue;
+    // un repère ne peut pas être une valeur extraite ailleurs : c'est un hasard
+    if (values.some((v) => v.length >= 3 && tail.includes(v))) continue;
+    let re: RegExp;
+    try {
+      re = new RegExp(`${escapeRegex(tail)}(${cap})`);
+    } catch {
+      return out;
+    }
+    const m = re.exec(input);
+    if (m && m.index + tail.length === pos && m[1] === raw) {
+      const wordy = /[A-Za-z]{2}/.test(tail);
+      if (out.length === 0) out.push(tail);
+      if (wordy) {
+        if (!out.includes(tail)) out.push(tail);
+        return out;
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Générateur de motifs à délimiteurs : un seul regex copiable de la forme
+ * `(?:délimiteur1|délimiteur2|…)(capture)`, déduit des valeurs connues.
+ */
+function alternationRule(
+  inputs: string[],
+  known: { index: number; value: string }[],
+  transform: Transform,
+  rate?: (index: number, value: string | null) => number,
+): Rule | null {
+  const hits: { i: number; raw: string; pos: number }[] = [];
+  for (const k of known) {
+    const input = inputs[k.index] ?? "";
+    const o = occurrences(input, k.value, transform)[0];
+    if (!o) continue;
+    hits.push({ i: k.index, raw: input.slice(o.pos, o.pos + o.len), pos: o.pos });
+  }
+  if (hits.length < 2) return null;
+
+  const caps = new Set<string>(antiUnify(hits.map((h) => h.raw)));
+  for (const c of capturePatterns(hits[0]!.raw, null)) caps.add(c);
+  // variantes à longueur minimale : évitent d'attraper « l » dans « l'agent »
+  const minLen = Math.min(...hits.map((h) => h.raw.length));
+  if (minLen >= 2)
+    for (const base of ["[a-z]", "[A-Z]", "[A-Za-z]", "\\w", "[A-Za-z0-9]", "\\S"])
+      caps.add(`${base}{${minLen},}`);
+  const wanted = new Map(known.map((k) => [k.index, k.value] as const));
+  const allValues = hits.map((h) => h.raw);
+
+  let best: { rule: Rule; score: number } | null = null;
+  for (const cap of caps) {
+    let full: RegExp;
+    try {
+      full = new RegExp(`^(?:${cap})$`);
+    } catch {
+      continue;
+    }
+    if (!hits.every((h) => full.test(h.raw))) continue;
+
+    const perLine: string[][] = [];
+    for (const h of hits) {
+      const l = minimalLefts(inputs[h.i] ?? "", h.pos, cap, h.raw, allValues);
+      // une ligne sans repère exploitable est simplement laissée de côté
+      if (l.length) perLine.push(l);
+    }
+    if (perLine.length < 2 || perLine.length < hits.length * 0.6) continue;
+
+    // deux jeux de repères : les plus courts, et ceux qui contiennent un mot
+    const variants = [perLine.map((l) => l[0]!), perLine.map((l) => l[l.length - 1]!)];
+    for (const lefts of variants) {
+      const uniq = [...new Set(lefts)].sort((a, b) => b.length - a.length);
+      if (uniq.length > 8) continue;
+      // des repères longs et tous différents = du hasard, pas un motif
+      const limit = uniq.every((u) => /[A-Za-z]{3}/.test(u) && !/\d/.test(u)) ? 18 : 12;
+      if (uniq.length > 1 && uniq.some((u) => u.length > limit)) continue;
+      const esc = (u: string): string => (u === "^" ? "^" : escapeRegex(u));
+      const head = uniq.length === 1 ? esc(uniq[0]!) : `(?:${uniq.map(esc).join("|")})`;
+      const src = `${head}(${cap})`;
+      let re: RegExp;
+      try {
+        re = new RegExp(src);
+      } catch {
+        continue;
+      }
+
+      let quality = 0;
+      for (let i = 0; i < inputs.length; i++) {
+        const input = inputs[i] ?? "";
+        if (!input) continue;
+        const g = re.exec(input)?.[1];
+        const v = g === undefined ? null : applyTransform(g, transform);
+        if (rate) {
+          quality += rate(i, v);
+          continue;
+        }
+        const w = wanted.get(i);
+        if (w === undefined) continue;
+        if (v === null) quality -= 0.5;
+        else quality += v === w ? 1 : -1.5;
+      }
+      const score = quality - (uniq.length - 1) * 0.3 - src.length / 400;
+      if (!best || score > best.score) best = { rule: { source: src, flags: "", transform }, score };
+    }
+  }
+  return best?.rule ?? null;
+}
+
+/**
+ * Si un regex unique à alternance de délimiteurs fait aussi bien qu'une chaîne
+ * de motifs, on le préfère : il est copiable tel quel.
+ */
+function preferAlternation(res: SynthResult, inputs: string[], examples: Example[]): SynthResult {
+  if (!res.rule) return res;
+  const shapes = new Set(examples.map((e) => shapeOf(e.output)));
+  const given = new Map(examples.map((e) => [e.index, e.output] as const));
+  const known: { index: number; value: string }[] = examples.map((e) => ({
+    index: e.index,
+    value: e.output,
+  }));
+  const unknown: number[] = [];
+  for (let i = 0; i < inputs.length; i++) {
+    if (given.has(i) || !inputs[i]) continue;
+    unknown.push(i);
+    const v = res.values[i];
+    if (v != null && shapes.has(shapeOf(v))) known.push({ index: i, value: v });
+  }
+
+  // les hypothèses servent d'arbitre : une valeur devinée en tête de liste
+  // vaut plus qu'une valeur simplement « de la bonne forme »
+  const ranked = new Map<number, string[]>();
+  for (const g of guessValues(inputs, examples, unknown.slice(0, 14)))
+    ranked.set(g.index, g.options);
+
+  const rate = (i: number, v: string | null): number => {
+    const w = given.get(i);
+    if (w !== undefined) return v === w ? 1.5 : -2;
+    if (v == null) return 0;
+    const opts = ranked.get(i);
+    // toutes les hypothèses d'une ligne pèsent pareil : leur ordre est incertain
+    if (opts?.includes(v)) return 0.8;
+    return shapes.has(shapeOf(v)) ? 0.5 : -0.6;
+  };
+  const score = (values: (string | null)[]): number =>
+    values.reduce<number>((n, v, i) => n + (inputs[i] ? rate(i, v) : 0), 0);
+
+  // deuxième jeu de valeurs de départ : les hypothèses les mieux classées
+  const guessed: { index: number; value: string }[] = examples.map((e) => ({
+    index: e.index,
+    value: e.output,
+  }));
+  const guessed2 = [...guessed];
+  for (const [i, opts] of ranked) {
+    if (opts[0]) guessed.push({ index: i, value: opts[0] });
+    if (opts[1] ?? opts[0]) guessed2.push({ index: i, value: (opts[1] ?? opts[0])! });
+  }
+
+  let out = res;
+  let bestScore = score(res.values);
+  for (const [n, seed] of [known, guessed, guessed2].entries()) {
+    const alt = alternationRule(inputs, seed, res.rule.transform, rate);
+    if (!alt || explains(alt, examples) < examples.length) continue;
+    const cand = applyRule(alt, inputs);
+    // à égalité, le regex unique gagne : il est copiable tel quel.
+    // les valeurs devinées, elles, doivent faire nettement mieux.
+    const need = n === 0 ? bestScore : bestScore + 0.75;
+    if (score(cand.values) >= need) {
+      out = cand;
+      bestScore = score(cand.values);
+    }
+  }
+  return out;
+}
+
 export function synthesize(inputs: string[], expected: (string | null)[]): SynthResult {
   const examples: Example[] = [];
   for (let i = 0; i < inputs.length; i++) {
@@ -968,7 +1172,7 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
   // la règle simple explique tous les exemples : on n'ajoute rien.
   // (des lignes non couvertes restent acceptables : on garde le maximum de lignes)
   if (single && singleRes && singleOk >= examples.length)
-    return selfTrain(singleRes, inputs, examples);
+    return preferAlternation(selfTrain(singleRes, inputs, examples), inputs, examples);
 
   // sinon seulement : plusieurs motifs, ou une exception
   const parts = partitionRules(examples);
@@ -978,9 +1182,10 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
     const comboOk = explains(combined, examples);
     // on ne complique la règle que si elle explique réellement plus d'exemples
     if (comboOk > singleOk || (comboOk === singleOk && res.matched > (singleRes?.matched ?? -1)))
-      return selfTrain(res, inputs, examples);
+      return preferAlternation(selfTrain(res, inputs, examples), inputs, examples);
   }
-  if (singleRes) return selfTrain(singleRes, inputs, examples);
-  if (parts[0]) return selfTrain(applyRule(parts[0].rule, inputs), inputs, examples);
+  if (singleRes) return preferAlternation(selfTrain(singleRes, inputs, examples), inputs, examples);
+  if (parts[0])
+    return preferAlternation(selfTrain(applyRule(parts[0].rule, inputs), inputs, examples), inputs, examples);
   return empty;
 }
