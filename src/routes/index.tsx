@@ -8,6 +8,7 @@ import {
   FileText,
   Trash2,
   Regex,
+  Sparkles,
 } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
@@ -380,12 +381,32 @@ function Index() {
         <PatternPanel column={active} rowCount={rows.length} />
         {rows.length === 0 && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70 backdrop-blur-[2px]">
-            <button
-              onClick={loadSample}
-              className="rounded-md border border-border px-3 py-1.5 text-xs transition hover:border-primary hover:text-primary"
-            >
-              Essayer avec un exemple
-            </button>
+            <div className="flex items-center gap-2.5">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border bg-surface px-4 py-2 text-sm transition hover:border-primary hover:text-primary">
+                <Upload className="size-4" />
+                Importer
+                <input
+                  type="file"
+                  accept=".txt,.csv,.tsv,.xlsx,.xls"
+                  className="hidden"
+                  onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+                />
+              </label>
+              <button
+                onClick={() => setPasteOpen(true)}
+                className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-4 py-2 text-sm transition hover:border-primary hover:text-primary"
+              >
+                <ClipboardPaste className="size-4" />
+                Coller du texte
+              </button>
+              <button
+                onClick={loadSample}
+                className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+              >
+                <Sparkles className="size-4" />
+                Essayer avec un exemple
+              </button>
+            </div>
           </div>
         )}
       </div>
