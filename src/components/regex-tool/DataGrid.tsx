@@ -9,6 +9,9 @@ const ADD_W = 52;
 const MIN_W = 100;
 const DEFAULT_SOURCE_W = 460;
 const DEFAULT_OUT_W = 190;
+/** Identifiant fictif de la colonne « Données source ». */
+export const SOURCE_COL = "__source__";
+
 
 /** Sélection façon Excel : ancre (ac,ar) + coin opposé (cc,cr). Colonne 0 = source. */
 export interface GridSel {
