@@ -1095,7 +1095,7 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
   // la règle simple explique tous les exemples : on n'ajoute rien.
   // (des lignes non couvertes restent acceptables : on garde le maximum de lignes)
   if (single && singleRes && singleOk >= examples.length)
-    return selfTrain(singleRes, inputs, examples);
+    return preferAlternation(selfTrain(singleRes, inputs, examples), inputs, examples);
 
   // sinon seulement : plusieurs motifs, ou une exception
   const parts = partitionRules(examples);
@@ -1105,9 +1105,10 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
     const comboOk = explains(combined, examples);
     // on ne complique la règle que si elle explique réellement plus d'exemples
     if (comboOk > singleOk || (comboOk === singleOk && res.matched > (singleRes?.matched ?? -1)))
-      return selfTrain(res, inputs, examples);
+      return preferAlternation(selfTrain(res, inputs, examples), inputs, examples);
   }
-  if (singleRes) return selfTrain(singleRes, inputs, examples);
-  if (parts[0]) return selfTrain(applyRule(parts[0].rule, inputs), inputs, examples);
+  if (singleRes) return preferAlternation(selfTrain(singleRes, inputs, examples), inputs, examples);
+  if (parts[0])
+    return preferAlternation(selfTrain(applyRule(parts[0].rule, inputs), inputs, examples), inputs, examples);
   return empty;
 }
