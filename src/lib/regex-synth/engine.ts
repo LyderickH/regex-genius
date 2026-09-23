@@ -704,6 +704,100 @@ function explains(rule: Rule, examples: Example[]): number {
   return n;
 }
 
+// ---------------------------------------------------------------------------
+// Auto-apprentissage (self-training) : quand la règle laisse des lignes de côté,
+// on DEVINE la valeur probable sur ces lignes (plus proche voisin + rareté du
+// mot + ressemblance du contexte), puis on re-synthétise avec ces pseudo-exemples.
+// ---------------------------------------------------------------------------
+
+function ngrams(s: string, n = 2): Set<string> {
+  const out = new Set<string>();
+  const t = `^${s.toLowerCase()}$`;
+  for (let i = 0; i + n <= t.length; i++) out.add(t.slice(i, i + n));
+  return out;
+}
+
+function jaccard(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let inter = 0;
+  for (const x of a) if (b.has(x)) inter++;
+  return inter / (a.size + b.size - inter);
+}
+
+const TOKEN_RE = /[A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9_.@:/-]*/g;
+
+function tokensOf(input: string): { text: string; pos: number }[] {
+  const out: { text: string; pos: number }[] = [];
+  let m: RegExpExecArray | null;
+  TOKEN_RE.lastIndex = 0;
+  while ((m = TOKEN_RE.exec(input))) out.push({ text: m[0], pos: m.index });
+  return out;
+}
+
+/** Valeurs probables sur les lignes non couvertes (ou captées de travers). */
+function guessValues(
+  inputs: string[],
+  examples: Example[],
+  suspect: number[],
+): Example[] {
+  if (examples.length === 0 || suspect.length === 0) return [];
+  const shapes = new Set(examples.map((e) => shapeOf(e.output)));
+  const vals = examples.map((e) => e.output);
+  const valGrams = vals.map((v) => ngrams(v));
+  const lens = vals.map((v) => v.length);
+  const minLen = Math.min(...lens) - 2;
+  const maxLen = Math.max(...lens) + 3;
+
+  // fréquence documentaire : un mot présent partout n'est presque jamais la valeur
+  const df = new Map<string, number>();
+  for (const input of inputs) {
+    if (!input) continue;
+    for (const t of new Set(tokensOf(input).map((x) => x.text.toLowerCase())))
+      df.set(t, (df.get(t) ?? 0) + 1);
+  }
+  const nLines = inputs.filter(Boolean).length || 1;
+
+  // contextes des exemples (12 car. à gauche, 8 à droite)
+  const ctxL: Set<string>[] = [];
+  const ctxR: Set<string>[] = [];
+  for (const ex of examples) {
+    const pos = ex.input.indexOf(ex.output);
+    if (pos < 0) continue;
+    ctxL.push(ngrams(ex.input.slice(Math.max(0, pos - 12), pos)));
+    ctxR.push(ngrams(ex.input.slice(pos + ex.output.length, pos + ex.output.length + 8)));
+  }
+
+  const out: Example[] = [];
+  for (const i of suspect) {
+    const input = inputs[i] ?? "";
+    if (!input) continue;
+    const scored: { text: string; score: number }[] = [];
+    for (const { text, pos } of tokensOf(input)) {
+      if (!shapes.has(shapeOf(text))) continue;
+      if (text.length < minLen || text.length > maxLen) continue;
+      const g = ngrams(text);
+      const sim = Math.max(...valGrams.map((v) => jaccard(g, v)));
+      const rarity = 1 - ((df.get(text.toLowerCase()) ?? 1) - 1) / nLines;
+      const lg = ngrams(input.slice(Math.max(0, pos - 12), pos));
+      const rg = ngrams(input.slice(pos + text.length, pos + text.length + 8));
+      const ctx =
+        (ctxL.length ? Math.max(...ctxL.map((c) => jaccard(lg, c))) : 0) * 0.6 +
+        (ctxR.length ? Math.max(...ctxR.map((c) => jaccard(rg, c))) : 0) * 0.4;
+      const casing = vals.every((v) => v === v.toLowerCase()) && text !== text.toLowerCase() ? -0.25 : 0;
+      scored.push({ text, score: sim * 1.6 + rarity * 1.2 + ctx * 0.8 + casing });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    const top = scored[0];
+    const second = scored[1];
+    // on n'accepte qu'un candidat nettement détaché : sinon on préfère ne rien dire
+    if (top && top.score > 1.1 && (!second || top.score - second.score > 0.12))
+      out.push({ index: i, input, output: top.text });
+  }
+  return out;
+}
+
+
+
 export function synthesize(inputs: string[], expected: (string | null)[]): SynthResult {
   const examples: Example[] = [];
   for (let i = 0; i < inputs.length; i++) {
