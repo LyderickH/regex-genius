@@ -907,6 +907,19 @@ function selfTrain(
     chain.push(pick);
     for (const i of pick.good) covered.add(i);
   }
+  // les lignes d'exemple doivent impérativement être couvertes
+  for (const e of examples) {
+    if (covered.has(e.index)) continue;
+    let add: Cand | null = null;
+    for (const c of pool) {
+      if (chain.includes(c) || !c.good.has(e.index)) continue;
+      if (!add || c.bad < add.bad) add = c;
+    }
+    if (add) {
+      chain.push(add);
+      for (const i of add.good) covered.add(i);
+    }
+  }
   if (chain.length === 0) return base;
 
   // l'ordre compte : la règle la plus spécifique passe en premier, la plus
