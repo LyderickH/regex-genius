@@ -99,35 +99,60 @@ function runsPattern(s: string, exact: boolean): string {
 }
 
 function applyTransform(value: string, t: Transform): string {
-  if (t === "upper") return value.toUpperCase();
-  if (t === "lower") return value.toLowerCase();
-  return value;
+  let v = value;
+  if (t.strip === "spaces") v = v.replace(/[\s\u00a0\u202f]/g, "");
+  else if (t.strip === "digits") v = v.replace(/[^0-9]/g, "");
+  if (t.dec === "dot") v = v.replace(/,/g, ".");
+  else if (t.dec === "comma") v = v.replace(/\./g, ",");
+  if (t.casing === "upper") v = v.toUpperCase();
+  else if (t.casing === "lower") v = v.toLowerCase();
+  return v;
 }
 
-function occurrences(input: string, output: string, t: Transform): number[] {
-  const res: number[] = [];
+/** Positions et longueurs du texte brut donnant l'output une fois nettoyé. */
+function occurrences(input: string, output: string, t: Transform): { pos: number; len: number }[] {
+  const res: { pos: number; len: number }[] = [];
   if (!output) return res;
-  for (let i = 0; i + output.length <= input.length; i++) {
-    if (applyTransform(input.substr(i, output.length), t) === output) res.push(i);
+  const sameLength = t.strip === "none";
+  for (let i = 0; i < input.length; i++) {
+    if (sameLength) {
+      if (i + output.length > input.length) break;
+      if (applyTransform(input.substr(i, output.length), t) === output)
+        res.push({ pos: i, len: output.length });
+    } else {
+      const max = Math.min(input.length - i, output.length * 2 + 6);
+      for (let len = 1; len <= max; len++) {
+        if (applyTransform(input.substr(i, len), t) === output) {
+          res.push({ pos: i, len });
+          break;
+        }
+      }
+    }
     if (res.length >= 4) break;
   }
   return res;
 }
 
-function capturePatterns(output: string, rightChar: string | null): string[] {
+function capturePatterns(raw: string, rightChar: string | null): string[] {
   const set = new Set<string>();
-  set.add(escapeRegex(output));
-  set.add(runsPattern(output, true));
-  set.add(runsPattern(output, false));
-  if (/^\d+$/.test(output)) {
-    set.add(`\\d{${output.length}}`);
+  set.add(escapeRegex(raw));
+  set.add(runsPattern(raw, true));
+  set.add(runsPattern(raw, false));
+  if (/^\d+$/.test(raw)) {
+    set.add(`\\d{${raw.length}}`);
     set.add("\\d+");
   }
-  if (/^[A-Za-z]+$/.test(output)) set.add("[A-Za-z]+");
-  if (/^[A-Za-z0-9]+$/.test(output)) set.add("[A-Za-z0-9]+");
-  if (/^[A-Za-z0-9 ]+$/.test(output)) set.add("[A-Za-z0-9 ]+");
+  if (/^[A-Za-z]+$/.test(raw)) set.add("[A-Za-z]+");
+  if (/^[A-Za-z0-9]+$/.test(raw)) set.add("[A-Za-z0-9]+");
+  if (/^[A-Za-z0-9 ]+$/.test(raw)) set.add("[A-Za-z0-9 ]+");
+  // nombres formatés : "1 250,00", "3 410.90", "12 000"
+  if (/^[\d][\d\s\u00a0\u202f.,]*\d$/.test(raw)) {
+    set.add("[\\d\\s\\u00a0.,]+");
+    set.add("\\d[\\d\\s\\u00a0]*[.,]\\d+");
+    set.add("\\d[\\d\\s\\u00a0]*(?:[.,]\\d+)?");
+  }
   if (rightChar && !/\s/.test(rightChar)) set.add(`[^${escapeClass(rightChar)}]+`);
-  if (!/\s/.test(output)) set.add("\\S+");
+  if (!/\s/.test(raw)) set.add("\\S+");
   set.add("[^\\n]+?");
   set.add("[^\\n]+");
   return [...set];
