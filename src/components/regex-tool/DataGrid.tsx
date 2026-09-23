@@ -65,6 +65,7 @@ export function DataGrid({
   const scroller = useRef<HTMLDivElement>(null);
   const container = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
   const [height, setHeight] = useState(600);
   // widths[0] = colonne source, widths[1..n] = colonnes de résultat
   const [widths, setWidths] = useState<number[]>([]);
@@ -352,12 +353,15 @@ export function DataGrid({
       className="flex min-h-0 flex-1 flex-col overflow-hidden outline-none"
       onKeyDown={onGridKeyDown}
     >
-      {/* en-têtes */}
+      {/* en-têtes : suivent le défilement horizontal du corps */}
+      <div className="shrink-0 overflow-hidden border-b border-grid-line bg-surface-2">
       <div
-        className="grid shrink-0 border-b border-grid-line bg-surface-2 text-xs"
-        style={{ gridTemplateColumns: template }}
+        className="grid text-xs"
+        style={{ gridTemplateColumns: template, transform: `translateX(${-scrollLeft}px)` }}
       >
-        <div className="grid-cell px-2 py-2 text-center font-mono text-muted-foreground">#</div>
+        <div className="grid-cell sticky left-0 z-20 bg-surface-2 px-2 py-2 text-center font-mono text-muted-foreground">
+          #
+        </div>
         <div className="grid-cell relative px-3 py-2 font-semibold tracking-wide text-foreground">
           Données source
           <ResizeHandle index={0} />
@@ -404,11 +408,15 @@ export function DataGrid({
           <Plus className="size-4" />
         </button>
       </div>
+      </div>
 
       {/* corps */}
       <div
         ref={scroller}
-        onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+        onScroll={(e) => {
+          setScrollTop(e.currentTarget.scrollTop);
+          setScrollLeft(e.currentTarget.scrollLeft);
+        }}
         className="min-h-0 flex-1 overflow-auto"
       >
         <div style={{ height: rows.length * ROW_H, position: "relative" }}>
@@ -421,7 +429,7 @@ export function DataGrid({
                   className="grid hover:bg-surface/60"
                   style={{ gridTemplateColumns: template, height: ROW_H }}
                 >
-                  <div className="group/row grid-cell relative flex items-center justify-center">
+                  <div className="group/row grid-cell sticky left-0 z-10 relative flex items-center justify-center bg-background">
                     <span className="font-mono text-[11px] text-muted-foreground group-hover/row:opacity-0">
                       {i + 1}
                     </span>
