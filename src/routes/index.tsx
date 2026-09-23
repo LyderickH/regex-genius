@@ -134,7 +134,7 @@ function Index() {
     );
   };
 
-  const loadMatrix = (matrix: Matrix) => {
+  const loadMatrix = (matrix: Matrix, names?: string[]) => {
     if (!matrix.length) {
       toast.error("Aucune donnée détectée");
       return;
@@ -144,7 +144,8 @@ function Index() {
     const cols: OutputColumn[] = [];
     const count = Math.max(1, extra);
     for (let c = 0; c < count; c++) {
-      const col = emptyColumn(`Résultat ${c + 1}`, source.length);
+      const given = names?.[c + 1]?.trim();
+      const col = emptyColumn(given ? given : `Résultat ${c + 1}`, source.length);
       if (c < extra) {
         col.user = matrix.map((r) => {
           const v = r[c + 1];
