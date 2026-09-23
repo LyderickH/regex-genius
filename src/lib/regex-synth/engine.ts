@@ -734,12 +734,12 @@ function tokensOf(input: string): { text: string; pos: number }[] {
   return out;
 }
 
-/** Valeurs probables sur les lignes non couvertes (ou captées de travers). */
+/** Hypothèses classées (top 3) pour chaque ligne non couverte. */
 function guessValues(
   inputs: string[],
   examples: Example[],
   suspect: number[],
-): Example[] {
+): { index: number; input: string; options: string[] }[] {
   if (examples.length === 0 || suspect.length === 0) return [];
   const shapes = new Set(examples.map((e) => shapeOf(e.output)));
   const vals = examples.map((e) => e.output);
