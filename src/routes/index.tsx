@@ -489,7 +489,16 @@ function Index() {
           onAddColumn={addColumn}
           onRemoveColumn={removeColumn}
         />
-        <PatternPanel column={active} rowCount={rows.length} />
+        <PatternPanel
+          column={active}
+          rowCount={rows.length}
+          rows={rows}
+          onGoToRow={(row) => {
+            const idx = columns.findIndex((c) => c.id === activeId);
+            if (idx < 0) return;
+            setSel({ ac: idx + 1, ar: row, cc: idx + 1, cr: row });
+          }}
+        />
         {rows.length === 0 && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70 backdrop-blur-[2px]">
             <div className="flex items-center gap-2.5">
