@@ -303,7 +303,7 @@ function Index() {
           </label>
           {rows.length > 0 && (
             <>
-              <ToolbarButton icon={ClipboardCopy} label="Copier" onClick={copyTable} />
+              <ToolbarButton icon={ClipboardCopy} label="Copier le tableau" onClick={copyTable} />
               <ToolbarButton icon={FileText} label="CSV" onClick={() => doExport("csv")} />
               <ToolbarButton
                 icon={FileSpreadsheet}
