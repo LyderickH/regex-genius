@@ -11,6 +11,8 @@ export interface Dialect {
 const dq = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 const sq = (s: string) => s.replace(/'/g, "''");
 const excelQ = (s: string) => s.replace(/"/g, '""');
+/** chaîne brute (r"...") : seules les guillemets sont échappées */
+const rawQ = (s: string) => s.replace(/"/g, '\\"');
 
 export const DIALECTS: Dialect[] = [
   {
