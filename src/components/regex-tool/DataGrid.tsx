@@ -34,6 +34,7 @@ interface Props {
   onChangeCell: (colId: string, row: number, value: string) => void;
   onChangeSource?: (row: number, value: string) => void;
   onAddRow?: () => void;
+  onRemoveRows?: (r0: number, r1: number) => void;
   onFocusCell?: (colId: string, row: number) => void;
 
   onRename: (colId: string, name: string) => void;
@@ -51,7 +52,9 @@ export function DataGrid({
   onChangeCell,
   onChangeSource,
   onAddRow,
+  onRemoveRows,
   onFocusCell,
+
 
   onRename,
   onAddColumn,
