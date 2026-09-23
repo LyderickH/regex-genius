@@ -196,7 +196,7 @@ function buildCandidates(ex: Example, transform: Transform): string[] {
       rights.add(runsPattern(chunk, true));
     }
 
-    const caps = capturePatterns(output, right.length ? right.charAt(0) : null);
+    const caps = capturePatterns(raw, right.length ? right.charAt(0) : null);
     for (const cap of caps)
       for (const l of lefts)
         for (const r of rights)
