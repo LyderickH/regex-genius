@@ -164,8 +164,29 @@ function applyTransform(value: string, t: Transform): string {
   if (t.strip === "trim") v = v.replace(/^[\s\u00a0\u202f]+|[\s\u00a0\u202f]+$/g, "");
   else if (t.strip === "spaces") v = v.replace(/[\s\u00a0\u202f]/g, "");
   else if (t.strip === "digits") v = v.replace(/[^0-9]/g, "");
-  if (t.dec === "dot") v = v.replace(/,/g, ".");
-  else if (t.dec === "comma") v = v.replace(/\./g, ",");
+
+  if (t.dec !== "none") {
+    const hasComma = v.includes(",");
+    const hasDot = v.includes(".");
+    if (hasComma && hasDot) {
+      const lastComma = v.lastIndexOf(",");
+      const lastDot = v.lastIndexOf(".");
+      if (lastComma > lastDot) {
+        // format européen : 1.250,50 -> point milliers, virgule décimale
+        const clean = v.replaceAll(".", "");
+        v = t.dec === "dot" ? clean.replaceAll(",", ".") : clean;
+      } else {
+        // format US/UK : 1,250.50 -> virgule milliers, point décimal
+        const clean = v.replaceAll(",", "");
+        v = t.dec === "comma" ? clean.replaceAll(".", ",") : clean;
+      }
+    } else if (t.dec === "dot") {
+      v = v.replaceAll(",", ".");
+    } else if (t.dec === "comma") {
+      v = v.replaceAll(".", ",");
+    }
+  }
+
   if (t.casing === "upper") v = v.toUpperCase();
   else if (t.casing === "lower") v = v.toLowerCase();
   return applyFmt(v, t.fmt);
@@ -176,7 +197,7 @@ function occurrences(input: string, output: string, t: Transform): { pos: number
   const res: { pos: number; len: number }[] = [];
   if (!output) return res;
   // une transformation change la longueur : on essaie toutes les longueurs
-  const sameLength = t.strip === "none" && t.fmt === "none";
+  const sameLength = t.strip === "none" && t.fmt === "none" && t.dec === "none";
   for (let i = 0; i < input.length; i++) {
     if (sameLength) {
       if (i + output.length > input.length) break;
@@ -224,14 +245,36 @@ function capturePatterns(raw: string, rightChar: string | null): string[] {
   if (/^[A-Za-z0-9][A-Za-z0-9_./-]*$/.test(raw)) set.add("[A-Za-z0-9][A-Za-z0-9_./-]*");
   if (!/[\s|;,]/.test(raw)) set.add("[^\\s|;,]+");
   // nombres formatés, éventuellement signés : "1 250,00", "-45,90", "3 410.90", "12 000"
-  if (/^[+-]?\s?[\d][\d\s\u00a0\u202f.,]*\d$/.test(raw)) {
-    // le signe doit faire partie de la classe, sinon un espace avant « - » le coupe
+  const trimmed = raw.trim();
+  const isNumber =
+    /^[+-]?\s*[\d][\d\s\u00a0\u202f.,]*\d$/.test(trimmed) ||
+    /^[+-]?\s*\d+$/.test(trimmed);
+  if (isNumber) {
     set.add("[-+\\d\\s\\u00a0.,]+");
-    set.add("[-+]?[\\d\\s\\u00a0.,]+");
-    set.add("\\s*[-+]?[\\d\\s\\u00a0.,]+");
-    set.add("[-+]?\\d[\\d\\s\\u00a0]*[.,]\\d+");
-    set.add("[-+]?\\d[\\d\\s\\u00a0]*(?:[.,]\\d+)?");
-    // pas de variante non signée : elle perdrait le « - » des montants négatifs
+    set.add("\\s*[-+\\d\\s\\u00a0.,]+");
+    set.add("[-+]?\\s*[\\d\\s\\u00a0.,]+");
+    set.add("\\s*[-+]?\\s*[\\d\\s\\u00a0.,]+");
+    set.add("[-+]?\\s*\\d[\\d\\s\\u00a0]*[.,]\\d+");
+    set.add("\\s*[-+]?\\s*\\d[\\d\\s\\u00a0]*[.,]\\d+");
+    set.add("[-+]?\\s*\\d[\\d\\s\\u00a0]*(?:[.,]\\d+)?");
+    set.add("\\s*[-+]?\\s*\\d[\\d\\s\\u00a0]*(?:[.,]\\d+)?");
+    set.add("[-+]?\\s*\\d+[.,]\\d+");
+    set.add("[-+]?\\s*\\d+(?:[.,]\\d+)?");
+    set.add("\\d+[.,]\\d+");
+    set.add("\\d+(?:[.,]\\d+)?");
+    set.add("-?\\d+");
+    set.add("\\d+");
+  }
+
+  // si le motif a une virgule ou un point entre chiffres, ajouter la variante unifiée [.,]
+  if (/\d[.,]\d/.test(raw)) {
+    const unified = runsPattern(raw, false).replace(/\\d\+(\\\.|,)\\d\+/g, "\\d+[.,]\\d+");
+    set.add(unified);
+    set.add(`[-+]?\\s*${unified}`);
+    set.add("[-+]?\\s*\\d+[.,]\\d+");
+    set.add("\\d+[.,]\\d+");
+    set.add("[-+]?\\s*\\d+(?:[.,]\\d+)?");
+    set.add("\\d+(?:[.,]\\d+)?");
   }
 
   if (rightChar && !/\s/.test(rightChar)) set.add(`[^${escapeClass(rightChar)}]+`);
@@ -293,6 +336,11 @@ function fieldPrefixes(input: string, pos: number): string[] {
     const cls = `[^${escapeClass(d)}]`;
     const lit = escapeRegex(d);
     out.push(n === 0 ? "^" : `^(?:${cls}*${lit}){${n}}`);
+    if (n > 0) {
+      out.push(`^(?:${cls}*${lit}){${n}}\\s*`);
+    } else {
+      out.push("^\\s*");
+    }
   }
   return out;
 }
@@ -492,9 +540,10 @@ function validate(source: string, transform: Transform, examples: Example[]): bo
   return true;
 }
 
-/** Forme abstraite d'une valeur : « 1250,00 » -> « 9,9 », « FA-2024-1 » -> « A-9-9 ». */
+/** Forme abstraite d'une valeur : « 1250,00 » -> « 9,9 », « 1250.00 » -> « 9.9 », « FA-2024-1 » -> « A-9-9 ». */
 function shapeOf(s: string): string {
   return s
+    .replace(/^[-+]/, "")
     .replace(/[0-9]+/g, "9")
     .replace(/[A-Za-zÀ-ÿ]+/g, "A")
     .replace(/\s+/g, " ")
@@ -576,6 +625,10 @@ export function synthesizeRule(
 
   const deadline = Date.now() + 1200;
   const seenOcc = new Set<string>();
+  let globalBest: Rule | null = null;
+  let globalBestScore = -1;
+  let globalBestLen = Infinity;
+
   for (const transform of TRANSFORMS) {
     if (Date.now() > deadline) break;
     // élagage rapide : le nettoyage doit pouvoir produire chaque sortie attendue,
@@ -591,7 +644,7 @@ export function synthesizeRule(
       key.push(occ.map((o) => `${o.pos}:${o.len}`).join(","));
     }
     if (!feasible) continue;
-    const k = key.join("|");
+    const k = `${transform.dec}:${transform.fmt}:${key.join("|")}`;
     if (seenOcc.has(k)) continue;
     seenOcc.add(k);
     const shared = valid.length > 1 ? commonContexts(valid, transform) : undefined;
@@ -630,10 +683,18 @@ export function synthesizeRule(
       if (fit >= target && wrong === 0) break;
       if (++seen >= 300 || Date.now() > deadline) break;
     }
-    if (best) return best;
+    if (best) {
+      if (bestScore > globalBestScore || (bestScore === globalBestScore && bestLen < globalBestLen)) {
+        globalBest = best;
+        globalBestScore = bestScore;
+        globalBestLen = bestLen;
+      }
+      const bestFit = coverageFit(best.source, best.transform, inputs, shapes);
+      if (bestFit.fit >= target && bestFit.cov === bestFit.fit) return best;
+    }
     if (Date.now() > deadline) break;
   }
-  return null;
+  return globalBest;
 }
 
 
