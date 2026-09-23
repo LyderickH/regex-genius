@@ -274,14 +274,16 @@ function fieldPrefixes(input: string, pos: number): string[] {
 function commonContexts(
   examples: Example[],
   transform: Transform,
-): { lefts: string[]; rights: string[] } {
+): { lefts: string[]; rights: string[]; caps: string[] } {
   const lefts: string[] = [];
   const rights: string[] = [];
+  const raws: string[] = [];
   for (const ex of examples) {
     const occ = occurrences(ex.input, ex.output, transform)[0];
-    if (!occ) return { lefts: [], rights: [] };
+    if (!occ) return { lefts: [], rights: [], caps: [] };
     lefts.push(ex.input.slice(0, occ.pos));
     rights.push(ex.input.slice(occ.pos + occ.len));
+    raws.push(ex.input.substr(occ.pos, occ.len));
   }
   const suffix = (() => {
     let n = 0;
@@ -308,13 +310,67 @@ function commonContexts(
     outR.push(escapeRegex(prefix));
     outR.push(runsPattern(prefix, true));
   }
-  return { lefts: outL, rights: outR };
+  return { lefts: outL, rights: outR, caps: antiUnify(raws) };
+}
+
+/** Découpe une valeur en jetons homogènes : chiffres / lettres / autres. */
+function tokenize(s: string): { kind: "d" | "a" | "o"; text: string }[] {
+  const out: { kind: "d" | "a" | "o"; text: string }[] = [];
+  const re = /[0-9]+|[A-Za-zÀ-ÿ]+|[^0-9A-Za-zÀ-ÿ]+/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s))) {
+    const text = m[0];
+    out.push({ kind: /^[0-9]/.test(text) ? "d" : /^[^0-9A-Za-zÀ-ÿ]/.test(text) ? "o" : "a", text });
+  }
+  return out;
+}
+
+/**
+ * Anti-unification : à partir de TOUTES les valeurs d'exemple, on remonte au
+ * motif le plus précis qui les explique toutes (« FA-2024-0001 » + « FA/2024/87 »
+ * -> « FA[-/]\d{4}[-/]\d+ ») au lieu de généraliser à l'aveugle.
+ */
+function antiUnify(raws: string[]): string[] {
+  const clean = raws.filter(Boolean);
+  if (clean.length === 0) return [];
+  const toks = clean.map(tokenize);
+  const n = toks[0]!.length;
+  if (!toks.every((t) => t.length === n && t.every((x, i) => x.kind === toks[0]![i]!.kind))) return [];
+  let exact = "";
+  let loose = "";
+  for (let i = 0; i < n; i++) {
+    const parts = toks.map((t) => t[i]!.text);
+    const kind = toks[0]![i]!.kind;
+    const same = parts.every((p) => p === parts[0]);
+    const lens = new Set(parts.map((p) => p.length));
+    if (kind === "o") {
+      if (same) {
+        exact += escapeRegex(parts[0]!);
+        loose += escapeRegex(parts[0]!);
+      } else {
+        const chars = [...new Set(parts.join("").split(""))].map(escapeClass).join("");
+        const cls = `[${chars}]${lens.size === 1 && parts[0]!.length === 1 ? "" : "+"}`;
+        exact += cls;
+        loose += cls;
+      }
+    } else if (kind === "d") {
+      exact += lens.size === 1 ? `\\d{${parts[0]!.length}}` : "\\d+";
+      loose += "\\d+";
+    } else {
+      const upper = parts.every((p) => p === p.toUpperCase());
+      const lower = parts.every((p) => p === p.toLowerCase());
+      const cls = upper ? "[A-Z]" : lower ? "[a-z]" : "[A-Za-zÀ-ÿ]";
+      exact += lens.size === 1 ? `${cls}{${parts[0]!.length}}` : `${cls}+`;
+      loose += `${cls}+`;
+    }
+  }
+  return exact === loose ? [exact] : [exact, loose];
 }
 
 function buildCandidates(
   ex: Example,
   transform: Transform,
-  shared?: { lefts: string[]; rights: string[] },
+  shared?: { lefts: string[]; rights: string[]; caps: string[] },
 ): string[] {
   const { input, output } = ex;
   const cands: { src: string; score: number }[] = [];
@@ -347,11 +403,28 @@ function buildCandidates(
       rights.add(runsPattern(chunk, true));
     }
 
-    const caps = capturePatterns(raw, right.length ? right.charAt(0) : null);
+    const caps = new Set(capturePatterns(raw, right.length ? right.charAt(0) : null));
+    // motifs anti-unifiés : prioritaires car déduits de TOUS les exemples
+    const generalized = new Set<string>();
+    for (const c of shared?.caps ?? []) {
+      let ok = false;
+      try {
+        ok = new RegExp(`^(?:${c})$`).test(raw);
+      } catch {
+        ok = false;
+      }
+      if (ok) {
+        caps.add(c);
+        generalized.add(c);
+      }
+    }
     for (const cap of caps)
       for (const l of lefts)
         for (const r of rights)
-          cands.push({ src: `${l}(${cap})${r}`, score: scoreOf(cap, l, r) });
+          cands.push({
+            src: `${l}(${cap})${r}`,
+            score: scoreOf(cap, l, r) - (generalized.has(cap) ? 30 : 0),
+          });
   }
   cands.sort((a, b) => a.score - b.score);
   const seen = new Set<string>();
@@ -505,14 +578,17 @@ export function synthesizeRule(
       if (!validate(src, transform, valid)) continue;
       if (neg && neg.length > 0 && !avoids(src, transform, neg)) continue;
       const { cov, fit } = coverageFit(src, transform, inputs, shapes);
-      // la cohérence de forme pèse plus lourd que la simple couverture
-      const score = fit * 3 + cov;
+      // la cohérence de forme pèse plus lourd que la couverture, et les lignes
+      // captées « de travers » (forme inattendue) comptent comme contre-exemples
+      const wrong = cov - fit;
+      // à couverture égale, la formulation la plus courte gagne
+      const score = fit * 3 + cov - wrong * 2 - src.length / 500;
       if (score > bestScore || (score === bestScore && src.length < bestLen)) {
         best = { source: src, flags: "", transform };
         bestScore = score;
         bestLen = src.length;
       }
-      if (fit >= target) break;
+      if (fit >= target && wrong === 0) break;
       if (++seen >= 300 || Date.now() > deadline) break;
     }
     if (best) return best;
