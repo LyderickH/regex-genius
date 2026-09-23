@@ -1087,24 +1087,38 @@ function preferAlternation(res: SynthResult, inputs: string[], examples: Example
     index: e.index,
     value: e.output,
   }));
+  const unknown: number[] = [];
   for (let i = 0; i < inputs.length; i++) {
-    if (given.has(i)) continue;
+    if (given.has(i) || !inputs[i]) continue;
+    unknown.push(i);
     const v = res.values[i];
     if (v != null && shapes.has(shapeOf(v))) known.push({ index: i, value: v });
   }
-  const alt = alternationRule(inputs, known, res.rule.transform);
+
+  // les hypothèses servent d'arbitre : une valeur devinée en tête de liste
+  // vaut plus qu'une valeur simplement « de la bonne forme »
+  const ranked = new Map<number, string[]>();
+  for (const g of guessValues(inputs, examples, unknown.slice(0, 14)))
+    ranked.set(g.index, g.options);
+
+  const rate = (i: number, v: string | null): number => {
+    const w = given.get(i);
+    if (w !== undefined) return v === w ? 1.5 : -2;
+    if (v == null) return 0;
+    const opts = ranked.get(i);
+    if (opts?.[0] === v) return 1;
+    if (opts?.includes(v)) return 0.6;
+    return shapes.has(shapeOf(v)) ? 0.3 : -0.6;
+  };
+  const score = (values: (string | null)[]): number =>
+    values.reduce<number>((n, v, i) => n + (inputs[i] ? rate(i, v) : 0), 0);
+
+  const alt = alternationRule(inputs, known, res.rule.transform, rate);
   if (!alt) return res;
   if (explains(alt, examples) < examples.length) return res;
   const cand = applyRule(alt, inputs);
-  const score = (r: SynthResult): number =>
-    r.values.reduce<number>((n, v, i) => {
-      const w = given.get(i);
-      if (w !== undefined) return n + (v === w ? 1 : -1);
-      if (v == null) return n;
-      return n + (shapes.has(shapeOf(v)) ? 1 : -0.5);
-    }, 0);
-  // à égalité, le regex unique gagne
-  return score(cand) >= score(res) ? cand : res;
+  // à égalité, le regex unique gagne : il est copiable tel quel
+  return score(cand.values) >= score(res.values) ? cand : res;
 }
 
 export function synthesize(inputs: string[], expected: (string | null)[]): SynthResult {
