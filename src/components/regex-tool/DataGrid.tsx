@@ -10,6 +10,14 @@ const MIN_W = 100;
 const DEFAULT_SOURCE_W = 460;
 const DEFAULT_OUT_W = 190;
 
+/** Sélection façon Excel : ancre (ac,ar) + coin opposé (cc,cr). Colonne 0 = source. */
+export interface GridSel {
+  ac: number;
+  ar: number;
+  cc: number;
+  cr: number;
+}
+
 /** Largeur approximative d'une chaîne en police mono 13px. */
 function measure(text: string): number {
   return Math.min(1200, Math.max(MIN_W, text.length * 7.8 + 28));
@@ -25,6 +33,8 @@ interface Props {
   onRename: (colId: string, name: string) => void;
   onAddColumn: () => void;
   onRemoveColumn: (colId: string) => void;
+  selection: GridSel | null;
+  onSelectionChange: (s: GridSel | null) => void;
 }
 
 export function DataGrid({
@@ -37,6 +47,8 @@ export function DataGrid({
   onRename,
   onAddColumn,
   onRemoveColumn,
+  selection,
+  onSelectionChange,
 }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -44,6 +56,8 @@ export function DataGrid({
   // widths[0] = colonne source, widths[1..n] = colonnes de résultat
   const [widths, setWidths] = useState<number[]>([]);
   const resizing = useRef<{ index: number; startX: number; startW: number } | null>(null);
+  const anchor = useRef<{ c: number; r: number } | null>(null);
+  const dragging = useRef(false);
 
   useEffect(() => {
     const el = scroller.current;
@@ -64,6 +78,16 @@ export function DataGrid({
       return next;
     });
   }, [columns.length]);
+
+  useEffect(() => {
+    const up = () => (dragging.current = false);
+    window.addEventListener("mouseup", up);
+    return () => window.removeEventListener("mouseup", up);
+  }, []);
+
+  useEffect(() => {
+    if (!selection) anchor.current = null;
+  }, [selection]);
 
   const wFor = (i: number) => widths[i] ?? (i === 0 ? DEFAULT_SOURCE_W : DEFAULT_OUT_W);
 
@@ -138,8 +162,129 @@ export function DataGrid({
     />
   );
 
+  // ===== Sélection façon Excel =====
+
+  /** Met à jour la sélection ; colonne 0 = source. */
+  const select = (c: number, r: number, extend: boolean) => {
+    r = Math.max(0, Math.min(rows.length - 1, r));
+    c = Math.max(0, Math.min(columns.length, c));
+    if (!extend || !anchor.current) anchor.current = { c, r };
+    const a = anchor.current;
+    onSelectionChange({ ac: a.c, ar: a.r, cc: c, cr: r });
+    const col = c >= 1 ? columns[c - 1] : null;
+    if (col) {
+      onSelect(col.id);
+      onFocusCell?.(col.id, r);
+    }
+  };
+
+  const onCellMouseDown = (c: number, row: number, e: React.MouseEvent) => {
+    if (e.button !== 0 || resizing.current) return;
+    // cellule déjà active : on laisse l'input prendre le focus (mode édition)
+    const s = selection;
+    if (s && s.ac === s.cc && s.ar === s.cr && s.ac === c && s.ar === row) return;
+    e.preventDefault();
+    dragging.current = true;
+    select(c, row, e.shiftKey);
+  };
+
+  const onCellMouseEnter = (c: number, row: number) => {
+    if (dragging.current) select(c, row, true);
+  };
+
+  /** Place le focus dans l'input d'une cellule (mode édition), en la faisant défiler. */
+  const focusInput = (c: number, row: number) => {
+    const el = scroller.current;
+    if (!el) return;
+    const top = row * ROW_H;
+    if (top < el.scrollTop || top + ROW_H > el.scrollTop + el.clientHeight)
+      el.scrollTop = Math.max(0, top - el.clientHeight / 2);
+    setTimeout(() => {
+      el.querySelector<HTMLInputElement>(`input[data-cell="${c}:${row}"]`)?.focus();
+    }, 40);
+  };
+
+  const onGridKeyDown = (e: React.KeyboardEvent) => {
+    const el = document.activeElement;
+    if (el instanceof HTMLInputElement && scroller.current?.contains(el)) {
+      if (e.key === "Escape") el.blur(); // quitter l'édition, garder la sélection
+      return; // édition en cours : navigation texte normale
+    }
+    if (!selection) return;
+    const a = anchor.current ?? { c: selection.ac, r: selection.ar };
+    const c0 = Math.min(selection.ac, selection.cc);
+    const c1 = Math.max(selection.ac, selection.cc);
+    const r0 = Math.min(selection.ar, selection.cr);
+    const r1 = Math.max(selection.ar, selection.cr);
+    const nav: Record<string, [number, number]> = {
+      ArrowUp: [0, -1],
+      ArrowDown: [0, 1],
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+    };
+    const d = nav[e.key];
+    if (d) {
+      e.preventDefault();
+      const base = e.shiftKey ? { c: selection.cc, r: selection.cr } : a;
+      select(base.c + d[0], base.r + d[1], e.shiftKey);
+      return;
+    }
+    if (e.key === "Tab") {
+      e.preventDefault();
+      select(a.c + (e.shiftKey ? -1 : 1), a.r, false);
+      return;
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      select(a.c, a.r + (e.shiftKey ? -1 : 1), false);
+      return;
+    }
+    if (e.key === "F2") {
+      e.preventDefault();
+      if (a.c >= 1) focusInput(a.c, a.r);
+      return;
+    }
+    if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault();
+      for (let c = Math.max(1, c0); c <= c1; c++) {
+        const col = columns[c - 1];
+        if (!col) continue;
+        for (let r = r0; r <= r1; r++) onChangeCell(col.id, r, "");
+      }
+      return;
+    }
+    // saisie directe : remplace le contenu de la cellule active puis passe en édition
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && a.c >= 1) {
+      const col = columns[a.c - 1];
+      if (col && a.r < rows.length) {
+        e.preventDefault();
+        onChangeCell(col.id, a.r, e.key);
+        focusInput(a.c, a.r);
+      }
+    }
+  };
+
+  const sb = selection
+    ? {
+        c0: Math.min(selection.ac, selection.cc),
+        c1: Math.max(selection.ac, selection.cc),
+        r0: Math.min(selection.ar, selection.cr),
+        r1: Math.max(selection.ar, selection.cr),
+      }
+    : null;
+  const inSel = (c: number, r: number) =>
+    !!sb && r >= sb.r0 && r <= sb.r1 && c >= sb.c0 && c <= sb.c1;
+
+  /** Décalage horizontal (px) du bord gauche de la colonne d'index c. */
+  const colLeft = (c: number) => {
+    let x = NUM_W;
+    for (let k = 0; k < c; k++) x += wFor(k);
+    return x;
+  };
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden" onKeyDown={onGridKeyDown}>
       {/* en-têtes */}
       <div
         className="grid shrink-0 border-b border-grid-line bg-surface-2 text-xs"
@@ -213,24 +358,35 @@ export function DataGrid({
                     {i + 1}
                   </div>
                   <div
-                    className="grid-cell flex items-center truncate px-3 font-mono text-[13px] text-foreground"
+                    onMouseDown={(e) => onCellMouseDown(0, i, e)}
+                    onMouseEnter={() => onCellMouseEnter(0, i)}
+                    onDoubleClick={() => focusInput(0, i) /* sans effet : pas d'input */}
+                    className={cn(
+                      "grid-cell flex cursor-cell items-center truncate px-3 font-mono text-[13px] text-foreground",
+                      inSel(0, i) && "bg-primary/10",
+                    )}
                     title={source}
                   >
                     {source}
                   </div>
                   {columns.map((col) => {
+                    const cIdx = columns.indexOf(col) + 1;
                     const isUser = col.user[i] != null && col.user[i] !== "";
                     const failed = !isUser && col.rule != null && col.derived[i] == null && source !== "";
                     return (
                       <div
                         key={col.id}
+                        onMouseDown={(e) => onCellMouseDown(cIdx, i, e)}
+                        onMouseEnter={() => onCellMouseEnter(cIdx, i)}
                         className={cn(
                           "grid-cell relative flex items-center",
-                          activeId === col.id && "bg-primary/[0.04]",
+                          activeId === col.id && !inSel(cIdx, i) && "bg-primary/[0.04]",
+                          inSel(cIdx, i) && "bg-primary/10",
                           failed && "bg-destructive/10",
                         )}
                       >
                         <input
+                          data-cell={`${cIdx}:${i}`}
                           value={cellValue(col, i)}
                           onFocus={() => {
                             onSelect(col.id);
@@ -239,7 +395,7 @@ export function DataGrid({
                           onChange={(e) => onChangeCell(col.id, i, e.target.value)}
                           placeholder={col.rule ? "" : "résultat attendu…"}
                           className={cn(
-                            "h-full w-full bg-transparent px-2.5 font-mono text-[13px] outline-none placeholder:text-muted-foreground/50 focus:bg-primary/10",
+                            "h-full w-full bg-transparent px-2.5 font-mono text-[13px] outline-none placeholder:text-muted-foreground/50 focus:bg-primary/15",
                             isUser ? "font-medium text-primary" : "text-derived",
                           )}
                         />
@@ -254,6 +410,18 @@ export function DataGrid({
               );
             })}
           </div>
+          {/* cadre de sélection */}
+          {sb && sb.r0 < rows.length && (
+            <div
+              className="pointer-events-none absolute z-20 ring-2 ring-inset ring-primary/80"
+              style={{
+                left: colLeft(sb.c0),
+                top: sb.r0 * ROW_H,
+                width: colLeft(sb.c1 + 1) - colLeft(sb.c0),
+                height: (Math.min(sb.r1, rows.length - 1) - sb.r0 + 1) * ROW_H,
+              }}
+            />
+          )}
         </div>
       </div>
     </div>
