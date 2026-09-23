@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Check, Copy, CircleAlert, CircleCheck } from "lucide-react";
+import { Check, Copy, CircleAlert, CircleCheck, ChevronRight, PanelLeft } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { explain } from "@/lib/regex-synth/explain";
