@@ -8,3 +8,5 @@
 - [x] Copier le tableau vers Excel (bouton + Ctrl+C)
 - [x] Coller depuis Excel (Ctrl+V à partir de la cellule active, ou tableau entier)
 - [x] Vérification typecheck + Playwright
+- [ ] Panneau « Motif déduit » repliable (bouton dans l'en-tête + bandeau vertical pour rouvrir)
+- [ ] Exemple FEC plus lisible (espaces autour des « | »)

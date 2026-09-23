@@ -61,9 +61,18 @@ export function PatternPanel({ column, rowCount }: { column: OutputColumn | null
 
   return (
     <aside className="flex w-[380px] shrink-0 flex-col overflow-y-auto border-l border-grid-line bg-surface">
-      <div className="border-b border-grid-line px-4 py-3">
-        <div className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Motif déduit</div>
-        <div className="mt-0.5 truncate text-sm font-semibold">{column.name}</div>
+      <div className="flex items-center justify-between border-b border-grid-line px-4 py-3">
+        <div className="min-w-0">
+          <div className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Motif déduit</div>
+          <div className="mt-0.5 truncate text-sm font-semibold">{column.name}</div>
+        </div>
+        <button
+          onClick={() => setCollapsed(true)}
+          title="Replier le panneau"
+          className="ml-2 shrink-0 rounded-md p-1 text-muted-foreground transition hover:bg-surface-2 hover:text-primary"
+        >
+          <ChevronRight className="size-4" />
+        </button>
       </div>
 
       {!rule ? (
