@@ -1326,15 +1326,36 @@ export function combineColumns(
     .sort((a, b) => a.at - b.at);
   if (ordered.length < 2) return null;
 
+  const FIELD = /^\^\(\?:\[\^(.)\]\*\\?(.)\)\{(\d+)\}/;
+  const fieldInfo = (src: string): { delim: string; n: number } | null => {
+    const m = FIELD.exec(src);
+    return m ? { delim: m[1]!, n: Number(m[3]) } : null;
+  };
   const strip = (src: string, first: boolean): string =>
-    first ? src : src.replace(/^\^/, "").replace(/^\(\?:\[\^[^\]]*\]\*[^)]*\)\{\d+\}/, "");
+    first ? src : src.replace(/^\^/, "").replace(FIELD, "");
 
   const build = (glue: string): string =>
     ordered.map((c, i) => strip(c.rule.source, i === 0)).join(glue);
 
+  // variante « champs délimités » : on saute le bon nombre de champs entre deux captures
+  const buildFields = (): string | null => {
+    const infos = ordered.map((c) => fieldInfo(c.rule.source));
+    const d = infos[0]?.delim;
+    if (!d || !infos.every((i) => i && i.delim === d)) return null;
+    let out = ordered[0]!.rule.source;
+    for (let i = 1; i < ordered.length; i++) {
+      const gap = infos[i]!.n - infos[i - 1]!.n;
+      if (gap < 1) return null;
+      const cls = `[^${escapeClass(d)}]`;
+      out += `${cls}*(?:\\${d}${cls}*){${gap - 1}}\\${d}` + strip(ordered[i]!.rule.source, false);
+    }
+    return out;
+  };
+
   let best: { source: string; covered: number } | null = null;
-  for (const glue of ["", "[\\s\\S]*?", ".*?"]) {
-    const source = build(glue);
+  const fieldVariant = buildFields();
+  for (const glue of ["[\\s\\S]*?", ".*?", ""]) {
+    const source = glue === "[\\s\\S]*?" && fieldVariant ? fieldVariant : build(glue);
     let re: RegExp;
     try {
       re = new RegExp(source);
@@ -1348,6 +1369,19 @@ export function combineColumns(
     }
     if (!best || covered > best.covered) best = { source, covered };
     if (covered === rows.length) break;
+  }
+  if (fieldVariant) {
+    try {
+      const re = new RegExp(fieldVariant);
+      let covered = 0;
+      for (const input of rows) {
+        const m = re.exec(input);
+        if (m && ordered.every((_, i) => m[i + 1] !== undefined)) covered++;
+      }
+      if (!best || covered > best.covered) best = { source: fieldVariant, covered };
+    } catch {
+      /* variante invalide */
+    }
   }
   if (!best || best.covered === 0) return null;
   return {
