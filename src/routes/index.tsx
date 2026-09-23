@@ -74,6 +74,14 @@ function Index() {
   const reqId = useRef(0);
   const focus = useRef<{ colId: string; row: number } | null>(null);
 
+  // --- historique (Ctrl+Z / Ctrl+Y) : on ne retient que les saisies, pas les déductions
+  type Snap = { rows: string[]; columns: OutputColumn[]; key: string };
+  const past = useRef<Snap[]>([]);
+  const futureSnaps = useRef<Snap[]>([]);
+  const lastSnap = useRef<Snap | null>(null);
+  const restoring = useRef(false);
+
+
   useEffect(() => {
     const w = new Worker(new URL("../lib/regex-synth/synth.worker.ts", import.meta.url), {
       type: "module",
