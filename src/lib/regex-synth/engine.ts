@@ -392,7 +392,7 @@ export function synthesizeRule(
  * sous-ensemble expliqué par une même règle, puis on recommence sur le reste.
  * Permet de gérer deux (ou plus) motifs différents, et les exceptions.
  */
-function partitionRules(examples: Example[], maxGroups = 4): Rule[] {
+function partitionRules(examples: Example[], maxGroups = 3): { rule: Rule; size: number }[] {
   const groups: Example[][] = [];
   let rest = examples.slice(0, 14);
   while (rest.length > 0 && groups.length < maxGroups) {
@@ -431,7 +431,7 @@ function partitionRules(examples: Example[], maxGroups = 4): Rule[] {
   }
   // les règles les plus spécifiques passent en premier
   rules.sort((a, b) => a.conflicts - b.conflicts || b.group.length - a.group.length);
-  return rules.map((r) => r.rule);
+  return rules.map((r) => ({ rule: r.rule, size: r.group.length }));
 }
 
 function ruleChain(rule: Rule): Rule[] {
