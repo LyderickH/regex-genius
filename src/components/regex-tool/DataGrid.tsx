@@ -46,7 +46,10 @@ export function DataGrid({
   activeId,
   onSelect,
   onChangeCell,
+  onChangeSource,
+  onAddRow,
   onFocusCell,
+
   onRename,
   onAddColumn,
   onRemoveColumn,
