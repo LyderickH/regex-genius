@@ -137,7 +137,7 @@ function Index() {
     }
     setRows(source);
     setColumns(cols);
-    setActiveId(cols[0].id);
+    setActiveId(cols[0]?.id ?? null);
     cols.forEach((c) => {
       if (c.user.some((v) => v != null)) runSynth(c.id, source, c.user);
     });
