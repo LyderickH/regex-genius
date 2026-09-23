@@ -366,17 +366,65 @@ export function synthesizeRule(examples: Example[], allInputs?: string[]): Rule 
 }
 
 
+/**
+ * Découpe les exemples en groupes cohérents : on cherche d'abord le plus grand
+ * sous-ensemble expliqué par une même règle, puis on recommence sur le reste.
+ * Permet de gérer deux (ou plus) motifs différents, et les exceptions.
+ */
+function partitionRules(examples: Example[], allInputs: string[], maxGroups = 4): Rule[] {
+  const rules: Rule[] = [];
+  let rest = examples.slice(0, 14);
+  while (rest.length > 0 && rules.length < maxGroups) {
+    let bestRule: Rule | null = null;
+    let bestGroup: Example[] = [];
+    for (let s = 0; s < rest.length; s++) {
+      let group: Example[] = [rest[s]!];
+      let rule = synthesizeRule(group, allInputs);
+      if (!rule) continue;
+      for (let j = 0; j < rest.length; j++) {
+        if (j === s) continue;
+        const trial = [...group, rest[j]!];
+        const r2 = synthesizeRule(trial, allInputs);
+        if (r2) {
+          group = trial;
+          rule = r2;
+        }
+      }
+      if (group.length > bestGroup.length) {
+        bestGroup = group;
+        bestRule = rule;
+      }
+      if (bestGroup.length === rest.length) break;
+    }
+    if (!bestRule) break;
+    rules.push(bestRule);
+    const used = new Set(bestGroup);
+    rest = rest.filter((e) => !used.has(e));
+  }
+  return rules;
+}
+
+function ruleChain(rule: Rule): Rule[] {
+  return [rule, ...(rule.extra ?? [])];
+}
+
 export function applyRule(rule: Rule, inputs: string[]): SynthResult {
-  const re = new RegExp(rule.source, rule.flags);
+  const chain = ruleChain(rule).map((r) => ({ re: new RegExp(r.source, r.flags), transform: r.transform }));
   const values: (string | null)[] = [];
   const failures: number[] = [];
   let matched = 0;
   for (let i = 0; i < inputs.length; i++) {
     const input = inputs[i] ?? "";
-    const m = re.exec(input);
-    const g = m?.[1];
-    if (g !== undefined) {
-      values.push(applyTransform(g, rule.transform));
+    let value: string | null = null;
+    for (const { re, transform } of chain) {
+      const g = re.exec(input)?.[1];
+      if (g !== undefined) {
+        value = applyTransform(g, transform);
+        break;
+      }
+    }
+    if (value !== null) {
+      values.push(value);
       matched++;
     } else {
       values.push(null);
@@ -386,13 +434,55 @@ export function applyRule(rule: Rule, inputs: string[]): SynthResult {
   return { rule, values, failures, matched, total: inputs.length };
 }
 
+/** Nombre d'exemples réellement reproduits par la chaîne de règles. */
+function explains(rule: Rule, examples: Example[]): number {
+  const chain = ruleChain(rule).map((r) => ({ re: new RegExp(r.source, r.flags), transform: r.transform }));
+  let n = 0;
+  for (const ex of examples) {
+    for (const { re, transform } of chain) {
+      const g = re.exec(ex.input)?.[1];
+      if (g !== undefined) {
+        if (applyTransform(g, transform) === ex.output) n++;
+        break;
+      }
+    }
+  }
+  return n;
+}
+
 export function synthesize(inputs: string[], expected: (string | null)[]): SynthResult {
   const examples: Example[] = [];
   for (let i = 0; i < inputs.length; i++) {
     const e = expected[i];
     if (e != null && e !== "") examples.push({ index: i, input: inputs[i] ?? "", output: e });
   }
-  const rule = synthesizeRule(examples, inputs);
-  if (!rule) return { rule: null, values: inputs.map(() => null), failures: [], matched: 0, total: inputs.length };
-  return applyRule(rule, inputs);
+  const empty: SynthResult = {
+    rule: null,
+    values: inputs.map(() => null),
+    failures: [],
+    matched: 0,
+    total: inputs.length,
+  };
+  if (examples.length === 0) return empty;
+
+  const single = synthesizeRule(examples, inputs);
+  const nonEmpty = inputs.filter(Boolean).length;
+  if (single) {
+    const res = applyRule(single, inputs);
+    if (res.matched >= nonEmpty) return res;
+  }
+
+  // une seule règle ne suffit pas (deux motifs, ou une exception) : on combine
+  const parts = partitionRules(examples, inputs);
+  if (parts.length > 1) {
+    const combined: Rule = { ...parts[0]!, extra: parts.slice(1) };
+    const res = applyRule(combined, inputs);
+    const single_res = single ? applyRule(single, inputs) : null;
+    if (!single_res || res.matched > single_res.matched || explains(combined, examples) > explains(single!, examples))
+      return res;
+    return single_res;
+  }
+  if (single) return applyRule(single, inputs);
+  if (parts[0]) return applyRule(parts[0], inputs);
+  return empty;
 }
