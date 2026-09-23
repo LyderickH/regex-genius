@@ -12,3 +12,5 @@
 - [x] Exemple FEC plus lisible (espaces autour des « | »)
 - [x] Sélection de cellules façon Excel (clic = sélection, maj+clic/glisser = plage, Ctrl+C = plage, flèches/Tab/Entrée, Suppr = vider, double-clic = édition)
 - [x] Transformations classiques après extraction : date JJ/MM/AAAA, date ISO, jour de la semaine, heure, ÷100 (centimes), ×1000
+- [x] Collage : création automatique des lignes manquantes, sans effacer les lignes précédentes
+- [x] Bouton « Ajouter une ligne » + option « Tableau vierge » au démarrage ; colonne source éditable
