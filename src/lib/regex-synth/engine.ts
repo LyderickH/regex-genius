@@ -370,7 +370,7 @@ function antiUnify(raws: string[]): string[] {
 function buildCandidates(
   ex: Example,
   transform: Transform,
-  shared?: { lefts: string[]; rights: string[] },
+  shared?: { lefts: string[]; rights: string[]; caps: string[] },
 ): string[] {
   const { input, output } = ex;
   const cands: { src: string; score: number }[] = [];
