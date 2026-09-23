@@ -360,7 +360,6 @@ export function DataGrid({
                   <div
                     onMouseDown={(e) => onCellMouseDown(0, i, e)}
                     onMouseEnter={() => onCellMouseEnter(0, i)}
-                    onDoubleClick={() => focusInput(0, i) /* sans effet : pas d'input */}
                     className={cn(
                       "grid-cell flex cursor-cell items-center truncate px-3 font-mono text-[13px] text-foreground",
                       inSel(0, i) && "bg-primary/10",

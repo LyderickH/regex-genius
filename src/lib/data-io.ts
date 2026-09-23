@@ -21,10 +21,15 @@ export function parsePastedText(text: string): Matrix {
   return lines.map((l) => [l]);
 }
 
+/** Cellules seules au format tabulations (copie d'une plage). */
+export function cellsToTsv(rows: Matrix): string {
+  const cell = (v: string) => (/[\t\n"]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  return rows.map((r) => r.map(cell).join("\t")).join("\n");
+}
+
 /** Tableau au format tabulations : collable directement dans Excel. */
 export function toTsv(header: string[], rows: Matrix): string {
-  const cell = (v: string) => (/[\t\n"]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-  return [header, ...rows].map((r) => r.map(cell).join("\t")).join("\n");
+  return cellsToTsv([header, ...rows]);
 }
 
 export async function copyToClipboard(text: string): Promise<boolean> {
