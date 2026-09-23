@@ -16,4 +16,4 @@
 - [x] Bouton « Ajouter une ligne » + option « Tableau vierge » au démarrage ; colonne source éditable
 - [x] Transformation de date AAAAMMJJ vers AAAA/MM/JJ
 
-- [ ] Multi-motifs : ne pas dégrader la regex simple, éviter de partir en exceptions (max 3 motifs, on ne découpe que si le gain est réel)
+- [x] Multi-motifs : ne pas dégrader la regex simple, éviter de partir en exceptions (max 3 motifs, on ne découpe que si le gain est réel)
