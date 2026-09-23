@@ -9,6 +9,7 @@ export type Fmt =
   | "none"
   | "date-fr" // AAAAMMJJ -> JJ/MM/AAAA
   | "date-iso" // AAAAMMJJ -> AAAA-MM-JJ
+  | "date-slash" // AAAAMMJJ -> AAAA/MM/JJ
   | "day" // AAAAMMJJ -> jour de la semaine
   | "time" // HHMM ou HHMMSS -> HH:MM[:SS]
   | "div100" // centimes -> euros
@@ -43,6 +44,7 @@ export function describeTransform(t: Transform): string | null {
   if (t.casing === "lower") parts.push("mise en minuscules");
   if (t.fmt === "date-fr") parts.push("conversion de la date AAAAMMJJ en JJ/MM/AAAA");
   if (t.fmt === "date-iso") parts.push("conversion de la date AAAAMMJJ en AAAA-MM-JJ");
+  if (t.fmt === "date-slash") parts.push("conversion de la date AAAAMMJJ en AAAA/MM/JJ");
   if (t.fmt === "day") parts.push("jour de la semaine de la date AAAAMMJJ");
   if (t.fmt === "time") parts.push("conversion de l'heure HHMM ou HHMMSS en HH:MM");
   if (t.fmt === "div100") parts.push("division par 100 (centimes vers euros)");
@@ -54,6 +56,7 @@ const FMTS: { id: Fmt; cost: number }[] = [
   { id: "none", cost: 0 },
   { id: "date-fr", cost: 3 },
   { id: "date-iso", cost: 3 },
+  { id: "date-slash", cost: 3 },
   { id: "time", cost: 3 },
   { id: "day", cost: 4 },
   { id: "div100", cost: 4 },
@@ -133,11 +136,12 @@ function runsPattern(s: string, exact: boolean): string {
 /** Transformations classiques : date, heure, jour, opérations. */
 function applyFmt(v: string, f: Fmt): string {
   if (f === "none") return v;
-  if (f === "date-fr" || f === "date-iso" || f === "day") {
+  if (f === "date-fr" || f === "date-iso" || f === "date-slash" || f === "day") {
     const m = /^(\d{4})(\d{2})(\d{2})$/.exec(v.trim());
     if (!m) return v;
     if (f === "date-fr") return `${m[3]}/${m[2]}/${m[1]}`;
     if (f === "date-iso") return `${m[1]}-${m[2]}-${m[3]}`;
+    if (f === "date-slash") return `${m[1]}/${m[2]}/${m[3]}`;
     const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
     const jours = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
     return jours[d.getDay()] ?? v;
