@@ -449,6 +449,7 @@ function Index() {
           onChangeCell={handleChangeCell}
           onChangeSource={handleChangeSource}
           onAddRow={addRow}
+          onRemoveRows={removeRows}
           onFocusCell={(colId, row) => {
             focus.current = { colId, row };
           }}
