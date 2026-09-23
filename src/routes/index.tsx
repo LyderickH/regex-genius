@@ -7,7 +7,6 @@ import {
   FileText,
   Trash2,
   Regex,
-  Wand2,
 } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
@@ -43,10 +42,20 @@ ES-2024-00455 / Madrid — 3 410,90 EUR
 IT-2022-00042 / Milan — 77,00 EUR
 FR-2025-01890 / Lyon — 12 000,00 EUR`;
 
+/** État de démarrage : la grille est déjà remplie avec l'exemple. */
+function initialData() {
+  const matrix = parsePastedText(SAMPLE);
+  const rows = matrix.map((r) => (r[0] ?? "").toString());
+  const col = emptyColumn("Résultat 1", rows.length);
+  col.user = ["1250,00", "980,50", null, null, null];
+  return { rows, columns: [col], activeId: col.id };
+}
+
 function Index() {
-  const [rows, setRows] = useState<string[]>([]);
-  const [columns, setColumns] = useState<OutputColumn[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [boot] = useState(initialData);
+  const [rows, setRows] = useState<string[]>(boot.rows);
+  const [columns, setColumns] = useState<OutputColumn[]>(boot.columns);
+  const [activeId, setActiveId] = useState<string | null>(boot.activeId);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
 
