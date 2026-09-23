@@ -241,6 +241,36 @@ function capturePatterns(raw: string, rightChar: string | null): string[] {
   return [...set];
 }
 
+
+/** Ponctuation technique : un vrai point d'ancrage (« : », « = », « | »…). */
+const TECH_DELIM = /[:=#|[\]()<>{},;\t"']/;
+
+/** Repère faible : uniquement des espaces, ou un mot de liaison de 1-2 lettres. */
+function weakDelimiter(lit: string | null): boolean {
+  if (lit == null || lit === "") return false;
+  if (lit.trim() === "") return true;
+  const t = lit.trim();
+  if (/^[A-Za-zÀ-ÿ]{1,2}$/.test(t) && /^\s|\s$/.test(lit)) return true;
+  // repère qui coupe un mot en deux : « eur » dans « utilisateur »
+  return /[A-Za-zÀ-ÿ]$/.test(lit) && !/(^|[^A-Za-zÀ-ÿ])[A-Za-zÀ-ÿ]+$/.test(lit);
+}
+
+function strongDelimiter(lit: string | null): boolean {
+  return lit != null && TECH_DELIM.test(lit);
+}
+
+/** Le groupe capturé est-il une constante brute (aucune classe de caractères) ? */
+function literalCapture(cap: string): boolean {
+  return !/[\\[\]+*?{}|.]/.test(cap);
+}
+
+/** Première capture définie : permet les motifs à deux branches (pivot avant/après). */
+function firstGroup(m: RegExpExecArray | null): string | undefined {
+  if (!m) return undefined;
+  for (let i = 1; i < m.length; i++) if (m[i] !== undefined) return m[i];
+  return undefined;
+}
+
 function scoreOf(cap: string, left: string, right: string): number {
   let s = cap.length + left.length + right.length;
   if (cap.includes("[^\\n]")) s += 60;
@@ -379,28 +409,28 @@ function buildCandidates(
     const left = input.slice(0, pos);
     const right = input.slice(pos + len);
 
-    const lefts = new Set<string>([""]);
-    if (pos === 0) lefts.add("^");
-    for (const p of fieldPrefixes(input, pos)) lefts.add(p);
-    for (const l of shared?.lefts ?? []) lefts.add(l);
+    // chaque repère garde son texte d'origine pour être qualifié (technique / mot de liaison)
+    const lefts = new Map<string, string | null>([["", null]]);
+    if (pos === 0) lefts.set("^", null);
+    for (const p of fieldPrefixes(input, pos)) lefts.set(p, "|");
+    for (const l of shared?.lefts ?? []) lefts.set(l, null);
     for (let l = 1; l <= 8 && l <= left.length; l++) {
       const chunk = left.slice(-l);
-      lefts.add(escapeRegex(chunk));
-      lefts.add(runsPattern(chunk, true));
+      lefts.set(escapeRegex(chunk), chunk);
+      lefts.set(runsPattern(chunk, true), chunk);
       if (l === left.length) {
-        lefts.add("^" + escapeRegex(chunk));
-        lefts.add("^" + runsPattern(chunk, true));
+        lefts.set("^" + escapeRegex(chunk), chunk);
+        lefts.set("^" + runsPattern(chunk, true), chunk);
       }
     }
 
-
-    const rights = new Set<string>([""]);
-    if (right === "") rights.add("$");
-    for (const r of shared?.rights ?? []) rights.add(r);
+    const rights = new Map<string, string | null>([["", null]]);
+    if (right === "") rights.set("$", null);
+    for (const r of shared?.rights ?? []) rights.set(r, null);
     for (let r = 1; r <= 4 && r <= right.length; r++) {
       const chunk = right.slice(0, r);
-      rights.add(escapeRegex(chunk));
-      rights.add(runsPattern(chunk, true));
+      rights.set(escapeRegex(chunk), chunk);
+      rights.set(runsPattern(chunk, true), chunk);
     }
 
     const caps = new Set(capturePatterns(raw, right.length ? right.charAt(0) : null));
@@ -418,13 +448,22 @@ function buildCandidates(
         generalized.add(c);
       }
     }
-    for (const cap of caps)
-      for (const l of lefts)
-        for (const r of rights)
-          cands.push({
-            src: `${l}(${cap})${r}`,
-            score: scoreOf(cap, l, r) - (generalized.has(cap) ? 30 : 0),
-          });
+    for (const cap of caps) {
+      const isLit = literalCapture(cap) && cap === escapeRegex(raw);
+      for (const [l, lLit] of lefts)
+        for (const [r, rLit] of rights) {
+          const anchored =
+            l.startsWith("^") || r === "$" || strongDelimiter(lLit) || strongDelimiter(rLit);
+          let score = scoreOf(cap, l, r) - (generalized.has(cap) ? 30 : 0);
+          // 1. une constante brute sans ancre forte est du sur-apprentissage
+          if (isLit && !anchored) score += 45;
+          // 2. un mot de liaison ou un bout de mot n'est pas un repère fiable
+          if (weakDelimiter(lLit)) score += 25;
+          if (weakDelimiter(rLit)) score += 15;
+          if (strongDelimiter(lLit)) score -= 10;
+          cands.push({ src: `${l}(${cap})${r}`, score });
+        }
+    }
   }
   cands.sort((a, b) => a.score - b.score);
   const seen = new Set<string>();
@@ -446,9 +485,9 @@ function validate(source: string, transform: Transform, examples: Example[]): bo
     return false;
   }
   for (const ex of examples) {
-    const m = re.exec(ex.input);
-    if (!m || m[1] === undefined) return false;
-    if (applyTransform(m[1], transform) !== ex.output) return false;
+    const g = firstGroup(re.exec(ex.input));
+    if (g === undefined) return false;
+    if (applyTransform(g, transform) !== ex.output) return false;
   }
   return true;
 }
@@ -483,7 +522,7 @@ function coverageFit(
   let fit = 0;
   for (const input of inputs) {
     if (!input) continue;
-    const g = re.exec(input)?.[1];
+    const g = firstGroup(re.exec(input));
     if (g === undefined) continue;
     cov++;
     if (shapes.size === 0 || shapes.has(shapeOf(applyTransform(g, transform)))) fit++;
@@ -501,7 +540,7 @@ function avoids(src: string, transform: Transform, negatives: Example[]): boolea
     return false;
   }
   for (const n of negatives) {
-    const g = re.exec(n.input)?.[1];
+    const g = firstGroup(re.exec(n.input));
     if (g !== undefined && applyTransform(g, transform) !== n.output) return false;
   }
   return true;
@@ -648,13 +687,33 @@ function partitionRules(examples: Example[], maxGroups = 3): { rule: Rule; size:
     if (!rule) continue;
     let conflicts = 0;
     for (const o of others) {
-      const g = new RegExp(rule.source, rule.flags).exec(o.input)?.[1];
+      const g = firstGroup(new RegExp(rule.source, rule.flags).exec(o.input));
       if (g !== undefined && applyTransform(g, rule.transform) !== o.output) conflicts++;
     }
     rules.push({ rule, group, conflicts });
   }
-  // les règles les plus spécifiques passent en premier
-  rules.sort((a, b) => a.conflicts - b.conflicts || b.group.length - a.group.length);
+  // 4. ordre strict : les règles les plus contraintes d'abord, les constantes en dernier
+  const level = (rule: Rule): number => {
+    const src = rule.source;
+    const i = src.indexOf("(");
+    const j = src.lastIndexOf(")");
+    const cap = i >= 0 && j > i ? src.slice(i + 1, j) : "";
+    const before = i > 0 ? src.slice(0, i) : "";
+    const after = j >= 0 ? src.slice(j + 1) : "";
+    const leftAnchor = before.startsWith("^") || before.length > 0;
+    const rightAnchor = after === "$" || after.length > 0;
+    const typed = /\\d|\[A-Za-z|\\w/.test(cap);
+    let lv = leftAnchor && rightAnchor ? 0 : (leftAnchor || rightAnchor) && typed ? 1 : 2;
+    // une règle qui extrait une constante ne doit jamais servir de règle générale
+    if (literalCapture(cap)) lv += 5;
+    return lv;
+  };
+  rules.sort(
+    (a, b) =>
+      a.conflicts - b.conflicts ||
+      level(a.rule) - level(b.rule) ||
+      b.group.length - a.group.length,
+  );
   return rules.map((r) => ({ rule: r.rule, size: r.group.length }));
 }
 
@@ -671,7 +730,7 @@ export function applyRule(rule: Rule, inputs: string[]): SynthResult {
     const input = inputs[i] ?? "";
     let value: string | null = null;
     for (const { re, transform } of chain) {
-      const g = re.exec(input)?.[1];
+      const g = firstGroup(re.exec(input));
       if (g !== undefined) {
         value = applyTransform(g, transform);
         break;
@@ -978,6 +1037,8 @@ function minimalLefts(
     if (/\d/.test(tail) && !/[A-Za-z]{2}/.test(tail)) continue;
     // un repère ne peut pas être une valeur extraite ailleurs : c'est un hasard
     if (values.some((v) => v.length >= 3 && tail.includes(v))) continue;
+    // ni un mot de liaison court (« de », « à ») : trop de faux positifs
+    if (weakDelimiter(tail)) continue;
     let re: RegExp;
     try {
       re = new RegExp(`${escapeRegex(tail)}(${cap})`);
@@ -995,6 +1056,36 @@ function minimalLefts(
     }
   }
   return out;
+}
+
+
+/** Repère situé APRÈS la valeur (pivot inversé : « 50 € payés »). */
+function minimalRight(
+  input: string,
+  end: number,
+  cap: string,
+  raw: string,
+  values: string[] = [],
+): string | null {
+  const after = input.slice(end);
+  if (!after) return null;
+  for (let len = 1; len <= 14 && len <= after.length; len++) {
+    const head = after.slice(0, len);
+    const next = after[len];
+    if (next && /[A-Za-z0-9]/.test(next) && /[A-Za-z0-9]/.test(head[head.length - 1]!)) continue;
+    if (/\d/.test(head) && !/[A-Za-z]{2}/.test(head)) continue;
+    if (values.some((v) => v.length >= 3 && head.includes(v))) continue;
+    if (weakDelimiter(head)) continue;
+    let re: RegExp;
+    try {
+      re = new RegExp(`(${cap})${escapeRegex(head)}`);
+    } catch {
+      return null;
+    }
+    const m = re.exec(input);
+    if (m && m[1] === raw && /[A-Za-z]{2}|[:=#|]/.test(head)) return head;
+  }
+  return null;
 }
 
 /**
@@ -1037,12 +1128,17 @@ function alternationRule(
     if (!hits.every((h) => full.test(h.raw))) continue;
 
     const perLine: string[][] = [];
+    const rightMarks: string[] = [];
     for (const h of hits) {
       const l = minimalLefts(inputs[h.i] ?? "", h.pos, cap, h.raw, allValues);
-      // une ligne sans repère exploitable est simplement laissée de côté
       if (l.length) perLine.push(l);
+      else {
+        // 3. pivot inversé : la valeur précède son repère (« 50 € payés »)
+        const r = minimalRight(inputs[h.i] ?? "", h.pos + h.raw.length, cap, h.raw, allValues);
+        if (r) rightMarks.push(r);
+      }
     }
-    if (perLine.length < 2 || perLine.length < hits.length * 0.6) continue;
+    if (perLine.length < 2 || perLine.length + rightMarks.length < hits.length * 0.6) continue;
 
     // deux jeux de repères : les plus courts, et ceux qui contiennent un mot
     const variants = [perLine.map((l) => l[0]!), perLine.map((l) => l[l.length - 1]!)];
@@ -1054,7 +1150,12 @@ function alternationRule(
       if (uniq.length > 1 && uniq.some((u) => u.length > limit)) continue;
       const esc = (u: string): string => (u === "^" ? "^" : escapeRegex(u));
       const head = uniq.length === 1 ? esc(uniq[0]!) : `(?:${uniq.map(esc).join("|")})`;
-      const src = `${head}(${cap})`;
+      const tails = [...new Set(rightMarks)].filter((t) => t.length <= 12);
+      // disjonction pivot-avant / pivot-après quand les deux ordres existent
+      const src =
+        tails.length > 0
+          ? `(?:${head}(${cap})|(${cap})${tails.length === 1 ? escapeRegex(tails[0]!) : `(?:${tails.map(escapeRegex).join("|")})`})`
+          : `${head}(${cap})`;
       let re: RegExp;
       try {
         re = new RegExp(src);
@@ -1066,7 +1167,7 @@ function alternationRule(
       for (let i = 0; i < inputs.length; i++) {
         const input = inputs[i] ?? "";
         if (!input) continue;
-        const g = re.exec(input)?.[1];
+        const g = firstGroup(re.exec(input));
         const v = g === undefined ? null : applyTransform(g, transform);
         if (rate) {
           quality += rate(i, v);
@@ -1188,4 +1289,191 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
   if (parts[0])
     return preferAlternation(selfTrain(applyRule(parts[0].rule, inputs), inputs, examples), inputs, examples);
   return empty;
+}
+
+/** Contenu du groupe capturant d'un motif (en ignorant les groupes non capturants). */
+function capturedPart(src: string): string | null {
+  let depth = 0;
+  let start = -1;
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i]!;
+    if (ch === "\\") {
+      i++;
+      continue;
+    }
+    if (ch === "[") {
+      while (i < src.length && src[i] !== "]") {
+        if (src[i] === "\\") i++;
+        i++;
+      }
+      continue;
+    }
+    if (ch === "(") {
+      if (start < 0 && src[i + 1] !== "?") start = i;
+      depth++;
+    } else if (ch === ")") {
+      depth--;
+      if (start >= 0 && depth === 0) return src.slice(start + 1, i);
+    }
+  }
+  return null;
+}
+
+/** Regex combinée : un seul motif avec un groupe par colonne de sortie. */
+export function combineColumns(
+  inputs: string[],
+  cols: { name: string; rule: Rule }[],
+): { source: string; names: string[]; covered: number; total: number } | null {
+  const usable = cols.filter((c) => c.rule && c.rule.source);
+  if (usable.length < 2) return null;
+  const rows = inputs.filter(Boolean);
+  if (rows.length === 0) return null;
+
+  // ordre des colonnes = ordre d'apparition de la capture dans la ligne
+  const posOf = (rule: Rule): number => {
+    let sum = 0;
+    let n = 0;
+    for (const input of rows) {
+      let m: RegExpExecArray | null = null;
+      try {
+        m = new RegExp(rule.source, rule.flags).exec(input);
+      } catch {
+        return Infinity;
+      }
+      if (!m) continue;
+      const g = firstGroup(m);
+      if (g === undefined) continue;
+      sum += input.indexOf(g, m.index);
+      n++;
+    }
+    return n === 0 ? Infinity : sum / n;
+  };
+  const ordered = usable
+    .map((c) => ({ ...c, at: posOf(c.rule) }))
+    .filter((c) => Number.isFinite(c.at))
+    .sort((a, b) => a.at - b.at);
+  if (ordered.length < 2) return null;
+
+  const FIELD = /^\^\(\?:\[\^(.)\]\*\\?(.)\)\{(\d+)\}/;
+  const fieldInfo = (src: string): { delim: string; n: number } | null => {
+    const m = FIELD.exec(src);
+    return m ? { delim: m[1]!, n: Number(m[3]) } : null;
+  };
+  const strip = (src: string, first: boolean): string =>
+    first ? src : src.replace(FIELD, "").replace(/^\^/, "");
+
+  const build = (glue: string): string =>
+    ordered.map((c, i) => strip(c.rule.source, i === 0)).join(glue);
+
+  // variante « champs délimités » : on saute le bon nombre de champs entre deux captures
+  const buildFields = (): string | null => {
+    const infos = ordered.map((c) => fieldInfo(c.rule.source));
+    const d = infos[0]?.delim;
+    if (!d || !infos.every((i) => i && i.delim === d)) return null;
+    let out = ordered[0]!.rule.source;
+    for (let i = 1; i < ordered.length; i++) {
+      const gap = infos[i]!.n - infos[i - 1]!.n;
+      if (gap < 1) return null;
+      const cls = `[^${escapeClass(d)}]`;
+      out += `${cls}*(?:\\${d}${cls}*){${gap - 1}}\\${d}` + strip(ordered[i]!.rule.source, false);
+    }
+    return out;
+  };
+
+  /**
+   * Variante empirique : on repère le n-ième champ de chaque capture directement
+   * dans les lignes, ce qui donne un motif exact même sans préfixe de champ.
+   */
+  const buildEmpirical = (): string | null => {
+    const d = ["|", ";", "\t", ","].find((c) => rows.every((r) => r.split(c).length >= 3));
+    if (!d) return null;
+    const idx: number[] = [];
+    const caps: string[] = [];
+    for (const c of ordered) {
+      const seen = new Set<number>();
+      let re: RegExp;
+      try {
+        re = new RegExp(c.rule.source, c.rule.flags);
+      } catch {
+        return null;
+      }
+      for (const input of rows) {
+        const m = re.exec(input);
+        const g = firstGroup(m);
+        if (g === undefined || m === null) continue;
+        const at = input.indexOf(g, m.index);
+        seen.add(input.slice(0, at).split(d).length - 1);
+      }
+      if (seen.size !== 1) return null;
+      idx.push([...seen][0]!);
+      const cap = capturedPart(c.rule.source);
+      if (!cap) return null;
+      caps.push(cap);
+    }
+    const cls = `[^${escapeClass(d)}]`;
+    const lit = escapeRegex(d);
+    let out = idx[0] === 0 ? "^" : `^(?:${cls}*${lit}){${idx[0]}}`;
+    for (let i = 0; i < caps.length; i++) {
+      if (i > 0) {
+        const gap = idx[i]! - idx[i - 1]!;
+        if (gap < 1) return null;
+        out += `${cls}*${lit}(?:${cls}*${lit}){${gap - 1}}`;
+      }
+      // le champ peut commencer par des espaces avant la valeur
+      out += `${cls}*?(${caps[i]})`;
+    }
+    return out;
+  };
+
+  let best: { source: string; covered: number } | null = null;
+  const fieldVariant = buildFields() ?? buildEmpirical();
+  if (fieldVariant) {
+    try {
+      const re = new RegExp(fieldVariant);
+      let covered = 0;
+      for (const input of rows) {
+        const m = re.exec(input);
+        if (m && ordered.every((_, i) => m[i + 1] !== undefined)) covered++;
+      }
+      best = { source: fieldVariant, covered };
+    } catch {
+      /* variante invalide */
+    }
+  }
+  for (const glue of ["[\\s\\S]*?", ".*?", ""]) {
+    const source = build(glue);
+    let re: RegExp;
+    try {
+      re = new RegExp(source);
+    } catch {
+      continue;
+    }
+    let covered = 0;
+    for (const input of rows) {
+      const m = re.exec(input);
+      if (m && ordered.every((_, i) => m[i + 1] !== undefined)) covered++;
+    }
+    if (!best || covered > best.covered) best = { source, covered };
+    if (covered === rows.length) break;
+  }
+  if (fieldVariant) {
+    try {
+      const re = new RegExp(fieldVariant);
+      let covered = 0;
+      for (const input of rows) {
+        const m = re.exec(input);
+        if (m && ordered.every((_, i) => m[i + 1] !== undefined)) covered++;
+      }
+      if (!best || covered > best.covered) best = { source: fieldVariant, covered };
+    } catch {
+      /* variante invalide */
+    }
+  }
+  if (!best || best.covered === 0) return null;
+  return {
+    source: best.source,
+    names: ordered.map((c) => c.name),
+    covered: best.covered,
+    total: rows.length,
+  };
 }

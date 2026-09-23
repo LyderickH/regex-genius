@@ -352,12 +352,21 @@ export function DataGrid({
       className="flex min-h-0 flex-1 flex-col overflow-hidden outline-none"
       onKeyDown={onGridKeyDown}
     >
-      {/* en-têtes */}
+      {/* corps (l'en-tête défile avec lui, en restant collé en haut) */}
       <div
-        className="grid shrink-0 border-b border-grid-line bg-surface-2 text-xs"
+        ref={scroller}
+        onScroll={(e) => {
+          setScrollTop(e.currentTarget.scrollTop);
+        }}
+        className="min-h-0 flex-1 overflow-auto"
+      >
+      <div
+        className="sticky top-0 z-30 grid w-max border-b border-grid-line bg-surface-2 text-xs"
         style={{ gridTemplateColumns: template }}
       >
-        <div className="grid-cell px-2 py-2 text-center font-mono text-muted-foreground">#</div>
+        <div className="grid-cell sticky left-0 z-40 bg-surface-2 px-2 py-2 text-center font-mono text-muted-foreground">
+          #
+        </div>
         <div className="grid-cell relative px-3 py-2 font-semibold tracking-wide text-foreground">
           Données source
           <ResizeHandle index={0} />
@@ -404,13 +413,6 @@ export function DataGrid({
           <Plus className="size-4" />
         </button>
       </div>
-
-      {/* corps */}
-      <div
-        ref={scroller}
-        onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
-        className="min-h-0 flex-1 overflow-auto"
-      >
         <div style={{ height: rows.length * ROW_H, position: "relative" }}>
           <div style={{ position: "absolute", top: start * ROW_H, left: 0, right: 0 }}>
             {visible.map((source, k) => {
@@ -421,7 +423,7 @@ export function DataGrid({
                   className="grid hover:bg-surface/60"
                   style={{ gridTemplateColumns: template, height: ROW_H }}
                 >
-                  <div className="group/row grid-cell relative flex items-center justify-center">
+                  <div className="group/row grid-cell sticky left-0 z-10 relative flex items-center justify-center bg-background">
                     <span className="font-mono text-[11px] text-muted-foreground group-hover/row:opacity-0">
                       {i + 1}
                     </span>

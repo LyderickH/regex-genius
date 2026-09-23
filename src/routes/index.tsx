@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ClipboardPaste,
   ClipboardCopy,
@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import { DataGrid, type GridSel } from "@/components/regex-tool/DataGrid";
 import { PatternPanel } from "@/components/regex-tool/PatternPanel";
 import { emptyColumn, cellValue, type OutputColumn } from "@/components/regex-tool/types";
-import type { SynthResult } from "@/lib/regex-synth/engine";
+import { combineColumns, type SynthResult } from "@/lib/regex-synth/engine";
 import {
   parseFile,
   parsePastedText,
@@ -438,6 +438,14 @@ function Index() {
   };
 
   const active = columns.find((c) => c.id === activeId) ?? null;
+  const combined = useMemo(
+    () =>
+      combineColumns(
+        rows,
+        columns.filter((c) => c.rule).map((c) => ({ name: c.name, rule: c.rule! })),
+      ),
+    [rows, columns],
+  );
 
   const handleRootPaste = (e: React.ClipboardEvent) => {
     if (pasteOpen) return;
@@ -573,6 +581,7 @@ function Index() {
           onRemoveColumn={removeColumn}
         />
         <PatternPanel
+          combined={combined}
           column={active}
           rowCount={rows.length}
           rows={rows}

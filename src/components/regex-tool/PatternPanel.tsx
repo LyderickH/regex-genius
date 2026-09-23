@@ -20,11 +20,13 @@ export function PatternPanel({
   rowCount,
   rows = [],
   onGoToRow,
+  combined,
 }: {
   column: OutputColumn | null;
   rowCount: number;
   rows?: string[];
   onGoToRow?: (row: number) => void;
+  combined?: { source: string; names: string[]; covered: number; total: number } | null;
 }) {
   const [dialectId, setDialectId] = useState("python");
   const [copied, setCopied] = useState<string | null>(null);
@@ -84,6 +86,30 @@ export function PatternPanel({
           <ChevronRight className="size-4" />
         </button>
       </div>
+
+      {combined && (
+        <div className="border-b border-grid-line bg-surface-2/40 p-4">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+              Regex combinée — toutes les colonnes
+            </span>
+            <button
+              onClick={() => copy(combined.source, "combined")}
+              className="flex items-center gap-1 text-xs text-muted-foreground transition hover:text-primary"
+            >
+              {copied === "combined" ? <Check className="size-3" /> : <Copy className="size-3" />} copier
+            </button>
+          </div>
+          <div className="break-all rounded-md border border-border bg-background p-3 font-mono text-[12px] leading-relaxed text-derived">
+            {combined.source}
+          </div>
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Un seul passage extrait {combined.names.length} valeurs : groupe 1 ={" "}
+            {combined.names.join(", groupe suivant = ")}. Couvre {combined.covered}/{combined.total}{" "}
+            lignes.
+          </p>
+        </div>
+      )}
 
       {!rule ? (
         <div className="space-y-3 p-4 text-sm text-muted-foreground">
