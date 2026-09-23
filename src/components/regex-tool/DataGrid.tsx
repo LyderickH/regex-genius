@@ -398,8 +398,24 @@ export function DataGrid({
                   className="grid hover:bg-surface/60"
                   style={{ gridTemplateColumns: template, height: ROW_H }}
                 >
-                  <div className="grid-cell flex items-center justify-end px-2 font-mono text-[11px] text-muted-foreground">
-                    {i + 1}
+                  <div className="group/row grid-cell relative flex items-center justify-center">
+                    <span className="font-mono text-[11px] text-muted-foreground group-hover/row:opacity-0">
+                      {i + 1}
+                    </span>
+                    {onRemoveRows && (
+                      <button
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveRows(i, i);
+                        }}
+                        title="Supprimer cette ligne"
+                        aria-label="Supprimer cette ligne"
+                        className="absolute inset-y-0 flex w-full items-center justify-center text-muted-foreground opacity-0 transition hover:text-destructive group-hover/row:opacity-100"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    )}
                   </div>
                   <div
                     onMouseDown={(e) => onCellMouseDown(0, i, e)}
