@@ -181,6 +181,7 @@ export function DataGrid({
             >
               <Trash2 className="size-3.5" />
             </button>
+            <ResizeHandle index={columns.indexOf(col) + 1} />
           </div>
         ))}
         <button
