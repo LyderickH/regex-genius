@@ -1037,6 +1037,8 @@ function minimalLefts(
     if (/\d/.test(tail) && !/[A-Za-z]{2}/.test(tail)) continue;
     // un repère ne peut pas être une valeur extraite ailleurs : c'est un hasard
     if (values.some((v) => v.length >= 3 && tail.includes(v))) continue;
+    // ni un mot de liaison court (« de », « à ») : trop de faux positifs
+    if (weakDelimiter(tail)) continue;
     let re: RegExp;
     try {
       re = new RegExp(`${escapeRegex(tail)}(${cap})`);
@@ -1054,6 +1056,36 @@ function minimalLefts(
     }
   }
   return out;
+}
+
+
+/** Repère situé APRÈS la valeur (pivot inversé : « 50 € payés »). */
+function minimalRight(
+  input: string,
+  end: number,
+  cap: string,
+  raw: string,
+  values: string[] = [],
+): string | null {
+  const after = input.slice(end);
+  if (!after) return null;
+  for (let len = 1; len <= 14 && len <= after.length; len++) {
+    const head = after.slice(0, len);
+    const next = after[len];
+    if (next && /[A-Za-z0-9]/.test(next) && /[A-Za-z0-9]/.test(head[head.length - 1]!)) continue;
+    if (/\d/.test(head) && !/[A-Za-z]{2}/.test(head)) continue;
+    if (values.some((v) => v.length >= 3 && head.includes(v))) continue;
+    if (weakDelimiter(head)) continue;
+    let re: RegExp;
+    try {
+      re = new RegExp(`(${cap})${escapeRegex(head)}`);
+    } catch {
+      return null;
+    }
+    const m = re.exec(input);
+    if (m && m[1] === raw && /[A-Za-z]{2}|[:=#|]/.test(head)) return head;
+  }
+  return null;
 }
 
 /**
@@ -1096,12 +1128,17 @@ function alternationRule(
     if (!hits.every((h) => full.test(h.raw))) continue;
 
     const perLine: string[][] = [];
+    const rightMarks: string[] = [];
     for (const h of hits) {
       const l = minimalLefts(inputs[h.i] ?? "", h.pos, cap, h.raw, allValues);
-      // une ligne sans repère exploitable est simplement laissée de côté
       if (l.length) perLine.push(l);
+      else {
+        // 3. pivot inversé : la valeur précède son repère (« 50 € payés »)
+        const r = minimalRight(inputs[h.i] ?? "", h.pos + h.raw.length, cap, h.raw, allValues);
+        if (r) rightMarks.push(r);
+      }
     }
-    if (perLine.length < 2 || perLine.length < hits.length * 0.6) continue;
+    if (perLine.length < 2 || perLine.length + rightMarks.length < hits.length * 0.6) continue;
 
     // deux jeux de repères : les plus courts, et ceux qui contiennent un mot
     const variants = [perLine.map((l) => l[0]!), perLine.map((l) => l[l.length - 1]!)];
@@ -1113,7 +1150,12 @@ function alternationRule(
       if (uniq.length > 1 && uniq.some((u) => u.length > limit)) continue;
       const esc = (u: string): string => (u === "^" ? "^" : escapeRegex(u));
       const head = uniq.length === 1 ? esc(uniq[0]!) : `(?:${uniq.map(esc).join("|")})`;
-      const src = `${head}(${cap})`;
+      const tails = [...new Set(rightMarks)].filter((t) => t.length <= 12);
+      // disjonction pivot-avant / pivot-après quand les deux ordres existent
+      const src =
+        tails.length > 0
+          ? `(?:${head}(${cap})|(${cap})${tails.length === 1 ? escapeRegex(tails[0]!) : `(?:${tails.map(escapeRegex).join("|")})`})`
+          : `${head}(${cap})`;
       let re: RegExp;
       try {
         re = new RegExp(src);
@@ -1125,7 +1167,7 @@ function alternationRule(
       for (let i = 0; i < inputs.length; i++) {
         const input = inputs[i] ?? "";
         if (!input) continue;
-        const g = re.exec(input)?.[1];
+        const g = firstGroup(re.exec(input));
         const v = g === undefined ? null : applyTransform(g, transform);
         if (rate) {
           quality += rate(i, v);
