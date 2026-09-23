@@ -121,9 +121,9 @@ export function LLMControlDialog({ open, onClose }: LLMControlDialogProps) {
                       <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground border border-border">
                         {model.size}
                       </span>
-                      {model.recommended === "balanced" && (
-                        <span className="rounded bg-amber-500/10 text-amber-500 px-1.5 py-0.5 text-[10px] font-medium border border-amber-500/20">
-                          Recommandé
+                      {model.id === "Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC" && (
+                        <span className="rounded bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 text-[10px] font-semibold border border-emerald-500/20">
+                          Recommandé par défaut
                         </span>
                       )}
                     </div>

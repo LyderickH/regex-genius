@@ -47,7 +47,7 @@ export const AVAILABLE_MODELS: LocalModelConfig[] = [
     family: "qwen",
     size: "520 Mo",
     description: "Modèle généraliste léger avec bon équilibre taille/vitesse.",
-    recommended: "balanced",
+    recommended: "mobile",
     vramMB: 900,
   },
   {
