@@ -578,14 +578,17 @@ export function synthesizeRule(
       if (!validate(src, transform, valid)) continue;
       if (neg && neg.length > 0 && !avoids(src, transform, neg)) continue;
       const { cov, fit } = coverageFit(src, transform, inputs, shapes);
-      // la cohérence de forme pèse plus lourd que la simple couverture
-      const score = fit * 3 + cov;
+      // la cohérence de forme pèse plus lourd que la couverture, et les lignes
+      // captées « de travers » (forme inattendue) comptent comme contre-exemples
+      const wrong = cov - fit;
+      // à couverture égale, la formulation la plus courte gagne
+      const score = fit * 3 + cov - wrong * 2 - src.length / 500;
       if (score > bestScore || (score === bestScore && src.length < bestLen)) {
         best = { source: src, flags: "", transform };
         bestScore = score;
         bestLen = src.length;
       }
-      if (fit >= target) break;
+      if (fit >= target && wrong === 0) break;
       if (++seen >= 300 || Date.now() > deadline) break;
     }
     if (best) return best;
