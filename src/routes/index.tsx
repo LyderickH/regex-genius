@@ -251,10 +251,7 @@ function Index() {
         />
         <PatternPanel column={active} rowCount={rows.length} />
         {rows.length === 0 && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background/70 backdrop-blur-[2px]">
-            <p className="text-sm text-muted-foreground">
-              Collez ou importez vos données, ou…
-            </p>
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70 backdrop-blur-[2px]">
             <button
               onClick={loadSample}
               className="rounded-md border border-border px-3 py-1.5 text-xs transition hover:border-primary hover:text-primary"
