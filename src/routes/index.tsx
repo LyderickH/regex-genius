@@ -185,42 +185,92 @@ function Index() {
     runSynth(piece.id, source, piece.user);
   };
 
-  /** Colle un bloc Excel/TSV : soit tout le tableau, soit à partir de la cellule active. */
+  /** Change une ligne de données source. */
+  const handleChangeSource = (row: number, value: string) => {
+    setRows((rs) => {
+      const next = rs.slice();
+      next[row] = value;
+      columns.forEach((c) => scheduleSynth(c.id, next, c.user));
+      return next;
+    });
+  };
+
+  /** Ajoute une ligne vide en bas du tableau. */
+  const addRow = () => {
+    setRows((rs) => [...rs, ""]);
+    setColumns((cols) =>
+      cols.map((c) => ({ ...c, user: [...c.user, null], derived: [...c.derived, null] })),
+    );
+  };
+
+  /** Démarre avec un tableau vierge. */
+  const startBlank = () => {
+    const src = Array.from({ length: 5 }, () => "");
+    const col = emptyColumn("Résultat 1", src.length);
+    setRows(src);
+    setColumns([col]);
+    setActiveId(col.id);
+    setSel(null);
+  };
+
+  /** Colle un bloc Excel/TSV à partir de la cellule sélectionnée, en créant les lignes manquantes. */
   const pasteBlock = (text: string) => {
     const matrix = parsePastedText(text);
     if (!matrix.length) return;
-    const f = focus.current;
-    if (rows.length === 0 || !f) {
+    if (rows.length === 0) {
       loadMatrix(matrix);
       return;
     }
-    const startCol = columns.findIndex((c) => c.id === f.colId);
-    if (startCol < 0) {
-      loadMatrix(matrix);
-      return;
+    let startCol = 0;
+    let startRow = 0;
+    if (sel) {
+      startCol = Math.min(sel.ac, sel.cc);
+      startRow = Math.min(sel.ar, sel.cr);
+    } else if (focus.current) {
+      const idx = columns.findIndex((c) => c.id === focus.current!.colId);
+      startCol = idx < 0 ? 0 : idx + 1;
+      startRow = focus.current.row;
     }
     const width = Math.max(...matrix.map((r) => r.length));
-    setColumns((cols) => {
-      const next = cols.map((c) => ({ ...c, user: c.user.slice() }));
-      while (next.length < startCol + width)
-        next.push(emptyColumn(`Résultat ${next.length + 1}`, rows.length));
-      matrix.forEach((r, ri) => {
-        r.forEach((v, ci) => {
-          const col = next[startCol + ci];
-          const row = f.row + ri;
-          if (!col || row >= rows.length) return;
-          col.user[row] = v === "" ? null : String(v);
-        });
+    const needRows = Math.max(rows.length, startRow + matrix.length);
+    const nextRows = rows.slice();
+    while (nextRows.length < needRows) nextRows.push("");
+    const pad = <T,>(a: T[], v: T) => {
+      const out = a.slice();
+      while (out.length < needRows) out.push(v);
+      return out;
+    };
+    const next: OutputColumn[] = columns.map((c) => ({
+      ...c,
+      user: pad(c.user, null),
+      derived: pad(c.derived, null),
+    }));
+    while (next.length < startCol + width - 1)
+      next.push(emptyColumn(`Résultat ${next.length + 1}`, needRows));
+    matrix.forEach((r, ri) => {
+      r.forEach((v, ci) => {
+        const c = startCol + ci;
+        const row = startRow + ri;
+        const s = v == null ? "" : String(v);
+        if (c === 0) {
+          nextRows[row] = s;
+          return;
+        }
+        const col = next[c - 1];
+        if (col) col.user[row] = s === "" ? null : s;
       });
-      for (let c = startCol; c < startCol + width && c < next.length; c++) {
-        const col = next[c]!;
-        col.pending = true;
-        runSynth(col.id, rows, col.user);
-      }
-      return next;
     });
-    toast.success(`${matrix.length} valeurs collées`);
+    setRows(nextRows);
+    setColumns(next);
+    next.forEach((col) => {
+      if (col.user.some((v) => v != null)) {
+        col.pending = true;
+        runSynth(col.id, nextRows, col.user);
+      }
+    });
+    toast.success(`${matrix.length} lignes collées`);
   };
+
 
   const copyTable = async () => {
     if (!rows.length) return;
