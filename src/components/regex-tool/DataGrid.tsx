@@ -146,8 +146,9 @@ export function DataGrid({
         style={{ gridTemplateColumns: template }}
       >
         <div className="grid-cell px-2 py-2 text-center font-mono text-muted-foreground">#</div>
-        <div className="grid-cell px-3 py-2 font-semibold tracking-wide text-foreground">
+        <div className="grid-cell relative px-3 py-2 font-semibold tracking-wide text-foreground">
           Données source
+          <ResizeHandle index={0} />
         </div>
         {columns.map((col) => (
           <div
