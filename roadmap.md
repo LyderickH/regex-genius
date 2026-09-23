@@ -14,3 +14,4 @@
 - [x] Transformations classiques après extraction : date JJ/MM/AAAA, date ISO, jour de la semaine, heure, ÷100 (centimes), ×1000
 - [x] Collage : création automatique des lignes manquantes, sans effacer les lignes précédentes
 - [x] Bouton « Ajouter une ligne » + option « Tableau vierge » au démarrage ; colonne source éditable
+- [x] Transformation de date AAAAMMJJ vers AAAA/MM/JJ
