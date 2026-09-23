@@ -170,12 +170,13 @@ export function synthesizeRule(examples: Example[]): Rule | null {
   if (valid.length === 0) return null;
 
   // cas constant
-  if (valid.every((e) => e.output === valid[0].output) && valid.length > 1) {
-    const lit = escapeRegex(valid[0].output);
+  const first = valid[0]!;
+  if (valid.every((e) => e.output === first.output) && valid.length > 1) {
+    const lit = escapeRegex(first.output);
     if (validate(`(${lit})`, "none", valid)) return { source: `(${lit})`, flags: "", transform: "none" };
   }
 
-  const seed = valid.slice().sort((a, b) => a.input.length - b.input.length)[0];
+  const seed = valid.slice().sort((a, b) => a.input.length - b.input.length)[0]!;
   for (const transform of ["none", "upper", "lower"] as Transform[]) {
     const candidates = buildCandidates(seed, transform);
     for (const src of candidates) {
