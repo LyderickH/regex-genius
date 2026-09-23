@@ -16,6 +16,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { DataGrid, type GridSel } from "@/components/regex-tool/DataGrid";
 import { PatternPanel } from "@/components/regex-tool/PatternPanel";
+import { WelcomeHero } from "@/components/regex-tool/WelcomeHero";
 import { emptyColumn, cellValue, type OutputColumn } from "@/components/regex-tool/types";
 import { combineColumns, type SynthResult } from "@/lib/regex-synth/engine";
 import {
@@ -560,75 +561,48 @@ function Index() {
       </header>
 
       <div className="relative flex min-h-0 flex-1">
-        <DataGrid
-          rows={rows}
-          columns={columns}
-          activeId={activeId}
-          selection={sel}
-          onSelectionChange={setSel}
-          onSelect={setActiveId}
-          onChangeCell={handleChangeCell}
-          onChangeSource={handleChangeSource}
-          onAddRow={addRow}
-          onRemoveRows={removeRows}
-          onFocusCell={(colId, row) => {
-            focus.current = { colId, row };
-          }}
-          onRename={(id, name) =>
-            setColumns((cols) => cols.map((c) => (c.id === id ? { ...c, name } : c)))
-          }
-          onAddColumn={addColumn}
-          onRemoveColumn={removeColumn}
-        />
-        <PatternPanel
-          combined={combined}
-          column={active}
-          rowCount={rows.length}
-          rows={rows}
-          onGoToRow={(row) => {
-            const idx = columns.findIndex((c) => c.id === activeId);
-            if (idx < 0) return;
-            setSel({ ac: idx + 1, ar: row, cc: idx + 1, cr: row });
-          }}
-        />
-        {rows.length === 0 && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70 backdrop-blur-[2px]">
-            <div className="flex items-center gap-2.5">
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border bg-surface px-4 py-2 text-sm transition hover:border-primary hover:text-primary">
-                <Upload className="size-4" />
-                Importer
-                <input
-                  type="file"
-                  accept=".txt,.csv,.tsv,.xlsx,.xls"
-                  className="hidden"
-                  onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-                />
-              </label>
-              <button
-                onClick={() => setPasteOpen(true)}
-                className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-4 py-2 text-sm transition hover:border-primary hover:text-primary"
-              >
-                <ClipboardPaste className="size-4" />
-                Coller du texte
-              </button>
-              <button
-                onClick={startBlank}
-                className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-4 py-2 text-sm transition hover:border-primary hover:text-primary"
-              >
-                <Plus className="size-4" />
-                Tableau vierge
-              </button>
-              <button
-                onClick={loadSample}
-                className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
-              >
-                <Sparkles className="size-4" />
-                Essayer avec un exemple
-              </button>
-            </div>
-          </div>
+        {rows.length === 0 ? (
+          <WelcomeHero
+            onLoadSample={loadSample}
+            onImportFile={handleFile}
+            onOpenPaste={() => setPasteOpen(true)}
+            onStartBlank={startBlank}
+          />
+        ) : (
+          <>
+            <DataGrid
+              rows={rows}
+              columns={columns}
+              activeId={activeId}
+              selection={sel}
+              onSelectionChange={setSel}
+              onSelect={setActiveId}
+              onChangeCell={handleChangeCell}
+              onChangeSource={handleChangeSource}
+              onAddRow={addRow}
+              onRemoveRows={removeRows}
+              onFocusCell={(colId, row) => {
+                focus.current = { colId, row };
+              }}
+              onRename={(id, name) =>
+                setColumns((cols) => cols.map((c) => (c.id === id ? { ...c, name } : c)))
+              }
+              onAddColumn={addColumn}
+              onRemoveColumn={removeColumn}
+            />
+            <PatternPanel
+              combined={combined}
+              column={active}
+              rowCount={rows.length}
+              rows={rows}
+              onGoToRow={(row) => {
+                const idx = columns.findIndex((c) => c.id === activeId);
+                if (idx < 0) return;
+                setSel({ ac: idx + 1, ar: row, cc: idx + 1, cr: row });
+              }}
+            />
+          </>
         )}
-
       </div>
 
       {headerAsk && (
