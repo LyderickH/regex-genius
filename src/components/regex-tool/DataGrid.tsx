@@ -11,6 +11,7 @@ interface Props {
   activeId: string | null;
   onSelect: (id: string) => void;
   onChangeCell: (colId: string, row: number, value: string) => void;
+  onFocusCell?: (colId: string, row: number) => void;
   onRename: (colId: string, name: string) => void;
   onAddColumn: () => void;
   onRemoveColumn: (colId: string) => void;
@@ -22,6 +23,7 @@ export function DataGrid({
   activeId,
   onSelect,
   onChangeCell,
+  onFocusCell,
   onRename,
   onAddColumn,
   onRemoveColumn,
@@ -137,7 +139,10 @@ export function DataGrid({
                       >
                         <input
                           value={cellValue(col, i)}
-                          onFocus={() => onSelect(col.id)}
+                          onFocus={() => {
+                            onSelect(col.id);
+                            onFocusCell?.(col.id, i);
+                          }}
                           onChange={(e) => onChangeCell(col.id, i, e.target.value)}
                           placeholder={col.rule ? "" : "résultat attendu…"}
                           className={cn(

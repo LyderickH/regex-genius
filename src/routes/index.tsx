@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ClipboardPaste,
+  ClipboardCopy,
   Upload,
   FileSpreadsheet,
   FileText,
@@ -14,7 +15,15 @@ import { DataGrid } from "@/components/regex-tool/DataGrid";
 import { PatternPanel } from "@/components/regex-tool/PatternPanel";
 import { emptyColumn, cellValue, type OutputColumn } from "@/components/regex-tool/types";
 import type { SynthResult } from "@/lib/regex-synth/engine";
-import { parseFile, parsePastedText, exportCsv, exportXlsx, type Matrix } from "@/lib/data-io";
+import {
+  parseFile,
+  parsePastedText,
+  exportCsv,
+  exportXlsx,
+  toTsv,
+  copyToClipboard,
+  type Matrix,
+} from "@/lib/data-io";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -36,11 +45,15 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-const SAMPLE = `FR-2024-00123 / Paris — 1 250,00 EUR
-DE-2023-00987 / Berlin — 980,50 EUR
-ES-2024-00455 / Madrid — 3 410,90 EUR
-IT-2022-00042 / Milan — 77,00 EUR
-FR-2025-01890 / Lyon — 12 000,00 EUR`;
+/** Extrait de FEC (séparateur « | »), avec des cas volontairement piégeux. */
+const SAMPLE = `VE|Ventes|VT0001|20240131|411000|Clients divers|C0012|SARL DUPONT & FILS|FA-2024-0001|20240131|Facture FA-2024-0001 - SARL DUPONT|1 250,00|0,00|AA|20240215|20240131||EUR
+AC|Achats|AC0087|20240205|401000|Fournisseurs|F0031|ÉTS MARTIN|FA/2024/87|20240203|Achat fournitures - réf. 12/45| 980,50 |0,00|||20240205||EUR
+BQ|Banque|BQ0142|20240229|512000|Banque - compte courant|||REL-02|20240229|Virement client DUPONT|0,00|3 410,90|BB|20240301|20240229||EUR
+OD|Opérations diverses|OD0009|20241231|681100|Dotations amortissements|||DOT-2024|20241231|Amortissement matériel (5 ans)|77,00|0,00|||20241231||EUR
+VE|Ventes|VT0102|20250114|707000|Ventes de marchandises|C0007|LE COMPTOIR|FA-2025-0102|20250114|Facture - lot n°12 000 pièces|12 000,00|0,00|||20250114|13 200,00|USD
+AC|Achats|AC0203|20250220|607000|Achats marchandises|F0002|IMPORT & CO|FA-2025/203|20250218|Avoir sur facture 198|-45,90|0,00|||20250220||EUR
+BQ|Banque|BQ0311|20250331|627000|Services bancaires|||AGIOS-03|20250331|Agios trimestre 1|8,90|0,00|||20250331||EUR
+VE|Ventes|VT0115|20250402|707000|Ventes de marchandises|C0012|SARL DUPONT & FILS|FA-2025-0115|20250402|Facture - remise 10 %|2 300,00|0,00|CC|20250430|20250402||EUR`;
 
 function Index() {
   const [rows, setRows] = useState<string[]>([]);
@@ -53,6 +66,7 @@ function Index() {
   const pending = useRef(new Map<number, string>());
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const reqId = useRef(0);
+  const focus = useRef<{ colId: string; row: number } | null>(null);
 
   useEffect(() => {
     const w = new Worker(new URL("../lib/regex-synth/synth.worker.ts", import.meta.url), {
@@ -153,13 +167,65 @@ function Index() {
 
   const loadSample = () => {
     const source = SAMPLE.split("\n");
-    const col = emptyColumn("Résultat 1", source.length);
-    col.user = ["1250,00", "980,50", null, null, null];
+    const fill = (vals: (string | null)[]) =>
+      source.map((_, i) => vals[i] ?? null) as (string | null)[];
+    const debit = emptyColumn("Débit", source.length);
+    debit.user = fill(["1250,00", "980,50"]);
+    const piece = emptyColumn("N° de pièce", source.length);
+    piece.user = fill(["FA-2024-0001", "FA/2024/87"]);
     setRows(source);
-    setColumns([col]);
-    setActiveId(col.id);
-    runSynth(col.id, source, col.user);
+    setColumns([debit, piece]);
+    setActiveId(debit.id);
+    runSynth(debit.id, source, debit.user);
+    runSynth(piece.id, source, piece.user);
   };
+
+  /** Colle un bloc Excel/TSV : soit tout le tableau, soit à partir de la cellule active. */
+  const pasteBlock = (text: string) => {
+    const matrix = parsePastedText(text);
+    if (!matrix.length) return;
+    const f = focus.current;
+    if (rows.length === 0 || !f) {
+      loadMatrix(matrix);
+      return;
+    }
+    const startCol = columns.findIndex((c) => c.id === f.colId);
+    if (startCol < 0) {
+      loadMatrix(matrix);
+      return;
+    }
+    const width = Math.max(...matrix.map((r) => r.length));
+    setColumns((cols) => {
+      const next = cols.map((c) => ({ ...c, user: c.user.slice() }));
+      while (next.length < startCol + width)
+        next.push(emptyColumn(`Résultat ${next.length + 1}`, rows.length));
+      matrix.forEach((r, ri) => {
+        r.forEach((v, ci) => {
+          const col = next[startCol + ci];
+          const row = f.row + ri;
+          if (!col || row >= rows.length) return;
+          col.user[row] = v === "" ? null : String(v);
+        });
+      });
+      for (let c = startCol; c < startCol + width && c < next.length; c++) {
+        const col = next[c]!;
+        col.pending = true;
+        runSynth(col.id, rows, col.user);
+      }
+      return next;
+    });
+    toast.success(`${matrix.length} valeurs collées`);
+  };
+
+  const copyTable = async () => {
+    if (!rows.length) return;
+    const header = ["Source", ...columns.map((c) => c.name)];
+    const matrix = rows.map((src, i) => [src, ...columns.map((c) => cellValue(c, i))]);
+    const ok = await copyToClipboard(toTsv(header, matrix));
+    if (ok) toast.success("Tableau copié — collez-le dans Excel");
+    else toast.error("Copie impossible");
+  };
+
 
   const addColumn = () => {
     const col = emptyColumn(`Résultat ${columns.length + 1}`, rows.length);
@@ -181,9 +247,36 @@ function Index() {
 
   const active = columns.find((c) => c.id === activeId) ?? null;
 
+  const handleRootPaste = (e: React.ClipboardEvent) => {
+    if (pasteOpen) return;
+    const text = e.clipboardData.getData("text");
+    if (!text) return;
+    if (!text.includes("\t") && !text.includes("\n")) return; // valeur simple : collage normal
+    e.preventDefault();
+    pasteBlock(text);
+  };
+
+  const handleRootCopy = (e: React.ClipboardEvent) => {
+    if (pasteOpen || !rows.length) return;
+    const el = document.activeElement as HTMLInputElement | null;
+    const inField =
+      el?.tagName === "INPUT" && el.selectionStart !== el.selectionEnd;
+    if (inField || window.getSelection()?.toString()) return;
+    e.preventDefault();
+    const header = ["Source", ...columns.map((c) => c.name)];
+    const matrix = rows.map((src, i) => [src, ...columns.map((c) => cellValue(c, i))]);
+    e.clipboardData.setData("text/plain", toTsv(header, matrix));
+    toast.success("Tableau copié — collez-le dans Excel");
+  };
+
   return (
-    <div className="flex h-screen flex-col bg-background">
+    <div
+      className="flex h-screen flex-col bg-background"
+      onPaste={handleRootPaste}
+      onCopy={handleRootCopy}
+    >
       <Toaster position="bottom-right" />
+
 
       <header className="flex shrink-0 items-center gap-3 border-b border-grid-line bg-surface px-4 py-2.5">
         <div className="flex items-center gap-2">
@@ -210,12 +303,14 @@ function Index() {
           </label>
           {rows.length > 0 && (
             <>
+              <ToolbarButton icon={ClipboardCopy} label="Copier le tableau" onClick={copyTable} />
               <ToolbarButton icon={FileText} label="CSV" onClick={() => doExport("csv")} />
               <ToolbarButton
                 icon={FileSpreadsheet}
                 label="Excel"
                 onClick={() => doExport("xlsx")}
               />
+
               <ToolbarButton
                 icon={Trash2}
                 label="Vider"
@@ -243,6 +338,9 @@ function Index() {
           activeId={activeId}
           onSelect={setActiveId}
           onChangeCell={handleChangeCell}
+          onFocusCell={(colId, row) => {
+            focus.current = { colId, row };
+          }}
           onRename={(id, name) =>
             setColumns((cols) => cols.map((c) => (c.id === id ? { ...c, name } : c)))
           }

@@ -6,8 +6,8 @@
 
 /** Nettoyage appliqué après extraction. */
 export interface Transform {
-  /** suppression : rien, tous les espaces (y compris insécables), tout sauf les chiffres */
-  strip: "none" | "spaces" | "digits";
+  /** suppression : rien, espaces de début/fin, tous les espaces, tout sauf les chiffres */
+  strip: "none" | "trim" | "spaces" | "digits";
   /** séparateur décimal : inchangé, virgule -> point, point -> virgule */
   dec: "none" | "dot" | "comma";
   casing: "none" | "upper" | "lower";
@@ -22,6 +22,7 @@ export function isIdentity(t: Transform): boolean {
 /** Description lisible du nettoyage, ou null s'il n'y en a pas. */
 export function describeTransform(t: Transform): string | null {
   const parts: string[] = [];
+  if (t.strip === "trim") parts.push("suppression des espaces de début et de fin");
   if (t.strip === "spaces") parts.push("suppression des espaces");
   if (t.strip === "digits") parts.push("conservation des chiffres uniquement");
   if (t.dec === "dot") parts.push("virgule décimale remplacée par un point");
@@ -33,17 +34,18 @@ export function describeTransform(t: Transform): string | null {
 
 const TRANSFORMS: Transform[] = (() => {
   const out: Transform[] = [];
-  for (const strip of ["none", "spaces", "digits"] as const)
+  for (const strip of ["none", "trim", "spaces", "digits"] as const)
     for (const dec of ["none", "dot", "comma"] as const)
       for (const casing of ["none", "upper", "lower"] as const)
         out.push({ strip, dec, casing });
   // les nettoyages les plus simples d'abord
   const cost = (t: Transform) =>
-    (t.strip === "none" ? 0 : t.strip === "spaces" ? 1 : 3) +
+    (t.strip === "none" ? 0 : t.strip === "trim" ? 1 : t.strip === "spaces" ? 2 : 4) +
     (t.dec === "none" ? 0 : 2) +
     (t.casing === "none" ? 0 : 1);
   return out.sort((a, b) => cost(a) - cost(b));
 })();
+
 
 export interface Rule {
   /** source de l'expression régulière, le groupe 1 contient la valeur extraite */
@@ -100,7 +102,8 @@ function runsPattern(s: string, exact: boolean): string {
 
 function applyTransform(value: string, t: Transform): string {
   let v = value;
-  if (t.strip === "spaces") v = v.replace(/[\s\u00a0\u202f]/g, "");
+  if (t.strip === "trim") v = v.replace(/^[\s\u00a0\u202f]+|[\s\u00a0\u202f]+$/g, "");
+  else if (t.strip === "spaces") v = v.replace(/[\s\u00a0\u202f]/g, "");
   else if (t.strip === "digits") v = v.replace(/[^0-9]/g, "");
   if (t.dec === "dot") v = v.replace(/,/g, ".");
   else if (t.dec === "comma") v = v.replace(/\./g, ",");
@@ -138,19 +141,22 @@ function capturePatterns(raw: string, rightChar: string | null): string[] {
   set.add(escapeRegex(raw));
   set.add(runsPattern(raw, true));
   set.add(runsPattern(raw, false));
-  if (/^\d+$/.test(raw)) {
-    set.add(`\\d{${raw.length}}`);
+  if (/^-?\d+$/.test(raw)) {
     set.add("\\d+");
+    set.add("-?\\d+");
+    if (!raw.startsWith("-")) set.add(`\\d{${raw.length}}`);
   }
   if (/^[A-Za-z]+$/.test(raw)) set.add("[A-Za-z]+");
   if (/^[A-Za-z0-9]+$/.test(raw)) set.add("[A-Za-z0-9]+");
   if (/^[A-Za-z0-9 ]+$/.test(raw)) set.add("[A-Za-z0-9 ]+");
-  // nombres formatés : "1 250,00", "3 410.90", "12 000"
-  if (/^[\d][\d\s\u00a0\u202f.,]*\d$/.test(raw)) {
+  // nombres formatés, éventuellement signés : "1 250,00", "-45,90", "3 410.90", "12 000"
+  if (/^[+-]?\s?[\d][\d\s\u00a0\u202f.,]*\d$/.test(raw)) {
+    set.add("[-+]?[\\d\\s\\u00a0.,]+");
+    set.add("[-+]?\\d[\\d\\s\\u00a0]*[.,]\\d+");
+    set.add("[-+]?\\d[\\d\\s\\u00a0]*(?:[.,]\\d+)?");
     set.add("[\\d\\s\\u00a0.,]+");
-    set.add("\\d[\\d\\s\\u00a0]*[.,]\\d+");
-    set.add("\\d[\\d\\s\\u00a0]*(?:[.,]\\d+)?");
   }
+
   if (rightChar && !/\s/.test(rightChar)) set.add(`[^${escapeClass(rightChar)}]+`);
   if (!/\s/.test(raw)) set.add("\\S+");
   set.add("[^\\n]+?");
@@ -165,7 +171,23 @@ function scoreOf(cap: string, left: string, right: string): number {
   if (left === "") s += 8;
   if (right === "") s += 8;
   if (left === "^" || right === "$") s -= 6;
+  // les motifs « n-ième champ d'une ligne délimitée » sont très fiables
+  if (left.startsWith("^(?:[^")) s -= left.length + 12;
   return s;
+}
+
+/** Préfixes « aller au n-ième champ » pour les lignes à délimiteur (| ; tab , /). */
+function fieldPrefixes(input: string, pos: number): string[] {
+  const out: string[] = [];
+  for (const d of ["|", ";", "\t", ",", "/"]) {
+    const total = input.split(d).length - 1;
+    if (total < 2) continue;
+    const n = input.slice(0, pos).split(d).length - 1;
+    const cls = `[^${escapeClass(d)}]`;
+    const lit = escapeRegex(d);
+    out.push(n === 0 ? "^" : `^(?:${cls}*${lit}){${n}}`);
+  }
+  return out;
 }
 
 function buildCandidates(ex: Example, transform: Transform): string[] {
@@ -178,6 +200,7 @@ function buildCandidates(ex: Example, transform: Transform): string[] {
 
     const lefts = new Set<string>([""]);
     if (pos === 0) lefts.add("^");
+    for (const p of fieldPrefixes(input, pos)) lefts.add(p);
     for (let l = 1; l <= 4 && l <= left.length; l++) {
       const chunk = left.slice(-l);
       lefts.add(escapeRegex(chunk));
@@ -187,6 +210,7 @@ function buildCandidates(ex: Example, transform: Transform): string[] {
         lefts.add("^" + runsPattern(chunk, true));
       }
     }
+
 
     const rights = new Set<string>([""]);
     if (right === "") rights.add("$");
@@ -229,8 +253,24 @@ function validate(source: string, transform: Transform, examples: Example[]): bo
   return true;
 }
 
+/** Nombre de lignes où la règle produit une valeur (sert à départager les candidats). */
+function coverage(src: string, inputs: string[]): number {
+  let re: RegExp;
+  try {
+    re = new RegExp(src);
+  } catch {
+    return 0;
+  }
+  let n = 0;
+  for (const input of inputs) {
+    if (!input) continue;
+    if (re.exec(input)?.[1] !== undefined) n++;
+  }
+  return n;
+}
+
 /** Trouve une règle qui explique 100% des exemples fournis. */
-export function synthesizeRule(examples: Example[]): Rule | null {
+export function synthesizeRule(examples: Example[], allInputs?: string[]): Rule | null {
   const valid = examples.filter((e) => e.output !== "" && e.input !== "");
   if (valid.length === 0) return null;
 
@@ -242,15 +282,29 @@ export function synthesizeRule(examples: Example[]): Rule | null {
       return { source: `(${lit})`, flags: "", transform: NO_TRANSFORM };
   }
 
+  const inputs = (allInputs ?? examples.map((e) => e.input)).filter(Boolean);
+  const target = inputs.length;
   const seed = valid.slice().sort((a, b) => a.input.length - b.input.length)[0]!;
   for (const transform of TRANSFORMS) {
     const candidates = buildCandidates(seed, transform);
+    let best: Rule | null = null;
+    let bestCov = -1;
+    let seen = 0;
     for (const src of candidates) {
-      if (validate(src, transform, valid)) return { source: src, flags: "", transform };
+      if (!validate(src, transform, valid)) continue;
+      const cov = coverage(src, inputs);
+      if (cov > bestCov) {
+        best = { source: src, flags: "", transform };
+        bestCov = cov;
+      }
+      if (bestCov >= target) break;
+      if (++seen >= 40) break; // on ne scanne qu'un petit lot de variantes valides
     }
+    if (best) return best;
   }
   return null;
 }
+
 
 export function applyRule(rule: Rule, inputs: string[]): SynthResult {
   const re = new RegExp(rule.source, rule.flags);
@@ -278,7 +332,7 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
     const e = expected[i];
     if (e != null && e !== "") examples.push({ index: i, input: inputs[i] ?? "", output: e });
   }
-  const rule = synthesizeRule(examples);
+  const rule = synthesizeRule(examples, inputs);
   if (!rule) return { rule: null, values: inputs.map(() => null), failures: [], matched: 0, total: inputs.length };
   return applyRule(rule, inputs);
 }

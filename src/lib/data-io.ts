@@ -3,12 +3,16 @@ import * as XLSX from "xlsx";
 
 export type Matrix = string[][];
 
-/** Texte collé : TSV (Excel), CSV, ou lignes simples. */
+/** Texte collé : TSV (Excel), CSV point-virgule, ou lignes simples. */
 export function parsePastedText(text: string): Matrix {
   const clean = text.replace(/\r\n?/g, "\n").replace(/\n+$/, "");
   if (!clean) return [];
   const lines = clean.split("\n");
-  if (lines.some((l) => l.includes("\t"))) return lines.map((l) => l.split("\t"));
+  if (clean.includes("\t")) {
+    const parsed = Papa.parse<string[]>(clean, { delimiter: "\t", skipEmptyLines: true });
+    if (parsed.data.length)
+      return (parsed.data as Matrix).map((r) => r.map((c) => (c == null ? "" : String(c))));
+  }
   // point-virgule uniquement : la virgule est trop souvent un séparateur décimal
   if (lines.every((l) => l.includes(";"))) {
     const parsed = Papa.parse<string[]>(clean, { delimiter: ";", skipEmptyLines: true });
@@ -16,6 +20,30 @@ export function parsePastedText(text: string): Matrix {
   }
   return lines.map((l) => [l]);
 }
+
+/** Tableau au format tabulations : collable directement dans Excel. */
+export function toTsv(header: string[], rows: Matrix): string {
+  const cell = (v: string) => (/[\t\n"]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  return [header, ...rows].map((r) => r.map(cell).join("\t")).join("\n");
+}
+
+export async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  }
+}
+
 
 export async function parseFile(file: File): Promise<Matrix> {
   const name = file.name.toLowerCase();
