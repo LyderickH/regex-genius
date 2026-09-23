@@ -185,7 +185,10 @@ export function DataGrid({
     if (col) {
       onSelect(col.id);
       onFocusCell?.(col.id, r);
+    } else {
+      onFocusCell?.(SOURCE_COL, r);
     }
+
   };
 
   const onCellMouseDown = (c: number, row: number, e: React.MouseEvent) => {
