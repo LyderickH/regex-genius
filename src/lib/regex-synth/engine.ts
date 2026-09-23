@@ -946,6 +946,133 @@ function selfTrain(
   return best;
 }
 
+/** Plus petit délimiteur gauche qui isole exactement la valeur sur cette ligne. */
+function minimalLeft(input: string, pos: number, cap: string, raw: string): string | null {
+  const before = input.slice(0, pos);
+  for (let len = 1; len <= 18 && len <= before.length; len++) {
+    const tail = before.slice(before.length - len);
+    let re: RegExp;
+    try {
+      re = new RegExp(`${escapeRegex(tail)}(${cap})`);
+    } catch {
+      return null;
+    }
+    const m = re.exec(input);
+    if (m && m.index + tail.length === pos && m[1] === raw) return tail;
+  }
+  return null;
+}
+
+/**
+ * Générateur de motifs à délimiteurs : un seul regex copiable de la forme
+ * `(?:délimiteur1|délimiteur2|…)(capture)`, déduit des valeurs connues.
+ */
+function alternationRule(
+  inputs: string[],
+  known: { index: number; value: string }[],
+  transform: Transform,
+): Rule | null {
+  const hits: { i: number; raw: string; pos: number }[] = [];
+  for (const k of known) {
+    const input = inputs[k.index] ?? "";
+    const o = occurrences(input, k.value, transform)[0];
+    if (!o) continue;
+    hits.push({ i: k.index, raw: input.slice(o.pos, o.pos + o.len), pos: o.pos });
+  }
+  if (hits.length < 2) return null;
+
+  const caps = new Set<string>(antiUnify(hits.map((h) => h.raw)));
+  for (const c of capturePatterns(hits[0]!.raw, null)) caps.add(c);
+  const wanted = new Map(known.map((k) => [k.index, k.value] as const));
+
+  let best: { rule: Rule; score: number } | null = null;
+  for (const cap of caps) {
+    let full: RegExp;
+    try {
+      full = new RegExp(`^(?:${cap})$`);
+    } catch {
+      continue;
+    }
+    if (!hits.every((h) => full.test(h.raw))) continue;
+
+    const lefts: string[] = [];
+    let complete = true;
+    for (const h of hits) {
+      const l = minimalLeft(inputs[h.i] ?? "", h.pos, cap, h.raw);
+      if (l == null) {
+        complete = false;
+        break;
+      }
+      lefts.push(l);
+    }
+    if (!complete) continue;
+
+    const uniq = [...new Set(lefts)].sort((a, b) => b.length - a.length);
+    if (uniq.length > 6) continue;
+    const head =
+      uniq.length === 1 ? escapeRegex(uniq[0]!) : `(?:${uniq.map(escapeRegex).join("|")})`;
+    const src = `${head}(${cap})`;
+    let re: RegExp;
+    try {
+      re = new RegExp(src);
+    } catch {
+      continue;
+    }
+
+    let good = 0;
+    let bad = 0;
+    for (let i = 0; i < inputs.length; i++) {
+      const input = inputs[i] ?? "";
+      if (!input) continue;
+      const w = wanted.get(i);
+      const g = re.exec(input)?.[1];
+      if (g === undefined) {
+        if (w !== undefined) bad += 0.5;
+        continue;
+      }
+      const v = applyTransform(g, transform);
+      if (w === undefined) continue;
+      if (v === w) good++;
+      else bad++;
+    }
+    const score = good - bad * 1.5 - src.length / 400;
+    if (!best || score > best.score) best = { rule: { source: src, flags: "", transform }, score };
+  }
+  return best?.rule ?? null;
+}
+
+/**
+ * Si un regex unique à alternance de délimiteurs fait aussi bien qu'une chaîne
+ * de motifs, on le préfère : il est copiable tel quel.
+ */
+function preferAlternation(res: SynthResult, inputs: string[], examples: Example[]): SynthResult {
+  if (!res.rule) return res;
+  const shapes = new Set(examples.map((e) => shapeOf(e.output)));
+  const given = new Map(examples.map((e) => [e.index, e.output] as const));
+  const known: { index: number; value: string }[] = examples.map((e) => ({
+    index: e.index,
+    value: e.output,
+  }));
+  for (let i = 0; i < inputs.length; i++) {
+    if (given.has(i)) continue;
+    const v = res.values[i];
+    if (v != null && shapes.has(shapeOf(v))) known.push({ index: i, value: v });
+  }
+  const alt = alternationRule(inputs, known, res.rule.transform);
+  if (!alt) return res;
+  if (explains(alt, examples) < examples.length) return res;
+  const cand = applyRule(alt, inputs);
+  const score = (r: SynthResult): number =>
+    r.values.reduce<number>((n, v, i) => {
+      const w = given.get(i);
+      if (w !== undefined) return n + (v === w ? 1 : -1);
+      if (v == null) return n;
+      return n + (shapes.has(shapeOf(v)) ? 1 : -0.5);
+    }, 0);
+  // à égalité, le regex unique gagne
+  return score(cand) >= score(res) ? cand : res;
+}
+
 export function synthesize(inputs: string[], expected: (string | null)[]): SynthResult {
   const examples: Example[] = [];
   for (let i = 0; i < inputs.length; i++) {
