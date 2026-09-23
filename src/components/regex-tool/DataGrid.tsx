@@ -51,6 +51,7 @@ export function DataGrid({
   onSelectionChange,
 }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
+  const container = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [height, setHeight] = useState(600);
   // widths[0] = colonne source, widths[1..n] = colonnes de résultat
@@ -186,6 +187,8 @@ export function DataGrid({
     e.preventDefault();
     dragging.current = true;
     select(c, row, e.shiftKey);
+    // le conteneur porte le focus : flèches, Ctrl+C, Suppr… marchent comme sous Excel
+    container.current?.focus({ preventScroll: true });
   };
 
   const onCellMouseEnter = (c: number, row: number) => {
@@ -207,7 +210,10 @@ export function DataGrid({
   const onGridKeyDown = (e: React.KeyboardEvent) => {
     const el = document.activeElement;
     if (el instanceof HTMLInputElement && scroller.current?.contains(el)) {
-      if (e.key === "Escape") el.blur(); // quitter l'édition, garder la sélection
+      if (e.key === "Escape") {
+        el.blur();
+        container.current?.focus({ preventScroll: true }); // quitter l'édition, garder la sélection
+      }
       return; // édition en cours : navigation texte normale
     }
     if (!selection) return;
@@ -284,7 +290,12 @@ export function DataGrid({
 
   return (
     // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden" onKeyDown={onGridKeyDown}>
+    <div
+      ref={container}
+      tabIndex={-1}
+      className="flex min-h-0 flex-1 flex-col overflow-hidden outline-none"
+      onKeyDown={onGridKeyDown}
+    >
       {/* en-têtes */}
       <div
         className="grid shrink-0 border-b border-grid-line bg-surface-2 text-xs"
