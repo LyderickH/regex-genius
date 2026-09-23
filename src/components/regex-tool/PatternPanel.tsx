@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { explain } from "@/lib/regex-synth/explain";
 import { DIALECTS } from "@/lib/regex-synth/dialects";
+import { describeTransform } from "@/lib/regex-synth/engine";
 import type { OutputColumn } from "./types";
 
 const TOK_COLOR: Record<string, string> = {
