@@ -311,6 +311,60 @@ function commonContexts(
   return { lefts: outL, rights: outR };
 }
 
+/** Découpe une valeur en jetons homogènes : chiffres / lettres / autres. */
+function tokenize(s: string): { kind: "d" | "a" | "o"; text: string }[] {
+  const out: { kind: "d" | "a" | "o"; text: string }[] = [];
+  const re = /[0-9]+|[A-Za-zÀ-ÿ]+|[^0-9A-Za-zÀ-ÿ]+/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s))) {
+    const text = m[0];
+    out.push({ kind: /^[0-9]/.test(text) ? "d" : /^[^0-9A-Za-zÀ-ÿ]/.test(text) ? "o" : "a", text });
+  }
+  return out;
+}
+
+/**
+ * Anti-unification : à partir de TOUTES les valeurs d'exemple, on remonte au
+ * motif le plus précis qui les explique toutes (« FA-2024-0001 » + « FA/2024/87 »
+ * -> « FA[-/]\d{4}[-/]\d+ ») au lieu de généraliser à l'aveugle.
+ */
+function antiUnify(raws: string[]): string[] {
+  const clean = raws.filter(Boolean);
+  if (clean.length === 0) return [];
+  const toks = clean.map(tokenize);
+  const n = toks[0]!.length;
+  if (!toks.every((t) => t.length === n && t.every((x, i) => x.kind === toks[0]![i]!.kind))) return [];
+  let exact = "";
+  let loose = "";
+  for (let i = 0; i < n; i++) {
+    const parts = toks.map((t) => t[i]!.text);
+    const kind = toks[0]![i]!.kind;
+    const same = parts.every((p) => p === parts[0]);
+    const lens = new Set(parts.map((p) => p.length));
+    if (kind === "o") {
+      if (same) {
+        exact += escapeRegex(parts[0]!);
+        loose += escapeRegex(parts[0]!);
+      } else {
+        const chars = [...new Set(parts.join("").split(""))].map(escapeClass).join("");
+        const cls = `[${chars}]${lens.size === 1 && parts[0]!.length === 1 ? "" : "+"}`;
+        exact += cls;
+        loose += cls;
+      }
+    } else if (kind === "d") {
+      exact += lens.size === 1 ? `\\d{${parts[0]!.length}}` : "\\d+";
+      loose += "\\d+";
+    } else {
+      const upper = parts.every((p) => p === p.toUpperCase());
+      const lower = parts.every((p) => p === p.toLowerCase());
+      const cls = upper ? "[A-Z]" : lower ? "[a-z]" : "[A-Za-zÀ-ÿ]";
+      exact += lens.size === 1 ? `${cls}{${parts[0]!.length}}` : `${cls}+`;
+      loose += `${cls}+`;
+    }
+  }
+  return exact === loose ? [exact] : [exact, loose];
+}
+
 function buildCandidates(
   ex: Example,
   transform: Transform,
