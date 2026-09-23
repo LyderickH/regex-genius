@@ -8,5 +8,7 @@
 - [x] Copier le tableau vers Excel (bouton + Ctrl+C)
 - [x] Coller depuis Excel (Ctrl+V à partir de la cellule active, ou tableau entier)
 - [x] Vérification typecheck + Playwright
-- [ ] Panneau « Motif déduit » repliable (bouton dans l'en-tête + bandeau vertical pour rouvrir)
-- [ ] Exemple FEC plus lisible (espaces autour des « | »)
+- [x] Panneau « Motif déduit » repliable (bouton dans l'en-tête + bandeau vertical pour rouvrir)
+- [x] Exemple FEC plus lisible (espaces autour des « | »)
+- [ ] Sélection de cellules façon Excel (clic = sélection, maj+clic/glisser = plage, Ctrl+C = plage, flèches/Tab/Entrée, Suppr = vider, double-clic = édition)
+- [ ] Transformations classiques après extraction : date JJ/MM/AAAA, date ISO, jour de la semaine, heure, ÷100 (centimes), ×1000
