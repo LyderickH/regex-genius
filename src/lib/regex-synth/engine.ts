@@ -329,16 +329,36 @@ function coverage(src: string, inputs: string[]): number {
   return n;
 }
 
+/** La règle ne doit pas produire une valeur fausse sur les exemples d'un autre motif. */
+function avoids(src: string, transform: Transform, negatives: Example[]): boolean {
+  let re: RegExp;
+  try {
+    re = new RegExp(src);
+  } catch {
+    return false;
+  }
+  for (const n of negatives) {
+    const g = re.exec(n.input)?.[1];
+    if (g !== undefined && applyTransform(g, transform) !== n.output) return false;
+  }
+  return true;
+}
+
 /** Trouve une règle qui explique 100% des exemples fournis. */
-export function synthesizeRule(examples: Example[], allInputs?: string[]): Rule | null {
+export function synthesizeRule(
+  examples: Example[],
+  allInputs?: string[],
+  negatives?: Example[],
+): Rule | null {
   const valid = examples.filter((e) => e.output !== "" && e.input !== "");
   if (valid.length === 0) return null;
+  const neg = negatives?.filter((n) => !valid.includes(n));
 
   // cas constant
   const first = valid[0]!;
   if (valid.every((e) => e.output === first.output) && valid.length > 1) {
     const lit = escapeRegex(first.output);
-    if (validate(`(${lit})`, NO_TRANSFORM, valid))
+    if (validate(`(${lit})`, NO_TRANSFORM, valid) && (!neg || avoids(`(${lit})`, NO_TRANSFORM, neg)))
       return { source: `(${lit})`, flags: "", transform: NO_TRANSFORM };
   }
 
@@ -352,6 +372,7 @@ export function synthesizeRule(examples: Example[], allInputs?: string[]): Rule 
     let seen = 0;
     for (const src of candidates) {
       if (!validate(src, transform, valid)) continue;
+      if (neg && neg.length > 0 && !avoids(src, transform, neg)) continue;
       const cov = coverage(src, inputs);
       if (cov > bestCov) {
         best = { source: src, flags: "", transform };
@@ -372,36 +393,45 @@ export function synthesizeRule(examples: Example[], allInputs?: string[]): Rule 
  * Permet de gérer deux (ou plus) motifs différents, et les exceptions.
  */
 function partitionRules(examples: Example[], maxGroups = 4): Rule[] {
-  const rules: Rule[] = [];
+  const groups: Example[][] = [];
   let rest = examples.slice(0, 14);
-  while (rest.length > 0 && rules.length < maxGroups) {
-    let bestRule: Rule | null = null;
+  while (rest.length > 0 && groups.length < maxGroups) {
     let bestGroup: Example[] = [];
     for (let s = 0; s < rest.length; s++) {
       let group: Example[] = [rest[s]!];
-      let rule = synthesizeRule(group);
-      if (!rule) continue;
+      if (!synthesizeRule(group)) continue;
       for (let j = 0; j < rest.length; j++) {
         if (j === s) continue;
         const trial = [...group, rest[j]!];
-        const r2 = synthesizeRule(trial);
-        if (r2) {
-          group = trial;
-          rule = r2;
-        }
+        if (synthesizeRule(trial)) group = trial;
       }
-      if (group.length > bestGroup.length) {
-        bestGroup = group;
-        bestRule = rule;
-      }
+      if (group.length > bestGroup.length) bestGroup = group;
       if (bestGroup.length === rest.length) break;
     }
-    if (!bestRule) break;
-    rules.push(bestRule);
+    if (bestGroup.length === 0) break;
+    groups.push(bestGroup);
     const used = new Set(bestGroup);
     rest = rest.filter((e) => !used.has(e));
   }
-  return rules;
+
+  // chaque règle est re-synthétisée en évitant les exemples des autres groupes,
+  // pour qu'elle ne s'applique pas à tort aux lignes de l'autre motif
+  const rules: { rule: Rule; group: Example[]; conflicts: number }[] = [];
+  for (let i = 0; i < groups.length; i++) {
+    const group = groups[i]!;
+    const others = groups.filter((_, j) => j !== i).flat();
+    const rule = synthesizeRule(group, undefined, others) ?? synthesizeRule(group);
+    if (!rule) continue;
+    let conflicts = 0;
+    for (const o of others) {
+      const g = new RegExp(rule.source, rule.flags).exec(o.input)?.[1];
+      if (g !== undefined && applyTransform(g, rule.transform) !== o.output) conflicts++;
+    }
+    rules.push({ rule, group, conflicts });
+  }
+  // les règles les plus spécifiques passent en premier
+  rules.sort((a, b) => a.conflicts - b.conflicts || b.group.length - a.group.length);
+  return rules.map((r) => r.rule);
 }
 
 function ruleChain(rule: Rule): Rule[] {
