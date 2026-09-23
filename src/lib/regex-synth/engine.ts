@@ -496,23 +496,24 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
   if (examples.length === 0) return empty;
 
   const single = synthesizeRule(examples, inputs);
-  const nonEmpty = inputs.filter(Boolean).length;
-  if (single) {
-    const res = applyRule(single, inputs);
-    if (res.matched >= nonEmpty) return res;
-  }
+  const singleRes = single ? applyRule(single, inputs) : null;
+  const singleOk = single ? explains(single, examples) : 0;
 
-  // une seule règle ne suffit pas (deux motifs, ou une exception) : on combine
+  // la règle simple explique tous les exemples : on n'ajoute rien.
+  // (des lignes non couvertes restent acceptables : on garde le maximum de lignes)
+  if (single && singleRes && singleOk >= examples.length) return singleRes;
+
+  // sinon seulement : plusieurs motifs, ou une exception
   const parts = partitionRules(examples);
   if (parts.length > 1) {
-    const combined: Rule = { ...parts[0]!, extra: parts.slice(1) };
+    const combined: Rule = { ...parts[0]!.rule, extra: parts.slice(1).map((p) => p.rule) };
     const res = applyRule(combined, inputs);
-    const single_res = single ? applyRule(single, inputs) : null;
-    if (!single_res || res.matched > single_res.matched || explains(combined, examples) > explains(single!, examples))
+    const comboOk = explains(combined, examples);
+    // on ne complique la règle que si elle explique réellement plus d'exemples
+    if (comboOk > singleOk || (comboOk === singleOk && res.matched > (singleRes?.matched ?? -1)))
       return res;
-    return single_res;
   }
-  if (single) return applyRule(single, inputs);
-  if (parts[0]) return applyRule(parts[0], inputs);
+  if (singleRes) return singleRes;
+  if (parts[0]) return applyRule(parts[0].rule, inputs);
   return empty;
 }
