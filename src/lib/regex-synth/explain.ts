@@ -77,7 +77,15 @@ export function explain(source: string): Segment[] {
       let j = i;
       while (j < source.length && !"^$()[]\\{}+*?.".includes(source.charAt(j))) j++;
       const text = source.slice(i, j);
-      push(text, "literal", `le texte exact « ${text} »`);
+      push(
+        text,
+        "literal",
+        text.trim() === ""
+          ? text.length === 1
+            ? "une espace"
+            : `${text.length} espaces`
+          : `le texte exact « ${text} »`,
+      );
       i = j;
     }
   }
