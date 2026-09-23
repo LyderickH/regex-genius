@@ -831,16 +831,52 @@ function selfTrain(
   const guesses = guessValues(inputs, examples, suspect.slice(0, 12));
   if (guesses.length === 0) return base;
 
-  const parts = partitionRules([...examples, ...guesses.slice(0, 6)]);
-  if (parts.length === 0) return base;
-  const rule: Rule =
-    parts.length > 1 ? { ...parts[0]!.rule, extra: parts.slice(1).map((p) => p.rule) } : parts[0]!.rule;
-  const res = applyRule(rule, inputs);
-  const okReal = explains(rule, examples);
-  const baseFit = base.values.filter(plausible).length;
-  const newFit = res.values.filter(plausible).length;
-  if (okReal >= examples.length && newFit > baseFit) return res;
-  return base;
+  // vote : chaque hypothèse donne une règle candidate, on garde celle qui met
+  // le plus de lignes d'accord avec les hypothèses des AUTRES lignes
+  const agree = (values: (string | null)[]): number => {
+    let n = 0;
+    for (const g of guesses) if (g.options.includes(values[g.index] ?? "\u0000")) n++;
+    return n;
+  };
+  const baseScore = agree(base.values) + base.values.filter(plausible).length * 0.5;
+
+  const deadline = Date.now() + 2500;
+  let best = base;
+  let bestScore = baseScore;
+  for (const g of guesses) {
+    for (const opt of g.options.slice(0, 2)) {
+      if (Date.now() > deadline) break;
+      const rule = synthesizeRule([...examples, { index: g.index, input: g.input, output: opt }], inputs);
+      if (!rule || explains(rule, examples) < examples.length) continue;
+      const res = applyRule(rule, inputs);
+      const score = agree(res.values) + res.values.filter(plausible).length * 0.5;
+      if (score > bestScore) {
+        best = res;
+        bestScore = score;
+      }
+    }
+    if (Date.now() > deadline) break;
+  }
+
+  // deuxième motif pour les lignes qui résistent encore
+  if (best.rule) {
+    const left = guesses.filter((g) => !plausible(best.values[g.index] ?? null));
+    for (const g of left.slice(0, 3)) {
+      if (Date.now() > deadline) break;
+      const opt = g.options[0]!;
+      const rule2 = synthesizeRule([{ index: g.index, input: g.input, output: opt }], inputs, examples);
+      if (!rule2) continue;
+      const combined: Rule = { ...best.rule, extra: [...(best.rule.extra ?? []), rule2] };
+      if (explains(combined, examples) < examples.length) continue;
+      const res = applyRule(combined, inputs);
+      const score = agree(res.values) + res.values.filter(plausible).length * 0.5;
+      if (score > bestScore) {
+        best = res;
+        bestScore = score;
+      }
+    }
+  }
+  return best;
 }
 
 export function synthesize(inputs: string[], expected: (string | null)[]): SynthResult {
