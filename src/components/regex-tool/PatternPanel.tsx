@@ -18,6 +18,7 @@ const TOK_COLOR: Record<string, string> = {
 export function PatternPanel({ column, rowCount }: { column: OutputColumn | null; rowCount: number }) {
   const [dialectId, setDialectId] = useState("python");
   const [copied, setCopied] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
   const dialect = DIALECTS.find((d) => d.id === dialectId)!;
   const segments = useMemo(() => (column?.rule ? explain(column.rule.source) : []), [column?.rule]);
 
@@ -27,6 +28,25 @@ export function PatternPanel({ column, rowCount }: { column: OutputColumn | null
     toast.success("Copié dans le presse-papiers");
     setTimeout(() => setCopied(null), 1400);
   };
+
+  if (collapsed) {
+    return (
+      <aside className="flex w-9 shrink-0 flex-col items-center border-l border-grid-line bg-surface py-3">
+        <button
+          onClick={() => setCollapsed(false)}
+          title="Afficher le motif déduit"
+          className="rounded-md p-1 text-muted-foreground transition hover:bg-surface-2 hover:text-primary"
+        >
+          <PanelLeft className="size-4" />
+        </button>
+        <div className="mt-3 flex-1 [writing-mode:vertical-rl]">
+          <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+            Motif déduit{column ? ` — ${column.name}` : ""}
+          </span>
+        </div>
+      </aside>
+    );
+  }
 
   if (!column) {
     return (
