@@ -34,6 +34,7 @@ interface Props {
   onChangeCell: (colId: string, row: number, value: string) => void;
   onChangeSource?: (row: number, value: string) => void;
   onAddRow?: () => void;
+  onRemoveRows?: (r0: number, r1: number) => void;
   onFocusCell?: (colId: string, row: number) => void;
 
   onRename: (colId: string, name: string) => void;
@@ -51,7 +52,9 @@ export function DataGrid({
   onChangeCell,
   onChangeSource,
   onAddRow,
+  onRemoveRows,
   onFocusCell,
+
 
   onRename,
   onAddColumn,
@@ -262,6 +265,12 @@ export function DataGrid({
       focusInput(a.c, a.r);
       return;
     }
+    // Ctrl+« - » : supprime les lignes de la sélection (comme sous Excel)
+    if ((e.ctrlKey || e.metaKey) && e.key === "-" && onRemoveRows) {
+      e.preventDefault();
+      onRemoveRows(r0, r1);
+      return;
+    }
     if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault();
       for (let c = c0; c <= c1; c++) {
@@ -389,8 +398,24 @@ export function DataGrid({
                   className="grid hover:bg-surface/60"
                   style={{ gridTemplateColumns: template, height: ROW_H }}
                 >
-                  <div className="grid-cell flex items-center justify-end px-2 font-mono text-[11px] text-muted-foreground">
-                    {i + 1}
+                  <div className="group/row grid-cell relative flex items-center justify-center">
+                    <span className="font-mono text-[11px] text-muted-foreground group-hover/row:opacity-0">
+                      {i + 1}
+                    </span>
+                    {onRemoveRows && (
+                      <button
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveRows(i, i);
+                        }}
+                        title="Supprimer cette ligne"
+                        aria-label="Supprimer cette ligne"
+                        className="absolute inset-y-0 flex w-full items-center justify-center text-muted-foreground opacity-0 transition hover:text-destructive group-hover/row:opacity-100"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    )}
                   </div>
                   <div
                     onMouseDown={(e) => onCellMouseDown(0, i, e)}
