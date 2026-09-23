@@ -310,7 +310,7 @@ function commonContexts(
     outR.push(escapeRegex(prefix));
     outR.push(runsPattern(prefix, true));
   }
-  return { lefts: outL, rights: outR };
+  return { lefts: outL, rights: outR, caps: antiUnify(raws) };
 }
 
 /** Découpe une valeur en jetons homogènes : chiffres / lettres / autres. */
