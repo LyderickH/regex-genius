@@ -65,7 +65,6 @@ export function DataGrid({
   const scroller = useRef<HTMLDivElement>(null);
   const container = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
-  const [scrollLeft, setScrollLeft] = useState(0);
   const [height, setHeight] = useState(600);
   // widths[0] = colonne source, widths[1..n] = colonnes de résultat
   const [widths, setWidths] = useState<number[]>([]);
@@ -358,7 +357,6 @@ export function DataGrid({
         ref={scroller}
         onScroll={(e) => {
           setScrollTop(e.currentTarget.scrollTop);
-          setScrollLeft(e.currentTarget.scrollLeft);
         }}
         className="min-h-0 flex-1 overflow-auto"
       >
