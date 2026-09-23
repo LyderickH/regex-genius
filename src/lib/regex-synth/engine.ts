@@ -362,7 +362,7 @@ export function synthesizeRule(
       return { source: `(${lit})`, flags: "", transform: NO_TRANSFORM };
   }
 
-  const inputs = (allInputs ?? examples.map((e) => e.input)).filter(Boolean);
+  const inputs = (allInputs ?? examples.map((e) => e.input)).filter(Boolean).slice(0, 120);
   const target = inputs.length;
   const seed = valid.slice().sort((a, b) => a.input.length - b.input.length)[0]!;
   for (const transform of TRANSFORMS) {
@@ -393,7 +393,7 @@ export function synthesizeRule(
  * Permet de gérer deux (ou plus) motifs différents, et les exceptions.
  */
 function partitionRules(examples: Example[], maxGroups = 3): { rule: Rule; size: number }[] {
-  const deadline = Date.now() + 1200; // budget : la déduction doit rester instantanée
+  const deadline = Date.now() + 3000; // budget : la déduction doit rester instantanée
   const groups: Example[][] = [];
   let rest = examples.slice(0, 10);
   while (rest.length > 0 && groups.length < maxGroups && Date.now() < deadline) {
