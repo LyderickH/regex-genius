@@ -1,9 +1,19 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Plus, Trash2, AlertTriangle, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { cellValue, type OutputColumn } from "./types";
 
 const ROW_H = 34;
+const NUM_W = 56;
+const ADD_W = 52;
+const MIN_W = 100;
+const DEFAULT_SOURCE_W = 460;
+const DEFAULT_OUT_W = 190;
+
+/** Largeur approximative d'une chaîne en police mono 13px. */
+function measure(text: string): number {
+  return Math.min(1200, Math.max(MIN_W, text.length * 7.8 + 28));
+}
 
 interface Props {
   rows: string[];
@@ -31,6 +41,9 @@ export function DataGrid({
   const scroller = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [height, setHeight] = useState(600);
+  // widths[0] = colonne source, widths[1..n] = colonnes de résultat
+  const [widths, setWidths] = useState<number[]>([]);
+  const resizing = useRef<{ index: number; startX: number; startW: number } | null>(null);
 
   useEffect(() => {
     const el = scroller.current;
@@ -41,11 +54,89 @@ export function DataGrid({
     return () => ro.disconnect();
   }, []);
 
+  // Synchronise le nombre de largeurs avec le nombre de colonnes.
+  useEffect(() => {
+    setWidths((w) => {
+      const need = columns.length + 1;
+      if (w.length === need) return w;
+      const next = w.slice(0, need);
+      while (next.length < need) next.push(next.length === 0 ? DEFAULT_SOURCE_W : DEFAULT_OUT_W);
+      return next;
+    });
+  }, [columns.length]);
+
+  const wFor = (i: number) => widths[i] ?? (i === 0 ? DEFAULT_SOURCE_W : DEFAULT_OUT_W);
+
+  const startResize = (index: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizing.current = { index, startX: e.clientX, startW: wFor(index) };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+
+  useEffect(() => {
+    const move = (e: MouseEvent) => {
+      const r = resizing.current;
+      if (!r) return;
+      const w = Math.max(MIN_W, r.startW + (e.clientX - r.startX));
+      setWidths((ws) => {
+        const next = ws.slice();
+        next[r.index] = w;
+        return next;
+      });
+    };
+    const up = () => {
+      if (!resizing.current) return;
+      resizing.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    return () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+  }, []);
+
+  /** Double-clic sur la poignée : ajuste la colonne à son contenu le plus long. */
+  const autoFit = useCallback(
+    (index: number) => {
+      setWidths((ws) => {
+        const next = ws.slice();
+        if (index === 0) {
+          next[0] = rows.reduce((m, r) => Math.max(m, measure(r)), DEFAULT_SOURCE_W);
+        } else {
+          const col = columns[index - 1];
+          if (!col) return next;
+          let max = measure(col.name);
+          for (let i = 0; i < rows.length; i++) max = Math.max(max, measure(cellValue(col, i)));
+          next[index] = max;
+        }
+        return next;
+      });
+    },
+    [rows, columns],
+  );
+
   const start = Math.max(0, Math.floor(scrollTop / ROW_H) - 8);
   const end = Math.min(rows.length, Math.ceil((scrollTop + height) / ROW_H) + 8);
   const visible = rows.slice(start, end);
 
-  const template = `56px minmax(260px, 1.6fr) ${columns.map(() => "minmax(150px, 1fr)").join(" ")} 52px`;
+  const template = `${NUM_W}px ${wFor(0)}px ${columns.map((_, i) => `${wFor(i + 1)}px`).join(" ")} ${ADD_W}px`;
+
+  const ResizeHandle = ({ index }: { index: number }) => (
+    <span
+      onMouseDown={(e) => startResize(index, e)}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        autoFit(index);
+      }}
+      title="Glisser pour redimensionner · double-clic pour ajuster"
+      className="absolute inset-y-0 right-0 z-10 w-1.5 cursor-col-resize transition-colors hover:bg-primary/50"
+    />
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -55,15 +146,16 @@ export function DataGrid({
         style={{ gridTemplateColumns: template }}
       >
         <div className="grid-cell px-2 py-2 text-center font-mono text-muted-foreground">#</div>
-        <div className="grid-cell px-3 py-2 font-semibold tracking-wide text-foreground">
+        <div className="grid-cell relative px-3 py-2 font-semibold tracking-wide text-foreground">
           Données source
+          <ResizeHandle index={0} />
         </div>
         {columns.map((col) => (
           <div
             key={col.id}
             onClick={() => onSelect(col.id)}
             className={cn(
-              "grid-cell group flex cursor-pointer items-center gap-1 px-2 py-1.5",
+              "grid-cell group relative flex cursor-pointer items-center gap-1 px-2 py-1.5",
               activeId === col.id && "bg-primary/10 ring-1 ring-inset ring-primary/40",
             )}
           >
@@ -89,6 +181,7 @@ export function DataGrid({
             >
               <Trash2 className="size-3.5" />
             </button>
+            <ResizeHandle index={columns.indexOf(col) + 1} />
           </div>
         ))}
         <button
