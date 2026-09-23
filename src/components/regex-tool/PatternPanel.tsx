@@ -79,9 +79,10 @@ export function PatternPanel({ column, rowCount }: { column: OutputColumn | null
                 </span>
               ))}
             </div>
-            {rule.transform !== "none" && (
+            {describeTransform(rule.transform) && (
               <p className="mt-1.5 text-xs text-muted-foreground">
-                + mise en {rule.transform === "upper" ? "MAJUSCULES" : "minuscules"} du résultat.
+                Puis, sur la valeur extraite : {describeTransform(rule.transform)}. Cette étape
+                n'est pas incluse dans l'expression ci-dessous.
               </p>
             )}
           </div>
