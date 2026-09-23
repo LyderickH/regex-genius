@@ -704,6 +704,248 @@ function explains(rule: Rule, examples: Example[]): number {
   return n;
 }
 
+// ---------------------------------------------------------------------------
+// Auto-apprentissage (self-training) : quand la règle laisse des lignes de côté,
+// on DEVINE la valeur probable sur ces lignes (plus proche voisin + rareté du
+// mot + ressemblance du contexte), puis on re-synthétise avec ces pseudo-exemples.
+// ---------------------------------------------------------------------------
+
+function ngrams(s: string, n = 2): Set<string> {
+  const out = new Set<string>();
+  const t = `^${s.toLowerCase()}$`;
+  for (let i = 0; i + n <= t.length; i++) out.add(t.slice(i, i + n));
+  return out;
+}
+
+function jaccard(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let inter = 0;
+  for (const x of a) if (b.has(x)) inter++;
+  return inter / (a.size + b.size - inter);
+}
+
+const TOKEN_RE = /[A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9_.@:/-]*/g;
+
+function tokensOf(input: string): { text: string; pos: number }[] {
+  const out: { text: string; pos: number }[] = [];
+  let m: RegExpExecArray | null;
+  TOKEN_RE.lastIndex = 0;
+  while ((m = TOKEN_RE.exec(input))) out.push({ text: m[0], pos: m.index });
+  return out;
+}
+
+/** Hypothèses classées (top 3) pour chaque ligne non couverte. */
+function guessValues(
+  inputs: string[],
+  examples: Example[],
+  suspect: number[],
+): { index: number; input: string; options: string[] }[] {
+  if (examples.length === 0 || suspect.length === 0) return [];
+  const shapes = new Set(examples.map((e) => shapeOf(e.output)));
+  const vals = examples.map((e) => e.output);
+  const valGrams = vals.map((v) => ngrams(v));
+  const lens = vals.map((v) => v.length);
+  const minLen = Math.min(...lens) - 2;
+  const maxLen = Math.max(...lens) + 3;
+
+  // fréquence documentaire : un mot présent partout n'est presque jamais la valeur
+  const df = new Map<string, number>();
+  for (const input of inputs) {
+    if (!input) continue;
+    for (const t of new Set(tokensOf(input).map((x) => x.text.toLowerCase())))
+      df.set(t, (df.get(t) ?? 0) + 1);
+  }
+  const nLines = inputs.filter(Boolean).length || 1;
+
+  // contextes des exemples (12 car. à gauche, 8 à droite)
+  const ctxL: Set<string>[] = [];
+  const ctxR: Set<string>[] = [];
+  for (const ex of examples) {
+    const pos = ex.input.indexOf(ex.output);
+    if (pos < 0) continue;
+    ctxL.push(ngrams(ex.input.slice(Math.max(0, pos - 12), pos)));
+    ctxR.push(ngrams(ex.input.slice(pos + ex.output.length, pos + ex.output.length + 8)));
+  }
+
+  const out: { index: number; input: string; options: string[] }[] = [];
+  for (const i of suspect) {
+    const input = inputs[i] ?? "";
+    if (!input) continue;
+    const scored: { text: string; score: number }[] = [];
+    for (const { text, pos } of tokensOf(input)) {
+      if (!shapes.has(shapeOf(text))) continue;
+      if (text.length < minLen || text.length > maxLen) continue;
+      const g = ngrams(text);
+      const sim = Math.max(...valGrams.map((v) => jaccard(g, v)));
+      const rarity = 1 - ((df.get(text.toLowerCase()) ?? 1) - 1) / nLines;
+      const lg = ngrams(input.slice(Math.max(0, pos - 12), pos));
+      const rg = ngrams(input.slice(pos + text.length, pos + text.length + 8));
+      const ctx =
+        (ctxL.length ? Math.max(...ctxL.map((c) => jaccard(lg, c))) : 0) * 0.6 +
+        (ctxR.length ? Math.max(...ctxR.map((c) => jaccard(rg, c))) : 0) * 0.4;
+      const casing = vals.every((v) => v === v.toLowerCase()) && text !== text.toLowerCase() ? -0.25 : 0;
+      scored.push({ text, score: sim * 1.6 + rarity * 1.2 + ctx * 0.8 + casing });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    const options = scored.filter((s) => s.score > 0.9).slice(0, 3).map((s) => s.text);
+    if (options.length) out.push({ index: i, input, options });
+  }
+  return out;
+}
+
+
+
+/**
+ * Auto-apprentissage : on repart des lignes non couvertes (ou dont la valeur
+ * extraite n'a pas la forme attendue) pour deviner leur valeur, puis on
+ * re-synthétise. On ne garde le résultat que s'il couvre plus de lignes SANS
+ * trahir un seul exemple saisi par l'utilisateur.
+ */
+function selfTrain(
+  base: SynthResult,
+  inputs: string[],
+  examples: Example[],
+): SynthResult {
+  if (!base.rule) return base;
+  const shapes = new Set(examples.map((e) => shapeOf(e.output)));
+  const lens = examples.map((e) => e.output.length);
+  const minLen = Math.min(...lens) - 2;
+  const maxLen = Math.max(...lens) + 3;
+  const allLower = examples.every((e) => e.output === e.output.toLowerCase());
+  // une valeur « plausible » a la forme, la longueur et la casse des exemples
+  const plausible = (v: string | null): boolean =>
+    v != null &&
+    shapes.has(shapeOf(v)) &&
+    v.length >= minLen &&
+    v.length <= maxLen &&
+    (!allLower || v === v.toLowerCase());
+
+  const given = new Set(examples.map((e) => e.index));
+  const suspect: number[] = [];
+  for (let i = 0; i < inputs.length; i++) {
+    if (!inputs[i] || given.has(i)) continue;
+    if (!plausible(base.values[i] ?? null)) suspect.push(i);
+  }
+  if (suspect.length === 0) return base;
+
+  const guesses = guessValues(inputs, examples, suspect.slice(0, 12));
+  if (guesses.length === 0) return base;
+
+  const deadline = Date.now() + 2500;
+  const optionsAt = new Map(guesses.map((g) => [g.index, g.options] as const));
+  const expectedAt = new Map(examples.map((e) => [e.index, e.output] as const));
+
+  // valeur « acceptée » pour une ligne : l'exemple saisi, ou une hypothèse
+  const accepted = (i: number, v: string | null): boolean => {
+    if (v == null) return false;
+    const want = expectedAt.get(i);
+    if (want !== undefined) return v === want;
+    const opts = optionsAt.get(i);
+    return opts ? opts.includes(v) : plausible(v);
+  };
+
+  type Cand = { rule: Rule; good: Set<number>; bad: number };
+  const evaluate = (rule: Rule): Cand | null => {
+    let re: RegExp;
+    try {
+      re = new RegExp(rule.source, rule.flags);
+    } catch {
+      return null;
+    }
+    const good = new Set<number>();
+    let bad = 0;
+    for (let i = 0; i < inputs.length; i++) {
+      const input = inputs[i] ?? "";
+      if (!input) continue;
+      const g = re.exec(input)?.[1];
+      if (g === undefined) continue;
+      const v = applyTransform(g, rule.transform);
+      if (accepted(i, v)) good.add(i);
+      else bad++;
+    }
+    return { rule, good, bad };
+  };
+
+  // réservoir de règles : la règle de base + une règle par hypothèse de ligne
+  const pool: Cand[] = [];
+  for (const r of ruleChain(base.rule)) {
+    const c = evaluate(r);
+    if (c) pool.push(c);
+  }
+  for (const g of guesses) {
+    for (const opt of g.options.slice(0, 2)) {
+      if (Date.now() > deadline) break;
+      const r =
+        synthesizeRule([{ index: g.index, input: g.input, output: opt }], inputs, examples) ??
+        synthesizeRule([{ index: g.index, input: g.input, output: opt }], inputs);
+      if (!r) continue;
+      const c = evaluate(r);
+      if (c && c.good.size > 0) pool.push(c);
+    }
+    if (Date.now() > deadline) break;
+  }
+  if (pool.length === 0) return base;
+
+  // couverture gloutonne : d'abord les règles les plus sûres (peu d'erreurs),
+  // puis celles qui apportent de nouvelles lignes
+  const chain: Cand[] = [];
+  const covered = new Set<number>();
+  for (let step = 0; step < 5; step++) {
+    let pick: Cand | null = null;
+    let pickGain = 0;
+    for (const c of pool) {
+      if (chain.includes(c)) continue;
+      let gain = 0;
+      for (const i of c.good) if (!covered.has(i)) gain++;
+      const value = gain - c.bad * 1.5;
+      if (gain > 0 && value > pickGain) {
+        pick = c;
+        pickGain = value;
+      }
+    }
+    if (!pick) break;
+    chain.push(pick);
+    for (const i of pick.good) covered.add(i);
+  }
+  // les lignes d'exemple doivent impérativement être couvertes
+  for (const e of examples) {
+    if (covered.has(e.index)) continue;
+    let add: Cand | null = null;
+    for (const c of pool) {
+      if (chain.includes(c) || !c.good.has(e.index)) continue;
+      if (!add || c.bad < add.bad) add = c;
+    }
+    if (add) {
+      chain.push(add);
+      for (const i of add.good) covered.add(i);
+    }
+  }
+  if (chain.length === 0) return base;
+
+  // l'ordre compte : la règle la plus spécifique passe en premier, la plus
+  // générale en dernier (sinon elle capterait les lignes des autres)
+  const order = chain
+    .slice()
+    .sort((a, b) => a.bad - b.bad || a.good.size + a.bad - (b.good.size + b.bad));
+
+  const scoreOf2 = (values: (string | null)[]): number =>
+    values.reduce<number>((n, v, i) => n + (accepted(i, v) ? 1 : v != null && !plausible(v) ? -0.5 : 0), 0);
+  const baseScore = scoreOf2(base.values);
+  let best = base;
+  let bestScore = baseScore;
+  for (const list of [order, chain]) {
+    const combined: Rule = { ...list[0]!.rule, extra: list.slice(1).map((c) => c.rule) };
+    if (explains(combined, examples) < examples.length) continue;
+    const res = applyRule(combined, inputs);
+    const s = scoreOf2(res.values);
+    if (s > bestScore) {
+      best = res;
+      bestScore = s;
+    }
+  }
+  return best;
+}
+
 export function synthesize(inputs: string[], expected: (string | null)[]): SynthResult {
   const examples: Example[] = [];
   for (let i = 0; i < inputs.length; i++) {
@@ -725,7 +967,8 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
 
   // la règle simple explique tous les exemples : on n'ajoute rien.
   // (des lignes non couvertes restent acceptables : on garde le maximum de lignes)
-  if (single && singleRes && singleOk >= examples.length) return singleRes;
+  if (single && singleRes && singleOk >= examples.length)
+    return selfTrain(singleRes, inputs, examples);
 
   // sinon seulement : plusieurs motifs, ou une exception
   const parts = partitionRules(examples);
@@ -735,9 +978,9 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
     const comboOk = explains(combined, examples);
     // on ne complique la règle que si elle explique réellement plus d'exemples
     if (comboOk > singleOk || (comboOk === singleOk && res.matched > (singleRes?.matched ?? -1)))
-      return res;
+      return selfTrain(res, inputs, examples);
   }
-  if (singleRes) return singleRes;
-  if (parts[0]) return applyRule(parts[0].rule, inputs);
+  if (singleRes) return selfTrain(singleRes, inputs, examples);
+  if (parts[0]) return selfTrain(applyRule(parts[0].rule, inputs), inputs, examples);
   return empty;
 }
