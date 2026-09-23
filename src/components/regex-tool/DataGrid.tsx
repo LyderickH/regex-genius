@@ -139,7 +139,10 @@ export function DataGrid({
                       >
                         <input
                           value={cellValue(col, i)}
-                          onFocus={() => onSelect(col.id)}
+                          onFocus={() => {
+                            onSelect(col.id);
+                            onFocusCell?.(col.id, i);
+                          }}
                           onChange={(e) => onChangeCell(col.id, i, e.target.value)}
                           placeholder={col.rule ? "" : "résultat attendu…"}
                           className={cn(
