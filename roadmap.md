@@ -18,4 +18,4 @@
 
 - [x] Multi-motifs : ne pas dégrader la regex simple, éviter de partir en exceptions (max 3 motifs, on ne découpe que si le gain est réel)
 
-- [ ] Ctrl+Z / Ctrl+Y : annuler et rétablir les modifications du tableau
+- [x] Ctrl+Z / Ctrl+Y : annuler et rétablir les modifications du tableau
