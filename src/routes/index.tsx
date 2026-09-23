@@ -338,6 +338,9 @@ function Index() {
           activeId={activeId}
           onSelect={setActiveId}
           onChangeCell={handleChangeCell}
+          onFocusCell={(colId, row) => {
+            focus.current = { colId, row };
+          }}
           onRename={(id, name) =>
             setColumns((cols) => cols.map((c) => (c.id === id ? { ...c, name } : c)))
           }
