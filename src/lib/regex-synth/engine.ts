@@ -1014,6 +1014,8 @@ function alternationRule(
 
     const uniq = [...new Set(lefts)].sort((a, b) => b.length - a.length);
     if (uniq.length > 6) continue;
+    // des repères longs et tous différents = du hasard, pas un motif
+    if (uniq.length > 1 && uniq.some((u) => u.length > 12)) continue;
     const head =
       uniq.length === 1 ? escapeRegex(uniq[0]!) : `(?:${uniq.map(escapeRegex).join("|")})`;
     const src = `${head}(${cap})`;
