@@ -6,8 +6,8 @@
 
 /** Nettoyage appliqué après extraction. */
 export interface Transform {
-  /** suppression : rien, tous les espaces (y compris insécables), tout sauf les chiffres */
-  strip: "none" | "spaces" | "digits";
+  /** suppression : rien, espaces de début/fin, tous les espaces, tout sauf les chiffres */
+  strip: "none" | "trim" | "spaces" | "digits";
   /** séparateur décimal : inchangé, virgule -> point, point -> virgule */
   dec: "none" | "dot" | "comma";
   casing: "none" | "upper" | "lower";
@@ -22,6 +22,7 @@ export function isIdentity(t: Transform): boolean {
 /** Description lisible du nettoyage, ou null s'il n'y en a pas. */
 export function describeTransform(t: Transform): string | null {
   const parts: string[] = [];
+  if (t.strip === "trim") parts.push("suppression des espaces de début et de fin");
   if (t.strip === "spaces") parts.push("suppression des espaces");
   if (t.strip === "digits") parts.push("conservation des chiffres uniquement");
   if (t.dec === "dot") parts.push("virgule décimale remplacée par un point");
@@ -33,17 +34,18 @@ export function describeTransform(t: Transform): string | null {
 
 const TRANSFORMS: Transform[] = (() => {
   const out: Transform[] = [];
-  for (const strip of ["none", "spaces", "digits"] as const)
+  for (const strip of ["none", "trim", "spaces", "digits"] as const)
     for (const dec of ["none", "dot", "comma"] as const)
       for (const casing of ["none", "upper", "lower"] as const)
         out.push({ strip, dec, casing });
   // les nettoyages les plus simples d'abord
   const cost = (t: Transform) =>
-    (t.strip === "none" ? 0 : t.strip === "spaces" ? 1 : 3) +
+    (t.strip === "none" ? 0 : t.strip === "trim" ? 1 : t.strip === "spaces" ? 2 : 4) +
     (t.dec === "none" ? 0 : 2) +
     (t.casing === "none" ? 0 : 1);
   return out.sort((a, b) => cost(a) - cost(b));
 })();
+
 
 export interface Rule {
   /** source de l'expression régulière, le groupe 1 contient la valeur extraite */
