@@ -225,7 +225,10 @@ function capturePatterns(raw: string, rightChar: string | null): string[] {
   if (!/[\s|;,]/.test(raw)) set.add("[^\\s|;,]+");
   // nombres formatés, éventuellement signés : "1 250,00", "-45,90", "3 410.90", "12 000"
   if (/^[+-]?\s?[\d][\d\s\u00a0\u202f.,]*\d$/.test(raw)) {
+    // le signe doit faire partie de la classe, sinon un espace avant « - » le coupe
+    set.add("[-+\\d\\s\\u00a0.,]+");
     set.add("[-+]?[\\d\\s\\u00a0.,]+");
+    set.add("\\s*[-+]?[\\d\\s\\u00a0.,]+");
     set.add("[-+]?\\d[\\d\\s\\u00a0]*[.,]\\d+");
     set.add("[-+]?\\d[\\d\\s\\u00a0]*(?:[.,]\\d+)?");
     // pas de variante non signée : elle perdrait le « - » des montants négatifs
