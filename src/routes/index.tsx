@@ -16,6 +16,9 @@ import {
   Plane,
   Download,
   Laptop,
+  ShieldCheck,
+  CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
 import { usePwa } from "@/hooks/usePwa";
 import { Toaster } from "@/components/ui/sonner";
@@ -23,6 +26,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { DataGrid, type GridSel } from "@/components/regex-tool/DataGrid";
 import { PatternPanel } from "@/components/regex-tool/PatternPanel";
+import { BUSINESS_PRESETS, type BusinessPreset } from "@/lib/datasets/business-presets";
 import { WelcomeHero } from "@/components/regex-tool/WelcomeHero";
 import { LLMControlDialog } from "@/components/regex-tool/LLMControlDialog";
 import { ExternalPromptDialog } from "@/components/regex-tool/ExternalPromptDialog";
@@ -78,7 +82,7 @@ AC | Achats | AC0203 | 20250220 | 607000 | Achats marchandises | F0002 | IMPORT 
 BQ | Banque | BQ0311 | 20250331 | 627000 | Services bancaires |  |  | AGIOS-03 | 20250331 | Agios trimestre 1 | 8,90 | 0,00 |  |  | 20250331 |  | EUR
 VE | Ventes | VT0115 | 20250402 | 707000 | Ventes de marchandises | C0012 | SARL DUPONT & FILS | FA-2025-0115 | 20250402 | Facture - remise 10 % | 2 300,00 | 0,00 | CC | 20250430 | 20250402 |  | EUR`;
 
-export type DisplayMode = "sample_100_1000" | "first_1000" | "all";
+export type DisplayMode = "sample_100_1000" | "first_1000" | "failures_only" | "all";
 
 function Index() {
   const [rows, setRows] = useState<string[]>([]);
@@ -124,9 +128,26 @@ function Index() {
   const reqId = useRef(0);
   const focus = useRef<{ colId: string; row: number } | null>(null);
 
+  const activeCol = columns.find((c) => c.id === activeId);
+
+  const activeFailures = useMemo(() => {
+    if (!activeCol || !activeCol.rule) return [];
+    const fails: number[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      const val = activeCol.user[i] ?? activeCol.derived[i];
+      if (val == null || val === "") {
+        fails.push(i);
+      }
+    }
+    return fails;
+  }, [activeCol, rows]);
+
   // Calcul mémoïsé des index de lignes à afficher (garantit la fluidité 60fps et n'explose jamais à 50k lignes)
   const displayedIndices = useMemo(() => {
     if (rows.length === 0) return [];
+    if (displayMode === "failures_only") {
+      return activeFailures;
+    }
     if (displayMode === "all" || rows.length <= 1100) {
       return rows.map((_, i) => i);
     }
@@ -683,25 +704,34 @@ function detectBestSourceCol(matrix: Matrix): number {
     toast.success("Première ligne promue en en-tête");
   };
 
-  const loadSample1 = () => {
-    const source = SAMPLE.split("\n");
-    const fill = (vals: (string | null)[]) =>
-      source.map((_, i) => vals[i] ?? null) as (string | null)[];
-    const debit = emptyColumn("Débit", source.length);
-    debit.user = fill(["1250,00", "980,50"]);
-    const piece = emptyColumn("N° de pièce", source.length);
-    piece.user = fill(["FA-2024-0001", "FA/2024/87"]);
+  const loadBusinessPreset = (preset: BusinessPreset) => {
+    const source = preset.rows.slice();
+    const cols = preset.columns.map((pc) => {
+      const col = emptyColumn(pc.name, source.length);
+      Object.entries(pc.examples).forEach(([rStr, val]) => {
+        col.user[Number(rStr)] = val;
+      });
+      return col;
+    });
+
     setRows(source);
-    setSourceName("Journal comptable");
-    setColumns([debit, piece]);
-    setActiveId(debit.id);
+    setSourceName(preset.sourceName);
+    setColumns(cols);
+    setActiveId(cols[0]?.id ?? null);
     setSel(null);
     setDisplayMode("all");
     setExtraCount(0);
     fullSourceRef.current = null;
-    runSynth(debit.id, source, debit.user);
-    runSynth(piece.id, source, piece.user);
-    toast.success("Exemple 1 (Journal comptable) chargé !");
+
+    cols.forEach((c) => {
+      runSynth(c.id, source, c.user);
+    });
+
+    toast.success(`Modèle « ${preset.title} » chargé avec succès !`);
+  };
+
+  const loadSample1 = () => {
+    loadBusinessPreset(BUSINESS_PRESETS[0]);
   };
   const loadSample = loadSample1;
 
@@ -1058,6 +1088,15 @@ function detectBestSourceCol(matrix: Matrix): number {
             )}
           </button>
 
+          {/* Badge Confidentialité & Rassurance 100% Locale */}
+          <div
+            className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-400"
+            title="100% Local : Aucune donnée ne quitte votre ordinateur. Tout le traitement s'exécute localement dans votre navigateur (compatible secret bancaire/médical)."
+          >
+            <ShieldCheck className="size-3.5 text-emerald-400" />
+            <span>100% Local & Privé</span>
+          </div>
+
           {/* Badge Mode Avion / Hors-ligne en direct */}
           {isOffline && (
             <div
@@ -1117,6 +1156,7 @@ function detectBestSourceCol(matrix: Matrix): number {
       <div className="relative flex min-h-0 flex-1">
         {rows.length === 0 ? (
           <WelcomeHero
+            onLoadPreset={loadBusinessPreset}
             onLoadSample1={loadSample1}
             onLoadSample2={loadSample2}
             onImportFile={handleFile}
@@ -1129,66 +1169,115 @@ function detectBestSourceCol(matrix: Matrix): number {
           />
         ) : (
           <div className="flex flex-1 flex-col min-w-0">
-            {rows.length > 100 && (
+            {rows.length > 0 && (
               <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-grid-line bg-surface/70 px-4 py-1.5 text-xs backdrop-blur-xs">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium text-foreground">Affichage :</span>
                   <span className="rounded bg-primary/15 px-2 py-0.5 font-mono text-[11px] font-semibold text-primary">
                     {displayedIndices.length.toLocaleString("fr-FR")} / {rows.length.toLocaleString("fr-FR")} lignes
                   </span>
-                  {rows.length > displayedIndices.length && (
-                    <span className="hidden md:inline text-[11px] text-muted-foreground">
-                      (Calcul automatique appliqué sur la totalité des {rows.length.toLocaleString("fr-FR")} lignes)
-                    </span>
+                  {activeCol?.rule && (
+                    <>
+                      {activeFailures.length === 0 ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[11px] font-semibold text-emerald-400">
+                          <CheckCircle2 className="size-3" />
+                          100% complété sur « {activeCol.name} »
+                        </span>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() =>
+                              setDisplayMode((m) =>
+                                m === "failures_only" ? "all" : "failures_only",
+                              )
+                            }
+                            className={cn(
+                              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition cursor-pointer",
+                              displayMode === "failures_only"
+                                ? "bg-amber-500 text-amber-950 font-bold shadow-xs"
+                                : "bg-amber-500/15 border border-amber-500/40 text-amber-400 hover:bg-amber-500/25",
+                            )}
+                            title={
+                              displayMode === "failures_only"
+                                ? "Réafficher toutes les lignes"
+                                : "Filtrer pour n'afficher que les lignes non reconnues"
+                            }
+                          >
+                            <AlertTriangle className="size-3" />
+                            <span>
+                              {displayMode === "failures_only"
+                                ? "Afficher toutes les lignes"
+                                : `${activeFailures.length} non reconnue${activeFailures.length > 1 ? "s" : ""} — Filtrer`}
+                            </span>
+                          </button>
+                          {activeFailures.length > 0 && (
+                            <button
+                              onClick={() => {
+                                const targetRow = activeFailures[0];
+                                const colIdx = columns.findIndex((c) => c.id === activeId) + 1;
+                                setSel({ ac: colIdx, ar: targetRow, cc: colIdx, cr: targetRow });
+                                toast.info(`Ligne ${targetRow + 1} ciblée`);
+                              }}
+                              className="rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:border-primary transition cursor-pointer"
+                              title="Sauter à la première ligne non reconnue"
+                            >
+                              ↓ 1er échec
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => setDisplayMode("sample_100_1000")}
-                    className={cn(
-                      "rounded px-2.5 py-1 text-[11px] font-medium transition cursor-pointer",
-                      displayMode === "sample_100_1000"
-                        ? "bg-primary text-primary-foreground font-semibold shadow-xs"
-                        : "border border-border bg-background hover:bg-surface-2 text-muted-foreground hover:text-foreground",
-                    )}
-                    title="Afficher les 100 premières lignes et 1 000 lignes aléatoires représentatives"
-                  >
-                    100 + 1 000 aléatoires
-                  </button>
-                  <button
-                    onClick={() => setDisplayMode("first_1000")}
-                    className={cn(
-                      "rounded px-2.5 py-1 text-[11px] font-medium transition cursor-pointer",
-                      displayMode === "first_1000"
-                        ? "bg-primary text-primary-foreground font-semibold shadow-xs"
-                        : "border border-border bg-background hover:bg-surface-2 text-muted-foreground hover:text-foreground",
-                    )}
-                    title="Afficher les 1 000 premières lignes du fichier"
-                  >
-                    1 000 premières
-                  </button>
-                  {rows.length > displayedIndices.length && (
+                {rows.length > 100 && (
+                  <div className="flex items-center gap-1.5">
                     <button
-                      onClick={() => setExtraCount((c) => c + 1000)}
-                      className="rounded border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:border-primary hover:text-primary hover:bg-primary/5 transition cursor-pointer"
-                      title="Charger 1 000 lignes supplémentaires dans l'affichage"
+                      onClick={() => setDisplayMode("sample_100_1000")}
+                      className={cn(
+                        "rounded px-2.5 py-1 text-[11px] font-medium transition cursor-pointer",
+                        displayMode === "sample_100_1000"
+                          ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                          : "border border-border bg-background hover:bg-surface-2 text-muted-foreground hover:text-foreground",
+                      )}
+                      title="Afficher les 100 premières lignes et 1 000 lignes aléatoires représentatives"
                     >
-                      + 1 000 lignes
+                      100 + 1 000 aléatoires
                     </button>
-                  )}
-                  <button
-                    onClick={() => setDisplayMode("all")}
-                    className={cn(
-                      "rounded px-2.5 py-1 text-[11px] font-medium transition cursor-pointer",
-                      displayMode === "all"
-                        ? "bg-primary text-primary-foreground font-semibold shadow-xs"
-                        : "border border-border bg-background hover:bg-surface-2 text-muted-foreground hover:text-foreground",
+                    <button
+                      onClick={() => setDisplayMode("first_1000")}
+                      className={cn(
+                        "rounded px-2.5 py-1 text-[11px] font-medium transition cursor-pointer",
+                        displayMode === "first_1000"
+                          ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                          : "border border-border bg-background hover:bg-surface-2 text-muted-foreground hover:text-foreground",
+                      )}
+                      title="Afficher les 1 000 premières lignes du fichier"
+                    >
+                      1 000 premières
+                    </button>
+                    {rows.length > displayedIndices.length && (
+                      <button
+                        onClick={() => setExtraCount((c) => c + 1000)}
+                        className="rounded border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:border-primary hover:text-primary hover:bg-primary/5 transition cursor-pointer"
+                        title="Charger 1 000 lignes supplémentaires dans l'affichage"
+                      >
+                        + 1 000 lignes
+                      </button>
                     )}
-                    title="Afficher l'intégralité du jeu de données"
-                  >
-                    Tout afficher ({rows.length.toLocaleString("fr-FR")})
-                  </button>
-                </div>
+                    <button
+                      onClick={() => setDisplayMode("all")}
+                      className={cn(
+                        "rounded px-2.5 py-1 text-[11px] font-medium transition cursor-pointer",
+                        displayMode === "all"
+                          ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                          : "border border-border bg-background hover:bg-surface-2 text-muted-foreground hover:text-foreground",
+                      )}
+                      title="Afficher l'intégralité du jeu de données"
+                    >
+                      Tout afficher ({rows.length.toLocaleString("fr-FR")})
+                    </button>
+                  </div>
+                )}
               </div>
             )}
             <div className="relative flex min-h-0 flex-1">

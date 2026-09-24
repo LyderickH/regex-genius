@@ -16,17 +16,23 @@ import {
   WifiOff,
   Download,
   Laptop,
+  Receipt,
+  Users,
+  Globe,
+  Landmark,
 } from "lucide-react";
 import {
   HoverCard,
   HoverCardTrigger,
   HoverCardContent,
 } from "@/components/ui/hover-card";
+import { BUSINESS_PRESETS, type BusinessPreset } from "@/lib/datasets/business-presets";
 
 interface WelcomeHeroProps {
   onLoadSample1?: () => void;
   onLoadSample2?: () => void;
   onLoadSample?: () => void;
+  onLoadPreset?: (preset: BusinessPreset) => void;
   onImportFile: (file: File) => void;
   onOpenPaste: () => void;
   onStartBlank: () => void;
@@ -174,58 +180,10 @@ export function WelcomeHero({
           optimale et remplit tout votre tableau.
         </p>
 
-        {/* Grille des 4 cartes d'action principales */}
-        <div className="mt-10 grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 text-left">
-          {/* Carte 1 : Exemple 1 - Journal comptable */}
-          <button
-            type="button"
-            onClick={handleSample1}
-            className="group relative flex flex-col justify-between rounded-xl border border-primary/40 bg-surface/90 p-5 shadow-lg shadow-primary/5 transition-all duration-200 hover:-translate-y-1 hover:border-primary hover:bg-surface hover:shadow-primary/20 text-left cursor-pointer"
-          >
-            <div className="absolute -top-2.5 right-4 rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-bold text-primary-foreground uppercase tracking-wider">
-              Démo rapide
-            </div>
-            <div>
-              <div className="flex size-10 items-center justify-center rounded-lg bg-primary/20 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-                <Sparkles className="size-5" />
-              </div>
-              <h2 className="mt-3.5 text-sm font-semibold text-foreground">Exemple 1 : Comptabilité</h2>
-              <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                Extrait FEC (8 lignes) : montants décimaux, devises et numéros de factures complexes.
-              </p>
-            </div>
-            <div className="mt-4 flex items-center text-xs font-semibold text-primary">
-              <span>Lancer l'exemple 1</span>
-              <ArrowRight className="ml-1.5 size-3.5 transition-transform group-hover:translate-x-1" />
-            </div>
-          </button>
-
-          {/* Carte 2 : Exemple 2 - Logs d'audit (1 000+ lignes) */}
-          <button
-            type="button"
-            onClick={handleSample2}
-            className="group relative flex flex-col justify-between rounded-xl border border-border bg-surface/80 p-5 transition-all duration-200 hover:-translate-y-1 hover:border-primary/50 hover:bg-surface hover:shadow-md text-left cursor-pointer"
-          >
-            <div className="absolute -top-2.5 right-4 rounded-full bg-cyan-500/20 border border-cyan-500/40 px-2 py-0.5 text-[10px] font-bold text-cyan-400 uppercase tracking-wider">
-              1 000+ lignes
-            </div>
-            <div>
-              <div className="flex size-10 items-center justify-center rounded-lg border border-border bg-surface-2 text-foreground transition-colors group-hover:border-primary/30 group-hover:text-primary">
-                <Database className="size-5 text-cyan-400" />
-              </div>
-              <h2 className="mt-3.5 text-sm font-semibold text-foreground">Exemple 2 : Logs (1 000)</h2>
-              <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                Dataset complet de 1 138 logs : déduit automatiquement emails, horodatages ISO et tokens.
-              </p>
-            </div>
-            <div className="mt-4 flex items-center text-xs font-semibold text-cyan-400 group-hover:text-primary">
-              <span>Lancer le dataset 1 000</span>
-              <ArrowRight className="ml-1.5 size-3.5 transition-transform group-hover:translate-x-1" />
-            </div>
-          </button>
-
-          {/* Carte 3 : Importer un fichier */}
-          <label className="group relative flex cursor-pointer flex-col justify-between rounded-xl border border-border bg-surface/80 p-5 transition-all duration-200 hover:-translate-y-1 hover:border-primary/50 hover:bg-surface hover:shadow-md">
+        {/* Grille des 2 actions principales d'ingestion */}
+        <div className="mt-8 grid w-full grid-cols-1 gap-4 sm:grid-cols-2 text-left">
+          {/* Action 1 : Importer un fichier */}
+          <label className="group relative flex cursor-pointer flex-col justify-between rounded-2xl border border-primary/30 bg-surface/90 p-6 shadow-md transition-all duration-200 hover:-translate-y-1 hover:border-primary hover:bg-surface hover:shadow-primary/10">
             <input
               type="file"
               accept=".txt,.csv,.tsv,.xlsx,.xls"
@@ -236,65 +194,136 @@ export function WelcomeHero({
               }}
             />
             <div>
-              <div className="flex size-10 items-center justify-center rounded-lg border border-border bg-surface-2 text-foreground transition-colors group-hover:border-primary/30 group-hover:text-primary">
-                <Upload className="size-5" />
+              <div className="flex size-12 items-center justify-center rounded-xl bg-primary/20 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                <Upload className="size-6" />
               </div>
-              <h2 className="mt-3.5 text-sm font-semibold text-foreground">Importer un fichier</h2>
+              <h2 className="mt-4 text-base font-bold text-foreground">Importer vos données</h2>
               <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                Glissez-déposez un fichier <strong>.xlsx</strong>, <strong>.csv</strong>,{" "}
-                <strong>.tsv</strong> ou <strong>.txt</strong>.
+                Glissez-déposez ou parcourez un fichier <strong>.xlsx</strong>, <strong>.csv</strong>,{" "}
+                <strong>.tsv</strong> ou <strong>.txt</strong> (jusqu'à 1M+ de lignes).
               </p>
             </div>
-            <div className="mt-4 flex items-center text-xs font-medium text-muted-foreground group-hover:text-primary">
-              <span>Parcourir</span>
-              <ArrowRight className="ml-1.5 size-3.5 transition-transform group-hover:translate-x-1" />
+            <div className="mt-5 flex items-center text-xs font-semibold text-primary">
+              <span>Parcourir mes fichiers</span>
+              <ArrowRight className="ml-1.5 size-4 transition-transform group-hover:translate-x-1" />
             </div>
           </label>
 
-          {/* Carte 4 : Tableau vierge / Coller du texte (Fusionné) */}
+          {/* Action 2 : Tableau vierge / Coller du texte */}
           <div
             onClick={onStartBlank}
-            className="group relative flex flex-col justify-between rounded-xl border border-border bg-surface/80 p-5 transition-all duration-200 hover:-translate-y-1 hover:border-primary/50 hover:bg-surface hover:shadow-md text-left cursor-pointer"
+            className="group relative flex flex-col justify-between rounded-2xl border border-border bg-surface/80 p-6 transition-all duration-200 hover:-translate-y-1 hover:border-primary/50 hover:bg-surface hover:shadow-md text-left cursor-pointer"
           >
             <div>
-              <div className="flex items-center gap-2">
-                <div className="flex size-10 items-center justify-center rounded-lg border border-border bg-surface-2 text-foreground transition-colors group-hover:border-primary/30 group-hover:text-primary">
-                  <Plus className="size-5" />
+              <div className="flex items-center gap-2.5">
+                <div className="flex size-12 items-center justify-center rounded-xl border border-border bg-surface-2 text-foreground transition-colors group-hover:border-primary/30 group-hover:text-primary">
+                  <ClipboardPaste className="size-6" />
                 </div>
-                <div className="flex size-10 items-center justify-center rounded-lg border border-border bg-surface-2 text-foreground transition-colors group-hover:border-primary/30 group-hover:text-primary">
-                  <ClipboardPaste className="size-5" />
+                <div className="flex size-12 items-center justify-center rounded-xl border border-border bg-surface-2 text-foreground transition-colors group-hover:border-primary/30 group-hover:text-primary">
+                  <Plus className="size-6" />
                 </div>
               </div>
-              <h2 className="mt-3.5 text-sm font-semibold text-foreground">Tableau vierge / Coller</h2>
+              <h2 className="mt-4 text-base font-bold text-foreground">Coller du texte ou Grille vierge</h2>
               <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                Démarrez sur une grille vide ou collez directement des données (Ctrl + V) depuis Excel ou le Web.
+                Collez directement vos cellules copiées depuis Excel (Ctrl + V) ou démarrez sur une grille vide.
               </p>
             </div>
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onStartBlank();
-                }}
-                className="inline-flex items-center rounded-md bg-surface-2 px-2.5 py-1 text-xs font-medium text-foreground hover:bg-primary/20 hover:text-primary transition"
-              >
-                <span>Grille vide</span>
-              </button>
+            <div className="mt-5 flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onOpenPaste();
                 }}
-                className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-muted-foreground hover:border-primary/40 hover:text-primary transition"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20 transition"
               >
-                <ClipboardPaste className="size-3" />
-                <span>Coller</span>
-                <kbd className="text-[10px] font-mono text-muted-foreground">Ctrl+V</kbd>
+                <ClipboardPaste className="size-3.5" />
+                <span>Coller du texte</span>
+                <kbd className="text-[10px] font-mono text-primary/80">Ctrl+V</kbd>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStartBlank();
+                }}
+                className="inline-flex items-center rounded-lg bg-surface-2 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-3 transition"
+              >
+                <span>Grille vide</span>
               </button>
             </div>
           </div>
+        </div>
+
+        {/* Séparateur & En-tête des modèles métiers */}
+        <div className="mt-10 flex w-full items-center justify-between gap-4 border-t border-border/60 pt-6 text-left">
+          <div>
+            <div className="inline-flex items-center gap-1.5 text-xs font-bold text-foreground">
+              <Sparkles className="size-3.5 text-primary" />
+              <span>Ou essayez en 1 clic sur un cas d'usage métier :</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Ces modèles chargent des données réelles et déduisent les expressions immédiatement.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleSample2}
+            className="hidden sm:inline-flex items-center gap-1 text-[11px] font-medium text-cyan-400 hover:underline cursor-pointer"
+            title="Charger le dataset volumétrique de 1 138 logs d'audit"
+          >
+            <Database className="size-3" />
+            <span>Grand dataset (1 138 logs) →</span>
+          </button>
+        </div>
+
+        {/* Grille des 4 cas d'usage métiers */}
+        <div className="mt-3 grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 text-left">
+          {BUSINESS_PRESETS.map((preset) => {
+            const Icon =
+              preset.id === "fec"
+                ? Receipt
+                : preset.id === "rh"
+                ? Users
+                : preset.id === "web"
+                ? Globe
+                : Landmark;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => {
+                  if (onLoadPreset) {
+                    onLoadPreset(preset);
+                  } else {
+                    handleSample1();
+                  }
+                }}
+                className="group relative flex flex-col justify-between rounded-xl border border-border/70 bg-surface/60 p-4 transition-all duration-200 hover:-translate-y-1 hover:border-primary/50 hover:bg-surface hover:shadow-md text-left cursor-pointer"
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex size-9 items-center justify-center rounded-lg bg-surface-2 text-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
+                      <Icon className="size-4.5" />
+                    </div>
+                    <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      {preset.category}
+                    </span>
+                  </div>
+                  <h3 className="mt-3 text-xs font-bold text-foreground group-hover:text-primary transition-colors">
+                    {preset.title}
+                  </h3>
+                  <p className="mt-1 text-[11px] text-muted-foreground leading-normal line-clamp-2">
+                    {preset.description}
+                  </p>
+                </div>
+                <div className="mt-3 flex items-center text-[11px] font-semibold text-primary">
+                  <span>Essayer ce cas</span>
+                  <ArrowRight className="ml-1 size-3 transition-transform group-hover:translate-x-1" />
+                </div>
+              </button>
+            );
+          })}
         </div>
 
         {/* Bannière Défi Mode Avion & Installation Locale PWA */}

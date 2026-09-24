@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Plus, Trash2, AlertTriangle, Sparkles, ArrowLeftToLine, AlertCircle } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, Sparkles, ArrowLeftToLine, AlertCircle, ClipboardCopy, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { cellValue, type OutputColumn } from "./types";
+import { DIALECTS } from "@/lib/regex-synth/dialects";
+import { copyToClipboard } from "@/lib/data-io";
+import { toast } from "sonner";
 
 const ROW_H = 34;
 const NUM_W = 56;
@@ -432,9 +435,41 @@ export function DataGrid({
             {col.pending ? (
               <Sparkles className="size-3.5 shrink-0 animate-pulse text-primary" />
             ) : col.rule ? (
-              <span className="shrink-0 rounded bg-derived-soft px-1 font-mono text-[10px] text-derived">
-                {col.matched}/{rows.length}
-              </span>
+              <div className="flex items-center gap-1 shrink-0">
+                {col.matched === rows.length ? (
+                  <span
+                    className="inline-flex items-center gap-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 font-mono text-[10px] text-emerald-400 font-medium"
+                    title={`100% de complétude : les ${rows.length} lignes sont reconnues`}
+                  >
+                    <CheckCircle2 className="size-2.5" />
+                    100%
+                  </span>
+                ) : (
+                  <span
+                    className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 font-mono text-[10px] text-amber-400 font-medium"
+                    title={`${col.matched}/${rows.length} lignes reconnues (${rows.length - col.matched} non reconnues)`}
+                  >
+                    {Math.round((col.matched / rows.length) * 100)}%
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const excelDialect = DIALECTS.find((d) => d.id === "excel");
+                    if (excelDialect && col.rule) {
+                      const snippet = excelDialect.snippet(col.rule.pattern, col.name, "fr", col.rule.replacement);
+                      await copyToClipboard(snippet);
+                      toast.success("Formule Excel 365 copiée !");
+                    }
+                  }}
+                  className="shrink-0 rounded p-1 text-muted-foreground opacity-60 transition hover:bg-primary/20 hover:text-primary hover:opacity-100 group-hover:opacity-100 cursor-pointer"
+                  title="Copier directement la formule Excel (=REGEX.EXTRAIRE...)"
+                  aria-label="Copier la formule Excel"
+                >
+                  <ClipboardCopy className="size-3.5" />
+                </button>
+              </div>
             ) : null}
             {onSetAsSource && (
               <button
@@ -581,6 +616,16 @@ export function DataGrid({
                             onFocusCell?.(col.id, realRow);
                           }}
                           onChange={(e) => onChangeCell(col.id, realRow, e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              if (e.shiftKey) {
+                                if (visualRow > 0) focusInput(cIdx, visualRow - 1);
+                              } else {
+                                if (visualRow + 1 < displayCount) focusInput(cIdx, visualRow + 1);
+                              }
+                            }
+                          }}
                           placeholder={col.rule ? "" : "résultat attendu…"}
                           className={cn(
                             "h-full w-full bg-transparent px-2.5 font-mono text-[13px] outline-none placeholder:text-muted-foreground/50 focus:bg-primary/15",
