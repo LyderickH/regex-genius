@@ -216,17 +216,23 @@ export function WelcomeHero({
             className="group relative flex flex-col justify-between rounded-2xl border border-border bg-surface/80 p-6 transition-all duration-200 hover:-translate-y-1 hover:border-primary/50 hover:bg-surface hover:shadow-md text-left cursor-pointer"
           >
             <div>
-              <div className="flex items-center gap-2.5">
-                <div className="flex size-12 items-center justify-center rounded-xl border border-border bg-surface-2 text-foreground transition-colors group-hover:border-primary/30 group-hover:text-primary">
-                  <ClipboardPaste className="size-6" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex size-12 items-center justify-center rounded-xl border border-border bg-surface-2 text-foreground transition-colors group-hover:border-primary/30 group-hover:text-primary">
+                    <ClipboardPaste className="size-6" />
+                  </div>
+                  <div className="flex size-12 items-center justify-center rounded-xl border border-border bg-surface-2 text-foreground transition-colors group-hover:border-primary/30 group-hover:text-primary">
+                    <Plus className="size-6" />
+                  </div>
                 </div>
-                <div className="flex size-12 items-center justify-center rounded-xl border border-border bg-surface-2 text-foreground transition-colors group-hover:border-primary/30 group-hover:text-primary">
-                  <Plus className="size-6" />
-                </div>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-400">
+                  <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Ctrl+V actif partout
+                </span>
               </div>
               <h2 className="mt-4 text-base font-bold text-foreground">Coller du texte ou Grille vierge</h2>
               <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                Collez directement vos cellules copiées depuis Excel (Ctrl + V) ou démarrez sur une grille vide.
+                Faites <strong>Ctrl+V</strong> n'importe où sur l'écran pour importer vos données instantanément (depuis Excel, CSV ou bloc-notes), ou démarrez sur une grille vide.
               </p>
             </div>
             <div className="mt-5 flex flex-wrap items-center gap-2">

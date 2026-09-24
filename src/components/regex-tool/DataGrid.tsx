@@ -5,6 +5,7 @@ import { cellValue, type OutputColumn } from "./types";
 import { DIALECTS } from "@/lib/regex-synth/dialects";
 import { copyToClipboard } from "@/lib/data-io";
 import { toast } from "sonner";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const ROW_H = 34;
 const NUM_W = 56;
@@ -534,13 +535,27 @@ export function DataGrid({
             <ResizeHandle index={columns.indexOf(col) + 1} />
           </div>
         ))}
-        <button
-          onClick={onAddColumn}
-          className="grid-cell flex items-center justify-center text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
-          aria-label="Ajouter une colonne de résultat"
-        >
-          <Plus className="size-4" />
-        </button>
+        <TooltipProvider delayDuration={50}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={onAddColumn}
+                className="grid-cell flex items-center justify-center text-muted-foreground transition hover:bg-primary/10 hover:text-primary cursor-pointer group"
+                aria-label="Ajouter une colonne"
+                title="Ajouter une colonne"
+              >
+                <Plus className="size-4 transition-transform group-hover:scale-125" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent
+              side="bottom"
+              sideOffset={4}
+              className="z-50 bg-popover text-foreground border border-border shadow-lg text-xs font-semibold py-1 px-2.5"
+            >
+              Ajouter une colonne
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
         <div style={{ height: scrollContainerHeight, position: "relative" }}>
           <div style={{ position: "absolute", top: topOffset, left: 0, right: 0 }}>

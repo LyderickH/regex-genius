@@ -1076,14 +1076,39 @@ function detectBestSourceCol(matrix: Matrix): number {
     [rows, columns],
   );
 
-  const handleRootPaste = (e: React.ClipboardEvent) => {
-    if (pasteOpen) return;
-    const text = e.clipboardData.getData("text");
-    if (!text) return;
-    if (!text.includes("\t") && !text.includes("\n")) return; // valeur simple : collage normal
-    e.preventDefault();
-    pasteBlock(text);
-  };
+  const pasteBlockRef = useRef(pasteBlock);
+  pasteBlockRef.current = pasteBlock;
+
+  // Permet de faire Ctrl+V n'importe où sur l'application (notamment page d'accueil ou sélection globale)
+  useEffect(() => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      if (pasteOpen) return;
+      const target = e.target as HTMLElement | null;
+      // Laisser le comportement par défaut si l'utilisateur saisit dans un champ texte/input
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable ||
+          target.closest("input, textarea, [contenteditable='true']"))
+      ) {
+        return;
+      }
+      const text = e.clipboardData?.getData("text");
+      if (!text || !text.trim()) return;
+
+      e.preventDefault();
+      pasteBlockRef.current(text);
+      toast.success(
+        rowsRef.current.length === 0
+          ? "Données collées depuis le presse-papier !"
+          : "Données appliquées au tableau !",
+      );
+    };
+
+    window.addEventListener("paste", handleGlobalPaste);
+    return () => window.removeEventListener("paste", handleGlobalPaste);
+  }, [pasteOpen]);
 
   const handleRootCopy = (e: React.ClipboardEvent) => {
     if (pasteOpen || !rows.length) return;
@@ -1124,7 +1149,6 @@ function detectBestSourceCol(matrix: Matrix): number {
   return (
     <div
       className="flex h-screen flex-col bg-background"
-      onPaste={handleRootPaste}
       onCopy={handleRootCopy}
     >
       <Toaster position="bottom-right" />
@@ -1480,6 +1504,7 @@ function detectBestSourceCol(matrix: Matrix): number {
                 onTriggerLLM={() => activeId && triggerLLMFallback(activeId)}
                 isLLMRunning={isLLMRunning}
                 llmReport={llmReport}
+                onCopyTable={copyTable}
               />
             </div>
           </div>

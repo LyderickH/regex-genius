@@ -48,6 +48,7 @@ export function PatternPanel({
   onTriggerLLM,
   isLLMRunning,
   llmReport,
+  onCopyTable,
 }: {
   column: OutputColumn | null;
   rowCount: number;
@@ -58,6 +59,7 @@ export function PatternPanel({
   onTriggerLLM?: () => void;
   isLLMRunning?: boolean;
   llmReport?: ModelProgressReport;
+  onCopyTable?: () => void;
 }) {
   const [dialectId, setDialectId] = useState("excel");
   const [codeLocale, setCodeLocale] = useState<CodeLocale>("fr");
@@ -772,6 +774,52 @@ export function PatternPanel({
                         Copier le motif
                       </button>
                     </div>
+                    {/* Alerte rouge clignotante pour utilisateurs Excel hors Office 365 */}
+                    {dialectId === "excel" && (
+                      <div className="mt-3 rounded-lg border-2 border-red-500/60 bg-red-950/25 p-3 text-xs space-y-2 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="relative flex size-2.5 shrink-0">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+                            <span className="relative inline-flex size-2.5 rounded-full bg-red-500" />
+                          </span>
+                          <span className="font-bold text-red-400 uppercase tracking-wide text-[11px] flex items-center gap-1.5">
+                            <AlertTriangle className="size-3.5 text-red-400" />
+                            Alerte compatibilité : Nécessite Office 365 / Excel 2024+
+                          </span>
+                        </div>
+                        <p className="text-[11px] leading-relaxed text-red-200/90 font-medium">
+                          La fonction <code className="rounded bg-red-950/80 px-1 py-0.5 font-mono text-red-300 font-semibold">{codeLocale === "fr" ? "REGEX.EXTRAIRE" : "REGEXEXTRACT"}</code> n'existe <strong>que</strong> dans Microsoft 365 et Excel Web.
+                        </p>
+                        <div className="rounded bg-red-900/40 border border-red-500/40 p-2 text-[11px] text-red-200 leading-normal">
+                          ⚠️ <strong>Pour les dinosaures sur Excel 2016, 2019 ou 2021 :</strong> cette formule provoquera l'erreur <span className="font-mono font-bold text-white bg-red-600 px-1 py-0.5 rounded">#NOM?</span> !
+                        </div>
+                        <div className="text-[11px] text-red-200/90 space-y-1.5 pt-0.5">
+                          <div className="font-semibold text-red-300">💡 Solutions simples sans Office 365 :</div>
+                          <ul className="pl-1 space-y-1.5 text-muted-foreground list-none">
+                            <li className="flex items-start gap-1.5">
+                              <span className="text-primary font-bold">1.</span>
+                              <div>
+                                <strong className="text-foreground">Recommandé :</strong> Cliquez sur {onCopyTable ? (
+                                  <button
+                                    type="button"
+                                    onClick={onCopyTable}
+                                    className="font-bold text-primary underline underline-offset-2 hover:text-primary/80 cursor-pointer"
+                                  >
+                                    « Copier le tableau »
+                                  </button>
+                                ) : "« Copier le tableau »"} en haut pour coller directement les résultats déjà calculés !
+                              </div>
+                            </li>
+                            <li className="flex items-start gap-1.5">
+                              <span className="text-amber-400 font-bold">2.</span>
+                              <div>
+                                <strong className="text-foreground">Option Macro VBA :</strong> Basculez sur <button type="button" onClick={() => setDialectId("excel-vba")} className="font-semibold text-amber-300 underline underline-offset-2 hover:text-amber-200 cursor-pointer">« Excel 2010 - 2021 (Sans REGEX.EXTRAIRE / VBA) »</button> pour générer le code VBA compatible.
+                              </div>
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                    )}
                     {note && (
                       <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
                         {note}
