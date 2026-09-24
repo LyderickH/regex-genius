@@ -670,27 +670,6 @@ export function PatternPanel({
                   </>
                 );
               })()}
-
-              <div className="mt-4 pt-3 border-t border-border flex items-center justify-between gap-2">
-                <button
-                  onClick={() => setExternalPromptOpen(true)}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-purple-400 hover:text-purple-300 transition cursor-pointer"
-                  title="Générer un prompt complet avec vos exemples pour ChatGPT, Claude ou Gemini en cas de cas complexe"
-                >
-                  <Bot className="size-3.5" />
-                  <span>Prompt ChatGPT / Claude</span>
-                </button>
-                {!isLLMRule && onTriggerLLM && column.failures.length === 0 && (
-                  <button
-                    onClick={onTriggerLLM}
-                    disabled={isLLMRunning}
-                    className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-400 hover:text-amber-300 transition cursor-pointer"
-                  >
-                    <Sparkles className="size-3.5" />
-                    <span>IA locale</span>
-                  </button>
-                )}
-              </div>
             </div>
           </div>
         )}
