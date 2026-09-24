@@ -16,7 +16,6 @@ import {
   Plane,
   Download,
   Laptop,
-  ShieldCheck,
   CheckCircle2,
   AlertTriangle,
   ChevronDown,
@@ -113,8 +112,8 @@ function Index() {
   const [externalPromptOpen, setExternalPromptOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<"csv" | "xlsx">("csv");
-  const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
   const fullSourceRef = useRef<{ file?: File; rawText?: string; totalLines: number } | null>(null);
+  const [isForcedAll, setIsForcedAll] = useState(false);
 
   // --- Statut PWA, Mode Avion et Installation Locale
   const { isOffline, canInstall, isInstalled, installApp } = usePwa();
@@ -514,7 +513,12 @@ function detectBestSourceCol(matrix: Matrix): number {
   return 0;
 }
 
-  const loadMatrix = (matrix: Matrix, names?: string[], sourceColIndex?: number) => {
+  const loadMatrix = (
+    matrix: Matrix,
+    names?: string[],
+    sourceColIndex?: number,
+    preserveUserExamples?: boolean,
+  ) => {
     if (!matrix.length) {
       toast.error("Aucune donnée détectée");
       return;
@@ -554,6 +558,25 @@ function detectBestSourceCol(matrix: Matrix): number {
 
     if (cols.length === 0) {
       cols.push(emptyColumn("Résultat 1", len));
+    }
+
+    // Préserve les exemples déjà saisis par l'utilisateur si demandé (ex: lors d'un affichage forcé +50k)
+    if (preserveUserExamples) {
+      const prevCols = colsRef.current;
+      if (prevCols && prevCols.length > 0) {
+        cols.forEach((col, idx) => {
+          const prev = prevCols[idx];
+          if (prev) {
+            if (!names?.[idx]) col.name = prev.name;
+            const maxPreserve = Math.min(prev.user.length, len);
+            for (let i = 0; i < maxPreserve; i++) {
+              if (prev.user[i] != null && prev.user[i] !== "") {
+                col.user[i] = prev.user[i];
+              }
+            }
+          }
+        });
+      }
     }
 
     setRows(source);
@@ -648,6 +671,7 @@ function detectBestSourceCol(matrix: Matrix): number {
       // Petite temporisation pour laisser l'utilisateur apercevoir le 100%
       await new Promise((r) => setTimeout(r, 200));
       setFileLoading(null);
+      setIsForcedAll(false);
 
       if (parsed.isSampled) {
         fullSourceRef.current = { file, totalLines: parsed.totalLines };
@@ -739,6 +763,7 @@ function detectBestSourceCol(matrix: Matrix): number {
     setActiveId(null);
     setSel(null);
     fullSourceRef.current = null;
+    setIsForcedAll(false);
     setDisplayMode("all");
     setExtraCount(0);
   };
@@ -765,6 +790,7 @@ function detectBestSourceCol(matrix: Matrix): number {
     setDisplayMode("all");
     setExtraCount(0);
     fullSourceRef.current = null;
+    setIsForcedAll(false);
     runSynth(emailCol.id, source, emailCol.user);
     runSynth(dateCol.id, source, dateCol.user);
     runSynth(tokenCol.id, source, tokenCol.user);
@@ -825,11 +851,13 @@ function detectBestSourceCol(matrix: Matrix): number {
     setSel(null);
     setDisplayMode("all");
     setExtraCount(0);
+    setIsForcedAll(false);
   };
 
   /** Colle un bloc Excel/TSV à partir de la cellule sélectionnée, en créant les lignes manquantes. */
   const pasteBlock = (text: string) => {
     const parsed = parsePastedDataset(text, 50_000);
+    setIsForcedAll(false);
     if (parsed.isSampled) {
       fullSourceRef.current = { rawText: text, totalLines: parsed.totalLines };
       toast.info(
@@ -903,6 +931,65 @@ function detectBestSourceCol(matrix: Matrix): number {
       }
     });
     toast.success(`${matrix.length} lignes collées`);
+  };
+
+  /** Force le chargement de toutes les lignes (>50k) avec avertissement sur les risques de plantage */
+  const forceLoadAllRows = async () => {
+    const sourceInfo = fullSourceRef.current;
+    if (!sourceInfo) return;
+
+    const totalStr = sourceInfo.totalLines.toLocaleString("fr-FR");
+    const ok = window.confirm(
+      `⚠️ ATTENTION : RISQUE DE PLANTAGE DU NAVIGATEUR\n\nVous êtes sur le point de charger l'intégralité des ${totalStr} lignes dans le tableau interactif.\n\nL'affichage de plus de 50 000 lignes dans le navigateur consomme une quantité considérable de mémoire RAM et PEUT FAIRE PLANTER OU FIGER VOTRE NAVIGATEUR.\n\nVoulez-vous quand même forcer l'affichage de toutes les lignes ?`,
+    );
+    if (!ok) return;
+
+    try {
+      if (sourceInfo.file) {
+        const file = sourceInfo.file;
+        const sizeStr =
+          file.size > 1024 * 1024
+            ? `${(file.size / (1024 * 1024)).toFixed(1)} Mo`
+            : `${Math.round(file.size / 1024)} Ko`;
+
+        setFileLoading({
+          filename: file.name,
+          size: sizeStr,
+          percent: 5,
+          step: "Chargement forcé de toutes les lignes...",
+        });
+
+        const parsed = await parseFileDataset(file, Infinity, (report) => {
+          setFileLoading({
+            filename: file.name,
+            size: sizeStr,
+            percent: report.percent,
+            step: report.step,
+          });
+        });
+
+        setFileLoading(null);
+        fullSourceRef.current = null;
+        setIsForcedAll(true);
+        loadMatrix(parsed.matrix, undefined, undefined, true);
+        toast.warning(
+          `Affichage forcé : ${parsed.matrix.length.toLocaleString("fr-FR")} lignes chargées. Attention aux performances.`,
+          { duration: 6000 },
+        );
+      } else if (sourceInfo.rawText) {
+        const parsed = parsePastedDataset(sourceInfo.rawText, Infinity);
+        fullSourceRef.current = null;
+        setIsForcedAll(true);
+        loadMatrix(parsed.matrix, undefined, undefined, true);
+        toast.warning(
+          `Affichage forcé : ${parsed.matrix.length.toLocaleString("fr-FR")} lignes chargées. Attention aux performances.`,
+          { duration: 6000 },
+        );
+      }
+    } catch {
+      setFileLoading(null);
+      toast.error("Impossible de charger l'intégralité des données.");
+    }
   };
 
 
@@ -1155,16 +1242,6 @@ function detectBestSourceCol(matrix: Matrix): number {
               · {localLLM.getCurrentModelConfig().name}
             </span>
           </button>
-
-          {/* Badge Confidentialité & Rassurance 100% Locale */}
-          <div
-            className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-400"
-            title="100% Local : Aucune donnée ne quitte votre ordinateur. Tout le traitement s'exécute localement dans votre navigateur (compatible secret bancaire/médical)."
-          >
-            <ShieldCheck className="size-3.5 text-emerald-400" />
-            <span>100% Local & Privé</span>
-          </div>
-
           {/* Badge Mode Avion / Hors-ligne en direct */}
           {isOffline && (
             <div
@@ -1198,27 +1275,6 @@ function detectBestSourceCol(matrix: Matrix): number {
               <span>App locale</span>
             </div>
           )}
-
-          {rows.length > 0 && (
-            <div className="flex items-center gap-2 font-mono text-[11px]">
-              {fullSourceRef.current && fullSourceRef.current.totalLines > rows.length ? (
-                <div
-                  className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 font-medium text-primary shadow-xs"
-                  title="Échantillon interactif de 50 000 lignes pour une fluidité maximale. L'export traitera l'intégralité du fichier."
-                >
-                  <Layers className="size-3" />
-                  <span>
-                    Échantillon : {rows.length.toLocaleString("fr-FR")} /{" "}
-                    {fullSourceRef.current.totalLines.toLocaleString("fr-FR")} lignes · {columns.length} col.
-                  </span>
-                </div>
-              ) : (
-                <div className="text-muted-foreground">
-                  {rows.length.toLocaleString("fr-FR")} lignes · {columns.length} colonne{columns.length > 1 ? "s" : ""}
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </header>
 
@@ -1238,19 +1294,71 @@ function detectBestSourceCol(matrix: Matrix): number {
           />
         ) : (
           <div className="flex flex-1 flex-col min-w-0">
-            {rows.length > 0 && (activeFailures.length > 0 || rows.length > 5000) && (
-              <div className={cn(
-                "flex shrink-0 items-center justify-between border-b px-4 py-1 text-xs backdrop-blur-xs",
-                activeFailures.length > 0
-                  ? "border-amber-500/30 bg-amber-500/10"
-                  : "border-grid-line bg-surface/70"
-              )}>
-                <div className="flex items-center gap-2">
-                  {activeFailures.length > 0 ? (
+            {rows.length > 0 && (
+              <div
+                className={cn(
+                  "flex shrink-0 items-center justify-between border-b px-4 py-1.5 text-xs backdrop-blur-xs",
+                  activeFailures.length > 0
+                    ? "border-amber-500/30 bg-amber-500/10"
+                    : "border-grid-line bg-surface/70",
+                )}
+              >
+                {/* Section gauche : positionnée directement au-dessus des colonnes # et INPUT */}
+                <div className="flex items-center gap-2.5">
+                  {fullSourceRef.current && fullSourceRef.current.totalLines > rows.length ? (
                     <>
+                      <div
+                        className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 font-mono text-[11px] font-medium text-primary shadow-xs"
+                        title="Échantillon interactif de 50 000 lignes pour une fluidité maximale. L'export traitera l'intégralité du fichier."
+                      >
+                        <Layers className="size-3" />
+                        <span>
+                          Échantillon : {rows.length.toLocaleString("fr-FR")} /{" "}
+                          {fullSourceRef.current.totalLines.toLocaleString("fr-FR")} lignes · {columns.length} col.
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={forceLoadAllRows}
+                        className="group flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 px-2.5 py-0.5 text-[11px] font-medium text-amber-300 transition cursor-pointer shadow-xs"
+                        title="Forcer le chargement de toutes les lignes dans le navigateur (+50k lignes). Attention : cela peut saturer la mémoire vive et faire planter votre navigateur !"
+                      >
+                        <AlertTriangle className="size-3 text-amber-400 shrink-0 group-hover:scale-110 transition-transform" />
+                        <span>Forcer l'affichage (+50k lignes)</span>
+                        <span className="text-[10px] text-amber-400/80 font-normal">
+                          · peut planter le navigateur
+                        </span>
+                      </button>
+                    </>
+                  ) : isForcedAll ? (
+                    <div
+                      className="flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 font-mono text-[11px] font-medium text-amber-300 shadow-xs"
+                      title="Affichage forcé complet de toutes les lignes dans le DOM virtuel"
+                    >
+                      <AlertTriangle className="size-3 text-amber-400" />
+                      <span>
+                        {rows.length.toLocaleString("fr-FR")} lignes (+50k forcé) · {columns.length} colonne{columns.length > 1 ? "s" : ""}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
+                      <span className="font-semibold text-foreground">
+                        {rows.length.toLocaleString("fr-FR")}
+                      </span>
+                      <span>
+                        lignes · {columns.length} colonne{columns.length > 1 ? "s" : ""}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Alerte et navigation vers les lignes non reconnues */}
+                  {activeFailures.length > 0 && (
+                    <div className="flex items-center gap-2 pl-2 border-l border-amber-500/30">
                       <span className="font-semibold text-amber-400 flex items-center gap-1.5">
                         <AlertTriangle className="size-3.5" />
-                        <span>{activeFailures.length} ligne{activeFailures.length > 1 ? "s" : ""} non reconnue{activeFailures.length > 1 ? "s" : ""}</span>
+                        <span>
+                          {activeFailures.length} ligne{activeFailures.length > 1 ? "s" : ""} non reconnue{activeFailures.length > 1 ? "s" : ""}
+                        </span>
                       </span>
                       <button
                         type="button"
@@ -1285,35 +1393,41 @@ function detectBestSourceCol(matrix: Matrix): number {
                       >
                         ↓ 1er échec
                       </button>
-                    </>
-                  ) : rows.length > 5000 ? (
-                    <>
-                      <span className="text-[11px] font-medium text-muted-foreground">Affichage :</span>
-                      <select
-                        value={displayMode}
-                        onChange={(e) => setDisplayMode(e.target.value as any)}
-                        className="rounded border border-border bg-surface px-2 py-0.5 font-mono text-xs text-foreground focus:border-primary focus:outline-none cursor-pointer"
-                      >
-                        <option value="all">Toutes les lignes ({rows.length.toLocaleString("fr-FR")})</option>
-                        <option value="first_1000">1 000 premières lignes</option>
-                      </select>
-                    </>
-                  ) : null}
+                    </div>
+                  )}
                 </div>
 
+                {/* Section droite : sélecteur de mode ou pagination si dataset > 5000 */}
                 <div className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
-                  <span>
-                    {displayedIndices.length.toLocaleString("fr-FR")} lignes affichées sur {rows.length.toLocaleString("fr-FR")}
-                  </span>
-                  {displayMode === "first_1000" && rows.length > displayedIndices.length && (
-                    <button
-                      type="button"
-                      onClick={() => setExtraCount((c) => c + 1000)}
-                      className="rounded border border-border bg-surface px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:border-primary hover:text-primary transition cursor-pointer"
+                  {rows.length > 5000 && (
+                    <select
+                      value={displayMode}
+                      onChange={(e) => setDisplayMode(e.target.value as any)}
+                      className="rounded border border-border bg-surface px-2 py-0.5 font-mono text-xs text-foreground focus:border-primary focus:outline-none cursor-pointer"
                     >
-                      + 1 000 lignes
-                    </button>
+                      <option value="all">Toutes les lignes</option>
+                      <option value="first_1000">1 000 premières lignes</option>
+                    </select>
                   )}
+
+                  {displayMode === "failures_only" ? (
+                    <span>{displayedIndices.length.toLocaleString("fr-FR")} échecs filtrés</span>
+                  ) : displayMode === "first_1000" ? (
+                    <>
+                      <span>
+                        {displayedIndices.length.toLocaleString("fr-FR")} affichées
+                      </span>
+                      {rows.length > displayedIndices.length && (
+                        <button
+                          type="button"
+                          onClick={() => setExtraCount((c) => c + 1000)}
+                          className="rounded border border-border bg-surface px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:border-primary hover:text-primary transition cursor-pointer"
+                        >
+                          + 1 000 lignes
+                        </button>
+                      )}
+                    </>
+                  ) : null}
                 </div>
               </div>
             )}
