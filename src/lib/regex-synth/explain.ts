@@ -13,10 +13,22 @@ const CLASS_LABELS: Record<string, string> = {
 };
 
 /** Découpe une expression régulière en segments expliqués en clair. */
-export function explain(source: string): Segment[] {
+export function explain(source: string, replacement?: string): Segment[] {
   const out: Segment[] = [];
   let i = 0;
   const push = (text: string, kind: Segment["kind"], label: string) => out.push({ text, kind, label });
+
+  // Compter le nombre de groupes capturants pour adapter les libellés ($1, $2...)
+  let totalCapturing = 0;
+  for (let k = 0; k < source.length; k++) {
+    if (source[k] === "(" && !source.startsWith("(?:", k) && (k === 0 || source[k - 1] !== "\\")) {
+      totalCapturing++;
+    }
+  }
+
+  const multiGroup = totalCapturing > 1 || replacement !== undefined;
+  let openCount = 0;
+  const groupStack: number[] = [];
 
   while (i < source.length) {
     const c = source[i];
@@ -27,11 +39,25 @@ export function explain(source: string): Segment[] {
     } else if (c === "$") {
       push("$", "anchor", "fin de la ligne");
       i++;
+    } else if (source.startsWith("(?:", i)) {
+      push("(?:", "group", "début de groupe non-capturant (contexte)");
+      i += 3;
     } else if (c === "(") {
-      push("(", "group", "début de la valeur extraite");
+      openCount++;
+      groupStack.push(openCount);
+      push(
+        "(",
+        "group",
+        multiGroup ? `début du groupe de capture $${openCount}` : "début de la valeur extraite",
+      );
       i++;
     } else if (c === ")") {
-      push(")", "group", "fin de la valeur extraite");
+      const num = groupStack.pop();
+      push(
+        ")",
+        "group",
+        multiGroup && num ? `fin du groupe de capture $${num}` : "fin de la valeur extraite",
+      );
       i++;
     } else if (c === "[") {
       let j = i + 1;

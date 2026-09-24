@@ -66,7 +66,10 @@ export function PatternPanel({
   const [externalPromptOpen, setExternalPromptOpen] = useState(false);
 
   const dialect = DIALECTS.find((d) => d.id === dialectId) ?? DIALECTS[0]!;
-  const segments = useMemo(() => (column?.rule ? explain(column.rule.source) : []), [column?.rule]);
+  const segments = useMemo(
+    () => (column?.rule ? explain(column.rule.source, column.rule.replacement) : []),
+    [column?.rule],
+  );
   const rule = column?.rule;
   const humanExplanation = useMemo(() => explainRegexHuman(rule ?? null, column?.name), [rule, column?.name]);
 
@@ -563,6 +566,16 @@ export function PatternPanel({
                     <span className="text-muted-foreground">{s.label}</span>
                   </li>
                 ))}
+                {rule.replacement !== undefined && (
+                  <li className="flex items-center gap-2 text-xs pt-1.5 mt-1 border-t border-border/50 text-cyan-400">
+                    <code className="shrink-0 font-mono font-bold bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20 text-cyan-300">
+                      ➜ {rule.replacement}
+                    </code>
+                    <span className="text-muted-foreground">
+                      formule de remplacement appliquée aux groupes
+                    </span>
+                  </li>
+                )}
               </ul>
             </div>
 
