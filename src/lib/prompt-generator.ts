@@ -142,8 +142,8 @@ export function generateExternalAIPrompt({
   if (dLower.includes("excel")) {
     promptParts.push(
       `5. **Spécificités Excel 365 / Tableur (Versions Française et Anglaise)** :`,
-      `   - Fournis la formule Excel 365 en **version française** : \`=REGEX.EXTRAIRE(A2; "motif"; 1)\` (séparateur point-virgule \`;\`).`,
-      `   - Fournis également la formule en **version anglaise** : \`=REGEXEXTRACT(A2, "motif", 1)\` (séparateur virgule \`,\`).`,
+      `   - Fournis la formule Excel 365 en **version française** : \`=REGEX.EXTRAIRE(A2; "motif"; 2)\` (séparateur point-virgule \`;\`, mode 2 pour extraire les groupes de capture \`(...)\`, ou mode 0 pour la correspondance complète).`,
+      `   - Fournis également la formule en **version anglaise** : \`=REGEXEXTRACT(A2, "motif", 2)\` (séparateur virgule \`,\`).`,
       `   - Échappe correctement les guillemets dans la formule Excel en les doublant (\`""\`).`,
       `   - Si une formule native sans regex convient (ex: \`=TEXTE.AVANT(...)\` en FR / \`=TEXTBEFORE(...)\` en EN), mentionne les deux versions.`,
     );

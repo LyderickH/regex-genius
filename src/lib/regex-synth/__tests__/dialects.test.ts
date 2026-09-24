@@ -6,15 +6,18 @@ describe("DIALECTS - French & English modes", () => {
     const excel = DIALECTS.find((d) => d.id === "excel")!;
     expect(excel).toBeDefined();
 
-    // Mode français (par défaut)
+    // Mode français avec groupe de capture -> return_mode = 2
     const frSnippet = excel.snippet("([A-Z0-9]+)", "texte", "fr");
-    expect(frSnippet).toBe('=REGEX.EXTRAIRE(A2; "([A-Z0-9]+)"; 1)');
+    expect(frSnippet).toBe('=REGEX.EXTRAIRE(A2; "([A-Z0-9]+)"; 2)');
     expect(typeof excel.note === "function" ? excel.note("fr") : excel.note).toContain("REGEX.EXTRAIRE");
 
-    // Mode anglais
+    // Mode anglais avec groupe de capture -> return_mode = 2
     const enSnippet = excel.snippet("([A-Z0-9]+)", "text", "en");
-    expect(enSnippet).toBe('=REGEXEXTRACT(A2, "([A-Z0-9]+)", 1)');
+    expect(enSnippet).toBe('=REGEXEXTRACT(A2, "([A-Z0-9]+)", 2)');
     expect(typeof excel.note === "function" ? excel.note("en") : excel.note).toContain("REGEXEXTRACT");
+
+    // Motif sans groupe de capture -> return_mode = 0
+    expect(excel.snippet("[A-Z0-9]+", "texte", "fr")).toBe('=REGEX.EXTRAIRE(A2; "[A-Z0-9]+"; 0)');
   });
 
   it("gère Google Sheets avec séparateur point-virgule pour FR et virgule pour EN", () => {

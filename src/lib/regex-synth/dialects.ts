@@ -27,9 +27,13 @@ export const DIALECTS: Dialect[] = [
           ? `=REGEX.REMPLACER(A2; "${excelQ(s)}"; "${excelQ(replacement)}")`
           : `=REGEXREPLACE(A2, "${excelQ(s)}", "${excelQ(replacement)}")`;
       }
+      // Si la regex contient un groupe de capture (...), le mode 2 d'Excel extrait ce qui est dans les parenthèses.
+      // Sans groupe de capture, le mode 0 (défaut) extrait la correspondance complète.
+      const hasCapture = /(?<!\\)\((?!\?)/.test(s);
+      const mode = hasCapture ? "2" : "0";
       return loc === "fr"
-        ? `=REGEX.EXTRAIRE(A2; "${excelQ(s)}"; 1)`
-        : `=REGEXEXTRACT(A2, "${excelQ(s)}", 1)`;
+        ? `=REGEX.EXTRAIRE(A2; "${excelQ(s)}"; ${mode})`
+        : `=REGEXEXTRACT(A2, "${excelQ(s)}", ${mode})`;
     },
     note: (loc = "fr", replacement) => {
       if (replacement !== undefined) {
@@ -38,8 +42,8 @@ export const DIALECTS: Dialect[] = [
           : "REGEXREPLACE requires Excel 365 (comma delimiter ',') for replacement patterns.";
       }
       return loc === "fr"
-        ? "REGEX.EXTRAIRE est la formule officielle pour Excel 365 en français (séparateur point-virgule « ; »). Si votre Excel utilise les noms anglais, basculez sur l'onglet EN pour =REGEXEXTRACT."
-        : "REGEXEXTRACT requires Excel 365 (comma delimiter ','). The 3rd argument '1' returns the 1st capture group.";
+        ? "REGEX.EXTRAIRE dans Excel 365 (séparateur point-virgule « ; »). Le 3e argument est le mode de retour : 0 = première correspondance complète, 1 = toutes les correspondances, 2 = extrait le contenu des groupes de capture (...)."
+        : "REGEXEXTRACT in Excel 365 (comma delimiter ','). The 3rd argument is return_mode: 0 = first full match, 1 = all matches, 2 = extract capture groups (...).";
     },
   },
   {
