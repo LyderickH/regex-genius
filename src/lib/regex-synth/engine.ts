@@ -32,12 +32,14 @@ export interface Transform {
 
 export const NO_TRANSFORM: Transform = { strip: "none", dec: "none", casing: "none", fmt: "none" };
 
-export function isIdentity(t: Transform): boolean {
+export function isIdentity(t?: Transform | null): boolean {
+  if (!t) return true;
   return t.strip === "none" && t.dec === "none" && t.casing === "none" && t.fmt === "none";
 }
 
 /** Description lisible du nettoyage, ou null s'il n'y en a pas. */
-export function describeTransform(t: Transform): string | null {
+export function describeTransform(t?: Transform | null): string | null {
+  if (!t) return null;
   const parts: string[] = [];
   if (t.strip === "trim") parts.push("suppression des espaces de début et de fin");
   if (t.strip === "spaces") parts.push("suppression des espaces");

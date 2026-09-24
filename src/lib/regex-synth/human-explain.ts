@@ -129,7 +129,7 @@ export function explainRegexHuman(
     return rule.llmMetadata.explanation;
   }
 
-  const transformDesc = describeTransform(rule.transform);
+  const transformDesc = rule.transform ? describeTransform(rule.transform) : null;
   const appendTransform = (text: string) => {
     if (!transformDesc) return text;
     const clean = text.endsWith(".") ? text.slice(0, -1) : text;
@@ -263,7 +263,7 @@ export function explainRegexTechnical(
   }
 
   const p = rule.source;
-  const transformDesc = describeTransform(rule.transform);
+  const transformDesc = rule.transform ? describeTransform(rule.transform) : null;
   const steps: TechnicalStep[] = [];
   const assumptions: string[] = [];
 
