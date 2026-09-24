@@ -941,6 +941,19 @@ function detectBestSourceCol(matrix: Matrix): number {
     setSel(null);
   };
 
+  const moveColumn = (id: string, direction: "left" | "right") => {
+    setColumns((cols) => {
+      const idx = cols.findIndex((c) => c.id === id);
+      if (idx === -1) return cols;
+      const targetIdx = direction === "left" ? idx - 1 : idx + 1;
+      if (targetIdx < 0 || targetIdx >= cols.length) return cols;
+      const next = cols.slice();
+      const [moved] = next.splice(idx, 1);
+      if (moved) next.splice(targetIdx, 0, moved);
+      return next;
+    });
+  };
+
   const executeDirectExport = (kind: "csv" | "xlsx") => {
     const header = [sourceName || "Source", ...columns.map((c) => c.name)];
     const matrix = rows.map((src, i) => [src, ...columns.map((c) => cellValue(c, i))]);
@@ -1055,6 +1068,14 @@ function detectBestSourceCol(matrix: Matrix): number {
         </button>
 
         <div className="ml-4 flex items-center gap-1.5">
+          {rows.length > 0 && (
+            <ToolbarButton
+              icon={Home}
+              label="Menu"
+              onClick={returnToWelcome}
+            />
+          )}
+
           <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs transition hover:border-primary hover:text-primary">
             <Upload className="size-3.5" />
             Importer
@@ -1067,7 +1088,6 @@ function detectBestSourceCol(matrix: Matrix): number {
           </label>
           {rows.length > 0 && (
             <>
-              <ToolbarButton icon={ClipboardCopy} label="Copier le tableau" onClick={copyTable} />
               <ToolbarButton
                 icon={ArrowUpToLine}
                 label="1re ligne en en-tête"
@@ -1114,16 +1134,12 @@ function detectBestSourceCol(matrix: Matrix): number {
                 )}
               </div>
 
+              <ToolbarButton icon={ClipboardCopy} label="Copier le tableau" onClick={copyTable} />
+
               <ToolbarButton
                 icon={Bot}
                 label="Prompt ChatGPT / Claude"
                 onClick={() => setExternalPromptOpen(true)}
-              />
-
-              <ToolbarButton
-                icon={Home}
-                label="Menu"
-                onClick={returnToWelcome}
               />
             </>
           )}
@@ -1334,6 +1350,7 @@ function detectBestSourceCol(matrix: Matrix): number {
                 }
                 onAddColumn={addColumn}
                 onRemoveColumn={removeColumn}
+                onMoveColumn={moveColumn}
                 sourceName={sourceName}
                 onSetAsSource={setColumnAsSource}
               />

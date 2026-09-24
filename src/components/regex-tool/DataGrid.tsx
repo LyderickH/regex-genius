@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Plus, Trash2, AlertTriangle, Sparkles, ArrowLeftToLine, AlertCircle, ClipboardCopy, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, Sparkles, ArrowLeftToLine, AlertCircle, ClipboardCopy, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { cellValue, type OutputColumn } from "./types";
 import { DIALECTS } from "@/lib/regex-synth/dialects";
@@ -44,6 +44,7 @@ interface Props {
   onRename: (colId: string, name: string) => void;
   onAddColumn: () => void;
   onRemoveColumn: (colId: string) => void;
+  onMoveColumn?: (colId: string, direction: "left" | "right") => void;
   selection: GridSel | null;
   onSelectionChange: (s: GridSel | null) => void;
   sourceName?: string;
@@ -65,6 +66,7 @@ export function DataGrid({
   onRename,
   onAddColumn,
   onRemoveColumn,
+  onMoveColumn,
   selection,
   onSelectionChange,
   sourceName,
@@ -485,6 +487,38 @@ export function DataGrid({
               >
                 <ArrowLeftToLine className="size-3.5" />
               </button>
+            )}
+            {onMoveColumn && columns.length > 1 && (
+              <div className="flex items-center opacity-0 group-hover:opacity-100 transition shrink-0">
+                {columns.indexOf(col) > 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onMoveColumn(col.id, "left");
+                    }}
+                    className="rounded p-0.5 text-muted-foreground hover:bg-primary/20 hover:text-primary transition cursor-pointer"
+                    title="Déplacer la colonne vers la gauche"
+                    aria-label="Déplacer vers la gauche"
+                  >
+                    <ChevronLeft className="size-3.5" />
+                  </button>
+                )}
+                {columns.indexOf(col) < columns.length - 1 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onMoveColumn(col.id, "right");
+                    }}
+                    className="rounded p-0.5 text-muted-foreground hover:bg-primary/20 hover:text-primary transition cursor-pointer"
+                    title="Déplacer la colonne vers la droite"
+                    aria-label="Déplacer vers la droite"
+                  >
+                    <ChevronRight className="size-3.5" />
+                  </button>
+                )}
+              </div>
             )}
             <button
               onClick={(e) => {
