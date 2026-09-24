@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Plus, Trash2, AlertTriangle, Sparkles, ArrowLeftToLine } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, Sparkles, ArrowLeftToLine, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { cellValue, type OutputColumn } from "./types";
 
@@ -78,6 +78,7 @@ export function DataGrid({
   const container = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [height, setHeight] = useState(600);
+  const [sourceSelection, setSourceSelection] = useState<{ row: number; text: string } | null>(null);
   // widths[0] = colonne source, widths[1..n] = colonnes de résultat
   const [widths, setWidths] = useState<number[]>([]);
   const resizing = useRef<{ index: number; startX: number; startW: number } | null>(null);
@@ -519,6 +520,30 @@ export function DataGrid({
                       value={source}
                       onFocus={() => onFocusCell?.(SOURCE_COL, realRow)}
                       onChange={(e) => onChangeSource?.(realRow, e.target.value)}
+                      onSelect={(e) => {
+                        const target = e.currentTarget;
+                        const start = target.selectionStart ?? 0;
+                        const end = target.selectionEnd ?? 0;
+                        if (end > start) {
+                          const selected = target.value.slice(start, end);
+                          if (selected.trim().length > 0) {
+                            setSourceSelection({ row: realRow, text: selected });
+                            return;
+                          }
+                        }
+                        setSourceSelection(null);
+                      }}
+                      onMouseUp={(e) => {
+                        const target = e.currentTarget;
+                        const start = target.selectionStart ?? 0;
+                        const end = target.selectionEnd ?? 0;
+                        if (end > start) {
+                          const selected = target.value.slice(start, end);
+                          if (selected.trim().length > 0) {
+                            setSourceSelection({ row: realRow, text: selected });
+                          }
+                        }
+                      }}
                       readOnly={!onChangeSource}
                       placeholder="donnée source…"
                       className="h-full w-full bg-transparent px-3 font-mono text-[13px] text-foreground outline-none placeholder:text-muted-foreground/50 focus:bg-primary/15"
@@ -528,6 +553,12 @@ export function DataGrid({
                   {columns.map((col) => {
                     const cIdx = columns.indexOf(col) + 1;
                     const isUser = col.user[realRow] != null && col.user[realRow] !== "";
+                    const userVal = col.user[realRow] ?? "";
+                    const isTypoWarning =
+                      isUser &&
+                      userVal.trim() !== "" &&
+                      !source.includes(userVal) &&
+                      !col.rule?.replacement;
                     const failed = !isUser && col.rule != null && col.derived[realRow] == null && source !== "";
                     return (
                       <div
@@ -539,6 +570,7 @@ export function DataGrid({
                           activeId === col.id && !inSel(cIdx, visualRow) && "bg-primary/[0.04]",
                           inSel(cIdx, visualRow) && "bg-primary/10",
                           failed && "bg-destructive/10",
+                          isTypoWarning && "bg-amber-500/10",
                         )}
                       >
                         <input
@@ -555,7 +587,15 @@ export function DataGrid({
                             isUser ? "font-medium text-primary" : "text-derived",
                           )}
                         />
-                        {failed && (
+                        {isTypoWarning && (
+                          <span
+                            title="Attention : cette valeur saisie n'apparaît pas telle quelle dans la cellule source. Vérifiez qu'il n'y a pas de faute de frappe ou d'espace en trop."
+                            className="absolute right-1.5 z-10 cursor-help text-amber-400"
+                          >
+                            <AlertCircle className="size-3.5" />
+                          </span>
+                        )}
+                        {failed && !isTypoWarning && (
                           <AlertTriangle className="pointer-events-none absolute right-1.5 size-3.5 text-destructive" />
                         )}
                       </div>
@@ -590,6 +630,34 @@ export function DataGrid({
         )}
       </div>
 
+      {/* Barre flottante d'exemple rapide sur surlignage souris */}
+      {sourceSelection && activeId && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 rounded-full border border-primary/40 bg-surface-2/95 px-4 py-2 text-xs shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-2">
+          <Sparkles className="size-4 text-primary animate-pulse shrink-0" />
+          <span className="text-muted-foreground">
+            Sélection : <strong className="font-mono text-foreground font-semibold">"{sourceSelection.text}"</strong>
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              onChangeCell(activeId, sourceSelection.row, sourceSelection.text);
+              setSourceSelection(null);
+            }}
+            className="ml-1 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground shadow-xs hover:bg-primary/90 transition cursor-pointer active:scale-95"
+            title="Remplir la colonne active avec le texte surligné sans risquer d'erreur de frappe"
+          >
+            ✨ Définir comme exemple (Ligne {sourceSelection.row + 1})
+          </button>
+          <button
+            type="button"
+            onClick={() => setSourceSelection(null)}
+            className="rounded-full p-1 text-muted-foreground hover:text-foreground transition cursor-pointer"
+            title="Fermer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 }

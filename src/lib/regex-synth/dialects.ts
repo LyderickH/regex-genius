@@ -43,6 +43,45 @@ export const DIALECTS: Dialect[] = [
     },
   },
   {
+    id: "excel-vba",
+    label: "Excel 2010 - 2021 (Sans REGEX.EXTRAIRE / VBA)",
+    pattern: (s) => `"${excelQ(s)}"`,
+    snippet: (s, _f, loc = "fr", replacement) => {
+      if (replacement !== undefined) {
+        return loc === "fr"
+          ? `=REGEX_REMPLACER(A2; "${excelQ(s)}"; "${excelQ(replacement)}")`
+          : `=REGEX_REPLACE(A2, "${excelQ(s)}", "${excelQ(replacement)}")`;
+      }
+      return loc === "fr"
+        ? `=REGEX_EXTRAIRE(A2; "${excelQ(s)}"; 1)`
+        : `=REGEX_EXTRACT(A2, "${excelQ(s)}", 1)`;
+    },
+    note: (loc = "fr") =>
+      loc === "fr"
+        ? `Pour Excel 2016/2019/2021 (qui n'ont pas encore les fonctions REGEX natives d'Office 365) :
+1. Faites Alt + F11 dans Excel, puis "Insertion > Module".
+2. Collez la macro UDF universelle :
+
+Function REGEX_EXTRAIRE(c As Range, pat As String, Optional grp As Integer = 1) As String
+    Dim reg As Object, m As Object
+    Set reg = CreateObject("VBScript.RegExp")
+    reg.Global = False: reg.Pattern = pat
+    If reg.Test(c.Value) Then
+        Set m = reg.Execute(c.Value)
+        If m(0).SubMatches.Count >= grp Then REGEX_EXTRAIRE = m(0).SubMatches(grp - 1) Else REGEX_EXTRAIRE = m(0).Value
+    End If
+End Function
+
+Function REGEX_REMPLACER(c As Range, pat As String, repl As String) As String
+    Dim reg As Object
+    Set reg = CreateObject("VBScript.RegExp")
+    reg.Global = True: reg.Pattern = pat
+    REGEX_REMPLACER = reg.Replace(c.Value, repl)
+End Function`
+        : `For older Excel versions (2016/2019/2021):
+Press Alt + F11, click "Insert > Module", and paste the VBA UDF functions REGEX_EXTRACT and REGEX_REPLACE.`,
+  },
+  {
     id: "gsheets",
     label: "Google Sheets",
     pattern: (s) => `"${excelQ(s)}"`,

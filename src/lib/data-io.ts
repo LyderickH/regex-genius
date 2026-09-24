@@ -14,10 +14,19 @@ export interface ParsedDataset {
   rawText?: string;
 }
 
+/** Supprime les caractères invisibles parasites : BOM UTF-8, zero-width space, soft-hyphen */
+export function sanitizeInvisibleChars(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/^\uFEFF/, "")
+    .replace(/[\u200B\u200C\u200D\u00AD]/g, "");
+}
+
 /** Texte collé : TSV (Excel), CSV point-virgule, ou lignes simples. */
 export function parsePastedText(text: string): Matrix {
   if (!text) return [];
-  const lines = text.split(/\r?\n/);
+  const cleanText = sanitizeInvisibleChars(text);
+  const lines = cleanText.split(/\r?\n/);
   if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
   if (lines.length === 0) return [];
 
@@ -31,12 +40,12 @@ export function parsePastedText(text: string): Matrix {
   }
 
   if (hasTab) {
-    const parsed = Papa.parse<string[]>(text, { delimiter: "\t", skipEmptyLines: true });
+    const parsed = Papa.parse<string[]>(cleanText, { delimiter: "\t", skipEmptyLines: true });
     if (parsed.data.length)
       return (parsed.data as Matrix).map((r) => r.map((c) => (c == null ? "" : String(c))));
   }
   if (hasSemi && sampleLimit > 0) {
-    const parsed = Papa.parse<string[]>(text, { delimiter: ";", skipEmptyLines: true });
+    const parsed = Papa.parse<string[]>(cleanText, { delimiter: ";", skipEmptyLines: true });
     if (parsed.data.length) return parsed.data as Matrix;
   }
 
@@ -258,13 +267,20 @@ export async function exportFullDatasetStreaming({
     const chain = ruleChain(col.rule).map((r) => ({
       re: new RegExp(r.source, r.flags),
       transform: r.transform,
+      replacement: r.replacement,
     }));
     return (input: string): string => {
-      for (const { re, transform } of chain) {
-        const m = re.exec(input);
-        if (m) {
-          const g = firstGroup(m);
-          if (g !== undefined) return applyTransform(g, transform);
+      for (const { re, transform, replacement } of chain) {
+        if (replacement !== undefined) {
+          if (re.test(input)) {
+            return applyTransform(input.replace(re, replacement), transform);
+          }
+        } else {
+          const m = re.exec(input);
+          if (m) {
+            const g = firstGroup(m);
+            if (g !== undefined) return applyTransform(g, transform);
+          }
         }
       }
       return "";
