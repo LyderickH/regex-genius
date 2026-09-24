@@ -191,7 +191,7 @@ function applyFmt(v: string, f: Fmt): string {
   return String(Math.round(n * 1000));
 }
 
-function applyTransform(value: string, t: Transform): string {
+export function applyTransform(value: string, t: Transform): string {
   let v = value;
   if (t.strip === "trim") v = v.replace(/^[\s\u00a0\u202f]+|[\s\u00a0\u202f]+$/g, "");
   else if (t.strip === "spaces") v = v.replace(/[\s\u00a0\u202f]/g, "");
@@ -343,7 +343,7 @@ function literalCapture(cap: string): boolean {
 }
 
 /** Première capture définie : permet les motifs à deux branches (pivot avant/après). */
-function firstGroup(m: RegExpExecArray | null): string | undefined {
+export function firstGroup(m: RegExpExecArray | null): string | undefined {
   if (!m) return undefined;
   for (let i = 1; i < m.length; i++) if (m[i] !== undefined) return m[i];
   return undefined;
@@ -1014,7 +1014,7 @@ function partitionRules(examples: Example[], maxGroups = 3): { rule: Rule; size:
   return rules.map((r) => ({ rule: r.rule, size: r.group.length }));
 }
 
-function ruleChain(rule: Rule): Rule[] {
+export function ruleChain(rule: Rule): Rule[] {
   return [rule, ...(rule.extra ?? [])];
 }
 

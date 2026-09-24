@@ -1,12 +1,22 @@
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
+import { type Rule, ruleChain, firstGroup, applyTransform } from "./regex-synth/engine";
 
 export type Matrix = string[][];
+
+export const MAX_INTERACTIVE_ROWS = 50_000;
+
+export interface ParsedDataset {
+  matrix: Matrix;
+  totalLines: number;
+  isSampled: boolean;
+  file?: File;
+  rawText?: string;
+}
 
 /** Texte collé : TSV (Excel), CSV point-virgule, ou lignes simples. */
 export function parsePastedText(text: string): Matrix {
   if (!text) return [];
-  // Éviter replace(/\r\n?/g, "\n") qui duplique la chaîne entière en mémoire sur 50+ Mo
   const lines = text.split(/\r?\n/);
   if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
   if (lines.length === 0) return [];
@@ -32,6 +42,20 @@ export function parsePastedText(text: string): Matrix {
 
   // Pour un fichier à colonne unique (ex: 1M lignes de log/texte brut)
   return lines.map((l) => [l]);
+}
+
+/** Analyse un texte collé et retourne un échantillon interactif si le volume dépasse 50k lignes */
+export function parsePastedDataset(text: string, maxInteractive = MAX_INTERACTIVE_ROWS): ParsedDataset {
+  const fullMatrix = parsePastedText(text);
+  const totalLines = fullMatrix.length;
+  const isSampled = totalLines > maxInteractive;
+  const matrix = isSampled ? fullMatrix.slice(0, maxInteractive) : fullMatrix;
+  return {
+    matrix,
+    totalLines,
+    isSampled,
+    rawText: isSampled ? text : undefined,
+  };
 }
 
 /** Cellules seules au format tabulations (copie d'une plage). */
@@ -63,33 +87,64 @@ export async function copyToClipboard(text: string): Promise<boolean> {
 }
 
 export async function parseFile(file: File): Promise<Matrix> {
+  const res = await parseFileDataset(file, Infinity);
+  return res.matrix;
+}
+
+/**
+ * Analyse un fichier et extrait un échantillon interactif de 50 000 lignes
+ * pour que le studio de Regex reste ultra-fluide, tout en conservant la référence
+ * au fichier source pour appliquer les regex à 100% des lignes lors de l'export.
+ */
+export async function parseFileDataset(
+  file: File,
+  maxInteractive = MAX_INTERACTIVE_ROWS,
+): Promise<ParsedDataset> {
   const name = file.name.toLowerCase();
   if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf, { type: "array" });
     const sheet = wb.Sheets[wb.SheetNames[0] ?? ""];
-    if (!sheet) return [];
+    if (!sheet) return { matrix: [], totalLines: 0, isSampled: false };
     const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, blankrows: false, raw: false });
-    return rows.map((r) => (r as unknown[]).map((c) => (c == null ? "" : String(c))));
+    const full = rows.map((r) => (r as unknown[]).map((c) => (c == null ? "" : String(c))));
+    const isSampled = full.length > maxInteractive;
+    return {
+      matrix: isSampled ? full.slice(0, maxInteractive) : full,
+      totalLines: full.length,
+      isSampled,
+      file: isSampled ? file : undefined,
+    };
   }
 
   const text = await file.text();
   if (name.endsWith(".csv")) {
-    // Échantillon pour détecter si le CSV contient réellement plusieurs colonnes
     const firstChunk = text.slice(0, 4000);
     const hasDelimiter = firstChunk.includes(";") || firstChunk.includes(",") || firstChunk.includes("\t");
     if (hasDelimiter) {
       const parsed = Papa.parse<string[]>(text, { skipEmptyLines: true });
       if (parsed.data.length) {
-        return (parsed.data as Matrix).map((r) => r.map((c) => (c == null ? "" : String(c))));
+        const full = (parsed.data as Matrix).map((r) => r.map((c) => (c == null ? "" : String(c))));
+        const isSampled = full.length > maxInteractive;
+        return {
+          matrix: isSampled ? full.slice(0, maxInteractive) : full,
+          totalLines: full.length,
+          isSampled,
+          file: isSampled ? file : undefined,
+        };
       }
     }
   }
 
-  return parsePastedText(text);
+  const parsed = parsePastedDataset(text, maxInteractive);
+  return {
+    ...parsed,
+    file: parsed.isSampled ? file : undefined,
+  };
 }
 
 function download(blob: Blob, filename: string) {
+  if (typeof document === "undefined") return;
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -112,4 +167,96 @@ export function exportXlsx(header: string[], rows: Matrix, filename = "resultats
     new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
     filename,
   );
+}
+
+/**
+ * Applique toutes les regex déduites à l'intégralité du fichier d'origine (1M+ lignes)
+ * en streaming par blocs sans saturer la mémoire vive du navigateur.
+ */
+export async function exportFullDatasetStreaming({
+  file,
+  rawText,
+  totalLines,
+  header,
+  columns,
+  filename = "resultats_complet.csv",
+  onProgress,
+}: {
+  file?: File | null;
+  rawText?: string | null;
+  totalLines: number;
+  header: string[];
+  columns: { name: string; rule: Rule | null }[];
+  filename?: string;
+  onProgress?: (percent: number) => void;
+}): Promise<void> {
+  const sep = ";";
+  const escapeCell = (s: string): string => {
+    if (s.includes(sep) || s.includes('"') || s.includes("\n") || s.includes("\r")) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  };
+
+  // Compiler les règles une seule fois
+  const compiled = columns.map((col) => {
+    if (!col.rule) return null;
+    const chain = ruleChain(col.rule).map((r) => ({
+      re: new RegExp(r.source, r.flags),
+      transform: r.transform,
+    }));
+    return (input: string): string => {
+      for (const { re, transform } of chain) {
+        const m = re.exec(input);
+        if (m) {
+          const g = firstGroup(m);
+          if (g !== undefined) return applyTransform(g, transform);
+        }
+      }
+      return "";
+    };
+  });
+
+  const headerLine = header.map(escapeCell).join(sep) + "\r\n";
+  const chunks: string[] = ["\uFEFF", headerLine];
+
+  const sourceText = rawText ?? (file ? await file.text() : "");
+  const lines = sourceText.split(/\r?\n/);
+  if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+
+  const total = lines.length;
+  let batchStr = "";
+  const BATCH_SIZE = 25_000;
+
+  for (let i = 0; i < total; i++) {
+    const rawLine = lines[i]!;
+    let src = rawLine;
+    if (rawLine.includes(sep) || rawLine.includes(",")) {
+      const delim = rawLine.includes(sep) ? sep : ",";
+      const endIdx = rawLine.indexOf(delim);
+      if (endIdx > 0 && !rawLine.startsWith('"')) {
+        src = rawLine.slice(0, endIdx);
+      }
+    }
+    let rowCsv = escapeCell(src);
+    for (let c = 0; c < compiled.length; c++) {
+      const fn = compiled[c];
+      const val = fn ? fn(src) : "";
+      rowCsv += sep + escapeCell(val);
+    }
+    batchStr += rowCsv + "\r\n";
+
+    if ((i + 1) % BATCH_SIZE === 0 || i === total - 1) {
+      chunks.push(batchStr);
+      batchStr = "";
+      if (onProgress) {
+        onProgress(Math.round(((i + 1) / total) * 100));
+      }
+      // Laisser respirer le thread UI
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  }
+
+  const blob = new Blob(chunks, { type: "text/csv;charset=utf-8" });
+  download(blob, filename);
 }

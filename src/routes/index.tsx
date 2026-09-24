@@ -12,6 +12,7 @@ import {
   Plus,
   ArrowUpToLine,
   Bot,
+  Layers,
 } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
@@ -21,6 +22,7 @@ import { PatternPanel } from "@/components/regex-tool/PatternPanel";
 import { WelcomeHero } from "@/components/regex-tool/WelcomeHero";
 import { LLMControlDialog } from "@/components/regex-tool/LLMControlDialog";
 import { ExternalPromptDialog } from "@/components/regex-tool/ExternalPromptDialog";
+import { ExportOptionsDialog } from "@/components/regex-tool/ExportOptionsDialog";
 import { localLLM } from "@/lib/llm/webllm-service";
 import { runSynthesisPipeline } from "@/lib/llm/pipeline";
 import type { ModelProgressReport } from "@/lib/llm/types";
@@ -28,9 +30,12 @@ import { emptyColumn, cellValue, type OutputColumn } from "@/components/regex-to
 import { combineColumns, type SynthResult } from "@/lib/regex-synth/engine";
 import {
   parseFile,
+  parseFileDataset,
   parsePastedText,
+  parsePastedDataset,
   exportCsv,
   exportXlsx,
+  exportFullDatasetStreaming,
   toTsv,
   cellsToTsv,
   copyToClipboard,
@@ -91,6 +96,9 @@ function Index() {
   const [isLLMRunning, setIsLLMRunning] = useState(false);
   const [llmControlOpen, setLlmControlOpen] = useState(false);
   const [externalPromptOpen, setExternalPromptOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<"csv" | "xlsx">("csv");
+  const fullSourceRef = useRef<{ file?: File; rawText?: string; totalLines: number } | null>(null);
 
   useEffect(() => {
     return localLLM.subscribe(setLlmReport);
@@ -477,15 +485,25 @@ function Index() {
   const handleFile = async (file: File) => {
     try {
       const isBig = file.size > 5 * 1024 * 1024;
-      if (isBig) toast.loading("Chargement du fichier...", { id: "file-load" });
-      const matrix = await parseFile(file);
+      if (isBig) toast.loading("Lecture du fichier...", { id: "file-load" });
+      const parsed = await parseFileDataset(file, 50_000);
       if (isBig) toast.dismiss("file-load");
 
-      // Ne demander la confirmation d'en-tête QUE s'il y a plusieurs colonnes
-      if (matrix.length > 1 && (matrix[0]?.length ?? 0) > 1) {
-        setHeaderAsk(matrix);
+      if (parsed.isSampled) {
+        fullSourceRef.current = { file, totalLines: parsed.totalLines };
+        toast.info(
+          `Échantillon interactif de ${parsed.matrix.length.toLocaleString("fr-FR")} lignes chargé (sur ${parsed.totalLines.toLocaleString("fr-FR")} lignes au total). L'export pourra traiter l'intégralité du fichier.`,
+          { duration: 6000 },
+        );
       } else {
-        loadMatrix(matrix);
+        fullSourceRef.current = null;
+      }
+
+      // Ne demander la confirmation d'en-tête QUE s'il y a plusieurs colonnes
+      if (parsed.matrix.length > 1 && (parsed.matrix[0]?.length ?? 0) > 1) {
+        setHeaderAsk(parsed.matrix);
+      } else {
+        loadMatrix(parsed.matrix);
       }
     } catch {
       toast.dismiss("file-load");
@@ -590,7 +608,17 @@ function Index() {
 
   /** Colle un bloc Excel/TSV à partir de la cellule sélectionnée, en créant les lignes manquantes. */
   const pasteBlock = (text: string) => {
-    const matrix = parsePastedText(text);
+    const parsed = parsePastedDataset(text, 50_000);
+    if (parsed.isSampled) {
+      fullSourceRef.current = { rawText: text, totalLines: parsed.totalLines };
+      toast.info(
+        `Échantillon interactif de ${parsed.matrix.length.toLocaleString("fr-FR")} lignes chargé sur ${parsed.totalLines.toLocaleString("fr-FR")} au total.`,
+        { duration: 6000 },
+      );
+    } else if (rows.length === 0) {
+      fullSourceRef.current = null;
+    }
+    const matrix = parsed.matrix;
     if (!matrix.length) return;
     if (rows.length === 0) {
       loadMatrix(matrix);
@@ -679,11 +707,37 @@ function Index() {
     setSel(null);
   };
 
-  const doExport = (kind: "csv" | "xlsx") => {
+  const executeDirectExport = (kind: "csv" | "xlsx") => {
     const header = ["Source", ...columns.map((c) => c.name)];
     const matrix = rows.map((src, i) => [src, ...columns.map((c) => cellValue(c, i))]);
     if (kind === "csv") exportCsv(header, matrix);
     else exportXlsx(header, matrix);
+  };
+
+  const doExport = (kind: "csv" | "xlsx") => {
+    if (fullSourceRef.current && fullSourceRef.current.totalLines > rows.length) {
+      setExportFormat(kind);
+      setExportDialogOpen(true);
+      return;
+    }
+    executeDirectExport(kind);
+  };
+
+  const handleExportFull = async (onProgress: (percent: number) => void) => {
+    if (!fullSourceRef.current) return;
+    const header = ["Source", ...columns.map((c) => c.name)];
+    await exportFullDatasetStreaming({
+      file: fullSourceRef.current.file,
+      rawText: fullSourceRef.current.rawText,
+      totalLines: fullSourceRef.current.totalLines,
+      header,
+      columns: columns.map((c) => ({ name: c.name, rule: c.rule })),
+      filename: `resultats_complet_${fullSourceRef.current.totalLines}_lignes.csv`,
+      onProgress,
+    });
+    toast.success(
+      `✓ ${fullSourceRef.current.totalLines.toLocaleString("fr-FR")} lignes traitées et exportées avec succès !`,
+    );
   };
 
   const active = columns.find((c) => c.id === activeId) ?? null;
@@ -801,6 +855,7 @@ function Index() {
                   setColumns([]);
                   setActiveId(null);
                   setSel(null);
+                  fullSourceRef.current = null;
                 }}
               />
             </>
@@ -821,8 +876,22 @@ function Index() {
           </button>
 
           {rows.length > 0 && (
-            <div className="font-mono text-[11px] text-muted-foreground">
-              {rows.length} lignes · {columns.length} colonnes de sortie
+            <div className="flex items-center gap-2">
+              {fullSourceRef.current && fullSourceRef.current.totalLines > rows.length && (
+                <div
+                  className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary shadow-xs"
+                  title="Échantillon interactif de 50 000 lignes pour une fluidité maximale. L'export traitera l'intégralité du fichier."
+                >
+                  <Layers className="size-3" />
+                  <span>
+                    Échantillon : {rows.length.toLocaleString("fr-FR")} /{" "}
+                    {fullSourceRef.current.totalLines.toLocaleString("fr-FR")} lignes
+                  </span>
+                </div>
+              )}
+              <div className="font-mono text-[11px] text-muted-foreground">
+                {rows.length.toLocaleString("fr-FR")} lignes · {columns.length} colonne{columns.length > 1 ? "s" : ""}
+              </div>
             </div>
           )}
         </div>
@@ -954,6 +1023,16 @@ function Index() {
         column={active}
         rows={rows}
       />
+      <ExportOptionsDialog
+        open={exportDialogOpen}
+        onClose={() => setExportDialogOpen(false)}
+        totalLines={fullSourceRef.current?.totalLines ?? rows.length}
+        interactiveLines={rows.length}
+        columns={columns}
+        format={exportFormat}
+        onExportSample={() => executeDirectExport(exportFormat)}
+        onExportFull={handleExportFull}
+      />
 
       {headerAsk && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6">
@@ -1015,7 +1094,17 @@ function Index() {
               </button>
               <button
                 onClick={() => {
-                  loadMatrix(parsePastedText(pasteText));
+                  const parsed = parsePastedDataset(pasteText, 50_000);
+                  if (parsed.isSampled) {
+                    fullSourceRef.current = { rawText: pasteText, totalLines: parsed.totalLines };
+                    toast.info(
+                      `Échantillon interactif de ${parsed.matrix.length.toLocaleString("fr-FR")} lignes chargé sur ${parsed.totalLines.toLocaleString("fr-FR")} au total.`,
+                      { duration: 6000 },
+                    );
+                  } else {
+                    fullSourceRef.current = null;
+                  }
+                  loadMatrix(parsed.matrix);
                   setPasteOpen(false);
                   setPasteText("");
                 }}
