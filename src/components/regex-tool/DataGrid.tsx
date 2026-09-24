@@ -29,6 +29,7 @@ function measure(text: string): number {
 interface Props {
   rows: string[];
   columns: OutputColumn[];
+  displayIndices?: number[];
   activeId: string | null;
   onSelect: (id: string) => void;
   onChangeCell: (colId: string, row: number, value: string) => void;
@@ -47,6 +48,7 @@ interface Props {
 export function DataGrid({
   rows,
   columns,
+  displayIndices,
   activeId,
   onSelect,
   onChangeCell,
@@ -55,13 +57,19 @@ export function DataGrid({
   onRemoveRows,
   onFocusCell,
 
-
   onRename,
   onAddColumn,
   onRemoveColumn,
   selection,
   onSelectionChange,
 }: Props) {
+  const displayCount = displayIndices ? displayIndices.length : rows.length;
+  const getRealRow = useCallback(
+    (visualRow: number): number =>
+      displayIndices ? displayIndices[visualRow] ?? visualRow : visualRow,
+    [displayIndices],
+  );
+
   const scroller = useRef<HTMLDivElement>(null);
   const container = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -91,11 +99,12 @@ export function DataGrid({
       const next = w.slice(0, need);
       while (next.length < need) next.push(next.length === 0 ? DEFAULT_SOURCE_W : DEFAULT_OUT_W);
 
-      const sampleLimit = Math.min(rows.length, 100);
+      const sampleLimit = Math.min(displayCount, 100);
       if (!manuallyResized.current.has(SOURCE_COL)) {
         let maxSource = measure("Données source");
         for (let r = 0; r < sampleLimit; r++) {
-          const l = rows[r]?.length ?? 0;
+          const realR = getRealRow(r);
+          const l = rows[realR]?.length ?? 0;
           if (l * 8.2 + 32 > maxSource) maxSource = Math.min(800, l * 8.2 + 32);
         }
         next[0] = rows.length ? maxSource : DEFAULT_SOURCE_W;
@@ -106,7 +115,8 @@ export function DataGrid({
         if (manuallyResized.current.has(col.id)) continue;
         let required = measure(col.name) + 52;
         for (let r = 0; r < sampleLimit; r++) {
-          const v = cellValue(col, r);
+          const realR = getRealRow(r);
+          const v = cellValue(col, realR);
           if (v) required = Math.max(required, measure(v));
         }
         next[c + 1] = rows.length ? Math.min(600, required) : DEFAULT_OUT_W;
@@ -114,7 +124,7 @@ export function DataGrid({
 
       return next.some((value, index) => value !== w[index]) || w.length !== need ? next : w;
     });
-  }, [rows, columns]);
+  }, [rows, columns, displayCount, getRealRow]);
 
   useEffect(() => {
     const up = () => (dragging.current = false);
@@ -191,7 +201,7 @@ export function DataGrid({
   // Mise à l'échelle du conteneur de défilement pour les très grands volumes (1M+ lignes)
   // afin de ne pas dépasser la limite de hauteur de pixel imposée par les moteurs de rendu navigateur.
   const MAX_DOM_HEIGHT = 10_000_000;
-  const totalVirtualHeight = rows.length * ROW_H;
+  const totalVirtualHeight = displayCount * ROW_H;
   const isScaled = totalVirtualHeight > MAX_DOM_HEIGHT;
   const scrollContainerHeight = isScaled ? MAX_DOM_HEIGHT : totalVirtualHeight;
 
@@ -200,8 +210,7 @@ export function DataGrid({
     : scrollTop;
 
   const start = Math.max(0, Math.floor(virtualScrollTop / ROW_H) - 8);
-  const end = Math.min(rows.length, Math.ceil((virtualScrollTop + height) / ROW_H) + 8);
-  const visible = rows.slice(start, end);
+  const end = Math.min(displayCount, Math.ceil((virtualScrollTop + height) / ROW_H) + 8);
   const topOffset = isScaled
     ? Math.max(0, scrollTop - ((virtualScrollTop / ROW_H - start) * ROW_H))
     : start * ROW_H;
@@ -224,19 +233,19 @@ export function DataGrid({
 
   /** Met à jour la sélection ; colonne 0 = source. */
   const select = (c: number, r: number, extend: boolean) => {
-    r = Math.max(0, Math.min(rows.length - 1, r));
+    r = Math.max(0, Math.min(displayCount - 1, r));
     c = Math.max(0, Math.min(columns.length, c));
     if (!extend || !anchor.current) anchor.current = { c, r };
     const a = anchor.current;
     onSelectionChange({ ac: a.c, ar: a.r, cc: c, cr: r });
+    const realR = getRealRow(r);
     const col = c >= 1 ? columns[c - 1] : null;
     if (col) {
       onSelect(col.id);
-      onFocusCell?.(col.id, r);
+      onFocusCell?.(col.id, realR);
     } else {
-      onFocusCell?.(SOURCE_COL, r);
+      onFocusCell?.(SOURCE_COL, realR);
     }
-
   };
 
   const onCellMouseDown = (c: number, row: number, e: React.MouseEvent) => {
@@ -313,35 +322,36 @@ export function DataGrid({
     // Ctrl+« - » : supprime les lignes de la sélection (comme sous Excel)
     if ((e.ctrlKey || e.metaKey) && e.key === "-" && onRemoveRows) {
       e.preventDefault();
-      onRemoveRows(r0, r1);
+      onRemoveRows(getRealRow(r0), getRealRow(r1));
       return;
     }
     if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault();
       for (let c = c0; c <= c1; c++) {
         if (c === 0) {
-          for (let r = r0; r <= r1; r++) onChangeSource?.(r, "");
+          for (let r = r0; r <= r1; r++) onChangeSource?.(getRealRow(r), "");
           continue;
         }
         const col = columns[c - 1];
         if (!col) continue;
-        for (let r = r0; r <= r1; r++) onChangeCell(col.id, r, "");
+        for (let r = r0; r <= r1; r++) onChangeCell(col.id, getRealRow(r), "");
       }
       return;
     }
     // saisie directe : remplace le contenu de la cellule active puis passe en édition
-    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && a.r < rows.length) {
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && a.r < displayCount) {
+      const realR = getRealRow(a.r);
       if (a.c === 0) {
         if (!onChangeSource) return;
         e.preventDefault();
-        onChangeSource(a.r, e.key);
+        onChangeSource(realR, e.key);
         focusInput(0, a.r);
         return;
       }
       const col = columns[a.c - 1];
       if (col) {
         e.preventDefault();
-        onChangeCell(col.id, a.r, e.key);
+        onChangeCell(col.id, realR, e.key);
         focusInput(a.c, a.r);
       }
     }
@@ -437,24 +447,29 @@ export function DataGrid({
       </div>
         <div style={{ height: scrollContainerHeight, position: "relative" }}>
           <div style={{ position: "absolute", top: topOffset, left: 0, right: 0 }}>
-            {visible.map((source, k) => {
-              const i = start + k;
+            {Array.from({ length: Math.max(0, end - start) }, (_, k) => {
+              const visualRow = start + k;
+              const realRow = getRealRow(visualRow);
+              const source = rows[realRow] ?? "";
               return (
                 <div
-                  key={i}
+                  key={realRow}
                   className="grid hover:bg-surface/60"
                   style={{ gridTemplateColumns: template, height: ROW_H }}
                 >
                   <div className="group/row grid-cell sticky left-0 z-10 relative flex items-center justify-center bg-background">
-                    <span className="font-mono text-[11px] text-muted-foreground group-hover/row:opacity-0">
-                      {i + 1}
+                    <span
+                      className="font-mono text-[11px] text-muted-foreground group-hover/row:opacity-0"
+                      title={`Ligne ${realRow + 1} du fichier source`}
+                    >
+                      {realRow + 1}
                     </span>
                     {onRemoveRows && (
                       <button
                         onMouseDown={(e) => e.stopPropagation()}
                         onClick={(e) => {
                           e.stopPropagation();
-                          onRemoveRows(i, i);
+                          onRemoveRows(realRow, realRow);
                         }}
                         title="Supprimer cette ligne"
                         aria-label="Supprimer cette ligne"
@@ -465,19 +480,19 @@ export function DataGrid({
                     )}
                   </div>
                   <div
-                    onMouseDown={(e) => onCellMouseDown(0, i, e)}
-                    onMouseEnter={() => onCellMouseEnter(0, i)}
+                    onMouseDown={(e) => onCellMouseDown(0, visualRow, e)}
+                    onMouseEnter={() => onCellMouseEnter(0, visualRow)}
                     className={cn(
                       "grid-cell flex cursor-cell items-center",
-                      inSel(0, i) && "bg-primary/10",
+                      inSel(0, visualRow) && "bg-primary/10",
                     )}
                     title={source}
                   >
                     <input
-                      data-cell={`0:${i}`}
+                      data-cell={`0:${visualRow}`}
                       value={source}
-                      onFocus={() => onFocusCell?.(SOURCE_COL, i)}
-                      onChange={(e) => onChangeSource?.(i, e.target.value)}
+                      onFocus={() => onFocusCell?.(SOURCE_COL, realRow)}
+                      onChange={(e) => onChangeSource?.(realRow, e.target.value)}
                       readOnly={!onChangeSource}
                       placeholder="donnée source…"
                       className="h-full w-full bg-transparent px-3 font-mono text-[13px] text-foreground outline-none placeholder:text-muted-foreground/50 focus:bg-primary/15"
@@ -486,28 +501,28 @@ export function DataGrid({
 
                   {columns.map((col) => {
                     const cIdx = columns.indexOf(col) + 1;
-                    const isUser = col.user[i] != null && col.user[i] !== "";
-                    const failed = !isUser && col.rule != null && col.derived[i] == null && source !== "";
+                    const isUser = col.user[realRow] != null && col.user[realRow] !== "";
+                    const failed = !isUser && col.rule != null && col.derived[realRow] == null && source !== "";
                     return (
                       <div
                         key={col.id}
-                        onMouseDown={(e) => onCellMouseDown(cIdx, i, e)}
-                        onMouseEnter={() => onCellMouseEnter(cIdx, i)}
+                        onMouseDown={(e) => onCellMouseDown(cIdx, visualRow, e)}
+                        onMouseEnter={() => onCellMouseEnter(cIdx, visualRow)}
                         className={cn(
                           "grid-cell relative flex items-center",
-                          activeId === col.id && !inSel(cIdx, i) && "bg-primary/[0.04]",
-                          inSel(cIdx, i) && "bg-primary/10",
+                          activeId === col.id && !inSel(cIdx, visualRow) && "bg-primary/[0.04]",
+                          inSel(cIdx, visualRow) && "bg-primary/10",
                           failed && "bg-destructive/10",
                         )}
                       >
                         <input
-                          data-cell={`${cIdx}:${i}`}
-                          value={cellValue(col, i)}
+                          data-cell={`${cIdx}:${visualRow}`}
+                          value={cellValue(col, realRow)}
                           onFocus={() => {
                             onSelect(col.id);
-                            onFocusCell?.(col.id, i);
+                            onFocusCell?.(col.id, realRow);
                           }}
-                          onChange={(e) => onChangeCell(col.id, i, e.target.value)}
+                          onChange={(e) => onChangeCell(col.id, realRow, e.target.value)}
                           placeholder={col.rule ? "" : "résultat attendu…"}
                           className={cn(
                             "h-full w-full bg-transparent px-2.5 font-mono text-[13px] outline-none placeholder:text-muted-foreground/50 focus:bg-primary/15",
@@ -526,14 +541,14 @@ export function DataGrid({
             })}
           </div>
           {/* cadre de sélection */}
-          {sb && sb.r0 < rows.length && (
+          {sb && sb.r0 < displayCount && (
             <div
               className="pointer-events-none absolute z-20 ring-2 ring-inset ring-primary/80"
               style={{
                 left: colLeft(sb.c0),
                 top: sb.r0 * ROW_H,
                 width: colLeft(sb.c1 + 1) - colLeft(sb.c0),
-                height: (Math.min(sb.r1, rows.length - 1) - sb.r0 + 1) * ROW_H,
+                height: (Math.min(sb.r1, displayCount - 1) - sb.r0 + 1) * ROW_H,
               }}
             />
           )}

@@ -13,6 +13,7 @@ import {
   ShieldAlert,
   Cpu,
   RefreshCw,
+  Bot,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,7 @@ import { DIALECTS } from "@/lib/regex-synth/dialects";
 import { describeTransform } from "@/lib/regex-synth/engine";
 import type { OutputColumn } from "./types";
 import { LLMControlDialog } from "./LLMControlDialog";
+import { ExternalPromptDialog } from "./ExternalPromptDialog";
 import type { ModelProgressReport } from "@/lib/llm/types";
 
 const TOK_COLOR: Record<string, string> = {
@@ -56,6 +58,7 @@ export function PatternPanel({
   const [copied, setCopied] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [llmDialogOpen, setLlmDialogOpen] = useState(false);
+  const [externalPromptOpen, setExternalPromptOpen] = useState(false);
 
   const dialect = DIALECTS.find((d) => d.id === dialectId)!;
   const segments = useMemo(() => (column?.rule ? explain(column.rule.source) : []), [column?.rule]);
@@ -216,6 +219,31 @@ export function PatternPanel({
                     Synthétiser avec le LLM local (privé)
                   </button>
                 )}
+              </div>
+            )}
+
+            {/* Fallback ultime : Prompt pour votre propre IA (ChatGPT, Claude, Gemini) */}
+            {examples > 0 && (
+              <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-purple-400">
+                    <Bot className="size-4" />
+                    <span>Prompt pour votre propre IA</span>
+                  </div>
+                  <span className="text-[10px] text-purple-300/80 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
+                    Claude · GPT · Gemini
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Quand rien ne marche ou pour les cas complexes : générez en 1 clic un prompt ultra-optimisé avec tous vos exemples complétés, prêt à coller dans votre IA.
+                </p>
+                <button
+                  onClick={() => setExternalPromptOpen(true)}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 px-3 py-2 text-xs font-semibold transition cursor-pointer shadow-sm"
+                >
+                  <Bot className="size-3.5" />
+                  Générer le prompt pour votre propre IA
+                </button>
               </div>
             )}
           </div>
@@ -440,6 +468,28 @@ export function PatternPanel({
               </div>
             )}
 
+            {column.failures.length > 0 && (
+              <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-400">
+                    <Bot className="size-3.5" />
+                    <span>Besoin d'aide externe ?</span>
+                  </div>
+                  <span className="text-[10px] text-purple-300/80">Claude / ChatGPT / Gemini</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Générez un prompt complet incluant vos exemples et les lignes en échec pour votre IA.
+                </p>
+                <button
+                  onClick={() => setExternalPromptOpen(true)}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 px-2.5 py-1.5 text-xs font-medium transition cursor-pointer"
+                >
+                  <Bot className="size-3.5" />
+                  Prompt pour votre propre IA
+                </button>
+              </div>
+            )}
+
             <div>
               <div className="mb-1.5 text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
                 Lecture du motif
@@ -492,25 +542,38 @@ export function PatternPanel({
               </div>
               {dialect.note && <p className="mt-2 text-xs text-muted-foreground">{dialect.note}</p>}
 
-              {!isLLMRule && onTriggerLLM && column.failures.length === 0 && (
-                <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
-                  <span className="text-[11px] text-muted-foreground">Besoin d'une alternative ?</span>
+              <div className="mt-4 pt-3 border-t border-border flex items-center justify-between gap-2">
+                <button
+                  onClick={() => setExternalPromptOpen(true)}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-purple-400 hover:text-purple-300 transition cursor-pointer"
+                  title="Générer un prompt complet avec vos exemples pour ChatGPT, Claude ou Gemini"
+                >
+                  <Bot className="size-3.5" />
+                  <span>Prompt pour votre propre IA</span>
+                </button>
+                {!isLLMRule && onTriggerLLM && column.failures.length === 0 && (
                   <button
                     onClick={onTriggerLLM}
                     disabled={isLLMRunning}
-                    className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-400 hover:text-amber-300 transition"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-400 hover:text-amber-300 transition cursor-pointer"
                   >
                     <Sparkles className="size-3.5" />
-                    <span>Synthétiser avec l'IA locale</span>
+                    <span>IA locale</span>
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         )}
       </aside>
 
       <LLMControlDialog open={llmDialogOpen} onClose={() => setLlmDialogOpen(false)} />
+      <ExternalPromptDialog
+        open={externalPromptOpen}
+        onClose={() => setExternalPromptOpen(false)}
+        column={column}
+        rows={rows}
+      />
     </>
   );
 }

@@ -11,13 +11,16 @@ import {
   Sparkles,
   Plus,
   ArrowUpToLine,
+  Bot,
 } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { DataGrid, type GridSel } from "@/components/regex-tool/DataGrid";
 import { PatternPanel } from "@/components/regex-tool/PatternPanel";
 import { WelcomeHero } from "@/components/regex-tool/WelcomeHero";
 import { LLMControlDialog } from "@/components/regex-tool/LLMControlDialog";
+import { ExternalPromptDialog } from "@/components/regex-tool/ExternalPromptDialog";
 import { localLLM } from "@/lib/llm/webllm-service";
 import { runSynthesisPipeline } from "@/lib/llm/pipeline";
 import type { ModelProgressReport } from "@/lib/llm/types";
@@ -64,6 +67,8 @@ AC | Achats | AC0203 | 20250220 | 607000 | Achats marchandises | F0002 | IMPORT 
 BQ | Banque | BQ0311 | 20250331 | 627000 | Services bancaires |  |  | AGIOS-03 | 20250331 | Agios trimestre 1 | 8,90 | 0,00 |  |  | 20250331 |  | EUR
 VE | Ventes | VT0115 | 20250402 | 707000 | Ventes de marchandises | C0012 | SARL DUPONT & FILS | FA-2025-0115 | 20250402 | Facture - remise 10 % | 2 300,00 | 0,00 | CC | 20250430 | 20250402 |  | EUR`;
 
+export type DisplayMode = "sample_100_1000" | "first_1000" | "all";
+
 function Index() {
   const [rows, setRows] = useState<string[]>([]);
   const [columns, setColumns] = useState<OutputColumn[]>([]);
@@ -73,6 +78,10 @@ function Index() {
   const [pasteText, setPasteText] = useState("");
   const [headerAsk, setHeaderAsk] = useState<Matrix | null>(null);
 
+  // --- Modes d'échantillonnage de l'affichage
+  const [displayMode, setDisplayMode] = useState<DisplayMode>("sample_100_1000");
+  const [extraCount, setExtraCount] = useState(0);
+
   // --- IA Locale (Fallback WebLLM / WebGPU)
   const [llmReport, setLlmReport] = useState<ModelProgressReport>({
     status: "idle",
@@ -81,6 +90,7 @@ function Index() {
   });
   const [isLLMRunning, setIsLLMRunning] = useState(false);
   const [llmControlOpen, setLlmControlOpen] = useState(false);
+  const [externalPromptOpen, setExternalPromptOpen] = useState(false);
 
   useEffect(() => {
     return localLLM.subscribe(setLlmReport);
@@ -88,9 +98,49 @@ function Index() {
 
   const workerRef = useRef<Worker | null>(null);
   const pending = useRef(new Map<number, string>());
+  const latestReqForCol = useRef(new Map<string, number>());
+  const lastInputsSent = useRef<string[] | null>(null);
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const reqId = useRef(0);
   const focus = useRef<{ colId: string; row: number } | null>(null);
+
+  // Calcul mémoïsé des index de lignes à afficher (garantit la réactivité et inclut toujours les exemples saisis)
+  const displayedIndices = useMemo(() => {
+    if (rows.length === 0) return [];
+    if (displayMode === "all" || rows.length <= 1100) {
+      return rows.map((_, i) => i);
+    }
+    const set = new Set<number>();
+    // Toujours inclure impérativement les lignes contenant des exemples saisis par l'utilisateur
+    columns.forEach((c) => {
+      for (let r = 0; r < c.user.length; r++) {
+        if (c.user[r] != null && c.user[r] !== "") set.add(r);
+      }
+    });
+
+    if (displayMode === "first_1000") {
+      const limit = Math.min(rows.length, 1000 + extraCount);
+      for (let i = 0; i < limit; i++) set.add(i);
+    } else {
+      // mode "sample_100_1000" :
+      // 100 premières lignes
+      const headLimit = Math.min(rows.length, 100);
+      for (let i = 0; i < headLimit; i++) set.add(i);
+
+      // puis 1000 lignes aléatoires parmi le reste
+      const remaining = rows.length - headLimit;
+      if (remaining > 0) {
+        const targetSample = Math.min(remaining, 1000 + extraCount);
+        // Répartition déterministe avec pas et offset pour stabilité visuelle sans saut
+        const step = remaining / targetSample;
+        for (let s = 0; s < targetSample; s++) {
+          const idx = headLimit + Math.min(remaining - 1, Math.floor(s * step + ((s * 37) % step)));
+          set.add(idx);
+        }
+      }
+    }
+    return Array.from(set).sort((a, b) => a - b);
+  }, [rows.length, displayMode, extraCount, columns]);
 
   // --- historique (Ctrl+Z / Ctrl+Y) : on ne retient que les saisies, pas les déductions
   type Snap = { rows: string[]; columns: OutputColumn[]; key: string };
@@ -98,7 +148,6 @@ function Index() {
   const futureSnaps = useRef<Snap[]>([]);
   const lastSnap = useRef<Snap | null>(null);
   const restoring = useRef(false);
-
 
   const colsRef = useRef(columns);
   colsRef.current = columns;
@@ -115,6 +164,8 @@ function Index() {
       const colId = pending.current.get(id);
       pending.current.delete(id);
       if (!colId) return;
+      // Ignore les réponses obsolètes si une requête plus récente a été lancée
+      if (latestReqForCol.current.get(colId) !== id) return;
 
       if (result.rule) {
         setColumns((cols) =>
@@ -164,7 +215,10 @@ function Index() {
     if (!w) return;
     const id = ++reqId.current;
     pending.current.set(id, colId);
-    w.postMessage({ id, inputs, expected });
+    latestReqForCol.current.set(colId, id);
+    const needInputs = lastInputsSent.current !== inputs;
+    if (needInputs) lastInputsSent.current = inputs;
+    w.postMessage({ id, inputs: needInputs ? inputs : undefined, expected });
   }, []);
 
   const scheduleSynth = useCallback(
@@ -282,7 +336,7 @@ function Index() {
         columns: cols.map((c) => ({
           ...c,
           user: c.user.slice(),
-          derived: c.derived.slice(),
+          derived: c.derived,
         })),
         key: `${rsKey}||${colsKey}`,
       };
@@ -396,6 +450,8 @@ function Index() {
     setColumns(cols);
     setActiveId(cols[0]?.id ?? null);
     setSel(null);
+    setDisplayMode(source.length > 1100 ? "sample_100_1000" : "all");
+    setExtraCount(0);
     cols.forEach((c) => {
       if (c.user.some((v) => v != null)) runSynth(c.id, source, c.user);
     });
@@ -445,6 +501,8 @@ function Index() {
     setColumns([debit, piece]);
     setActiveId(debit.id);
     setSel(null);
+    setDisplayMode("all");
+    setExtraCount(0);
     runSynth(debit.id, source, debit.user);
     runSynth(piece.id, source, piece.user);
   };
@@ -501,6 +559,8 @@ function Index() {
     setColumns([col]);
     setActiveId(col.id);
     setSel(null);
+    setDisplayMode("all");
+    setExtraCount(0);
   };
 
   /** Colle un bloc Excel/TSV à partir de la cellule sélectionnée, en créant les lignes manquantes. */
@@ -515,7 +575,8 @@ function Index() {
     let startRow = 0;
     if (sel) {
       startCol = Math.min(sel.ac, sel.cc);
-      startRow = Math.min(sel.ar, sel.cr);
+      const visualRow = Math.min(sel.ar, sel.cr);
+      startRow = displayedIndices[visualRow] ?? visualRow;
     } else if (focus.current) {
       const idx = columns.findIndex((c) => c.id === focus.current!.colId);
       startCol = idx < 0 ? 0 : idx + 1;
@@ -632,10 +693,11 @@ function Index() {
       const r0 = Math.min(sel.ar, sel.cr);
       const r1 = Math.max(sel.ar, sel.cr);
       const matrix: string[][] = [];
-      for (let r = r0; r <= r1 && r < rows.length; r++) {
+      for (let r = r0; r <= r1 && r < displayedIndices.length; r++) {
+        const realR = displayedIndices[r] ?? r;
         const row: string[] = [];
         for (let c = c0; c <= c1; c++)
-          row.push(c === 0 ? (rows[r] ?? "") : cellValue(columns[c - 1]!, r));
+          row.push(c === 0 ? (rows[realR] ?? "") : cellValue(columns[c - 1]!, realR));
         matrix.push(row);
       }
       e.preventDefault();
@@ -700,6 +762,11 @@ function Index() {
                 label="Excel"
                 onClick={() => doExport("xlsx")}
               />
+              <ToolbarButton
+                icon={Bot}
+                label="Prompt pour votre IA"
+                onClick={() => setExternalPromptOpen(true)}
+              />
 
               <ToolbarButton
                 icon={Trash2}
@@ -745,47 +812,123 @@ function Index() {
             onStartBlank={startBlank}
           />
         ) : (
-          <>
-            <DataGrid
-              rows={rows}
-              columns={columns}
-              activeId={activeId}
-              selection={sel}
-              onSelectionChange={setSel}
-              onSelect={setActiveId}
-              onChangeCell={handleChangeCell}
-              onChangeSource={handleChangeSource}
-              onAddRow={addRow}
-              onRemoveRows={removeRows}
-              onFocusCell={(colId, row) => {
-                focus.current = { colId, row };
-              }}
-              onRename={(id, name) =>
-                setColumns((cols) => cols.map((c) => (c.id === id ? { ...c, name } : c)))
-              }
-              onAddColumn={addColumn}
-              onRemoveColumn={removeColumn}
-            />
-            <PatternPanel
-              combined={combined}
-              hasMultipleRules={columns.filter((c) => c.rule).length >= 2}
-              column={active}
-              rowCount={rows.length}
-              rows={rows}
-              onGoToRow={(row) => {
-                const idx = columns.findIndex((c) => c.id === activeId);
-                if (idx < 0) return;
-                setSel({ ac: idx + 1, ar: row, cc: idx + 1, cr: row });
-              }}
-              onTriggerLLM={() => activeId && triggerLLMFallback(activeId)}
-              isLLMRunning={isLLMRunning}
-              llmReport={llmReport}
-            />
-          </>
+          <div className="flex flex-1 flex-col min-w-0">
+            {rows.length > 100 && (
+              <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-grid-line bg-surface/70 px-4 py-1.5 text-xs backdrop-blur-xs">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-foreground">Affichage :</span>
+                  <span className="rounded bg-primary/15 px-2 py-0.5 font-mono text-[11px] font-semibold text-primary">
+                    {displayedIndices.length.toLocaleString("fr-FR")} / {rows.length.toLocaleString("fr-FR")} lignes
+                  </span>
+                  {rows.length > displayedIndices.length && (
+                    <span className="hidden md:inline text-[11px] text-muted-foreground">
+                      (Calcul automatique appliqué sur la totalité des {rows.length.toLocaleString("fr-FR")} lignes)
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setDisplayMode("sample_100_1000")}
+                    className={cn(
+                      "rounded px-2.5 py-1 text-[11px] font-medium transition cursor-pointer",
+                      displayMode === "sample_100_1000"
+                        ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                        : "border border-border bg-background hover:bg-surface-2 text-muted-foreground hover:text-foreground",
+                    )}
+                    title="Afficher les 100 premières lignes et 1 000 lignes aléatoires représentatives"
+                  >
+                    100 + 1 000 aléatoires
+                  </button>
+                  <button
+                    onClick={() => setDisplayMode("first_1000")}
+                    className={cn(
+                      "rounded px-2.5 py-1 text-[11px] font-medium transition cursor-pointer",
+                      displayMode === "first_1000"
+                        ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                        : "border border-border bg-background hover:bg-surface-2 text-muted-foreground hover:text-foreground",
+                    )}
+                    title="Afficher les 1 000 premières lignes du fichier"
+                  >
+                    1 000 premières
+                  </button>
+                  {rows.length > displayedIndices.length && (
+                    <button
+                      onClick={() => setExtraCount((c) => c + 1000)}
+                      className="rounded border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:border-primary hover:text-primary hover:bg-primary/5 transition cursor-pointer"
+                      title="Charger 1 000 lignes supplémentaires dans l'affichage"
+                    >
+                      + 1 000 lignes
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setDisplayMode("all")}
+                    className={cn(
+                      "rounded px-2.5 py-1 text-[11px] font-medium transition cursor-pointer",
+                      displayMode === "all"
+                        ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                        : "border border-border bg-background hover:bg-surface-2 text-muted-foreground hover:text-foreground",
+                    )}
+                    title="Afficher l'intégralité du jeu de données"
+                  >
+                    Tout afficher ({rows.length.toLocaleString("fr-FR")})
+                  </button>
+                </div>
+              </div>
+            )}
+            <div className="relative flex min-h-0 flex-1">
+              <DataGrid
+                rows={rows}
+                columns={columns}
+                displayIndices={displayedIndices}
+                activeId={activeId}
+                selection={sel}
+                onSelectionChange={setSel}
+                onSelect={setActiveId}
+                onChangeCell={handleChangeCell}
+                onChangeSource={handleChangeSource}
+                onAddRow={addRow}
+                onRemoveRows={removeRows}
+                onFocusCell={(colId, row) => {
+                  focus.current = { colId, row };
+                }}
+                onRename={(id, name) =>
+                  setColumns((cols) => cols.map((c) => (c.id === id ? { ...c, name } : c)))
+                }
+                onAddColumn={addColumn}
+                onRemoveColumn={removeColumn}
+              />
+              <PatternPanel
+                combined={combined}
+                hasMultipleRules={columns.filter((c) => c.rule).length >= 2}
+                column={active}
+                rowCount={rows.length}
+                rows={rows}
+                onGoToRow={(row) => {
+                  const idx = columns.findIndex((c) => c.id === activeId);
+                  if (idx < 0) return;
+                  if (!displayedIndices.includes(row)) {
+                    setDisplayMode("all");
+                  }
+                  const visualIndex = displayedIndices.indexOf(row);
+                  const targetRow = visualIndex >= 0 ? visualIndex : row;
+                  setSel({ ac: idx + 1, ar: targetRow, cc: idx + 1, cr: targetRow });
+                }}
+                onTriggerLLM={() => activeId && triggerLLMFallback(activeId)}
+                isLLMRunning={isLLMRunning}
+                llmReport={llmReport}
+              />
+            </div>
+          </div>
         )}
       </div>
 
       <LLMControlDialog open={llmControlOpen} onClose={() => setLlmControlOpen(false)} />
+      <ExternalPromptDialog
+        open={externalPromptOpen}
+        onClose={() => setExternalPromptOpen(false)}
+        column={active}
+        rows={rows}
+      />
 
       {headerAsk && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6">

@@ -276,6 +276,9 @@ function capturePatterns(raw: string, rightChar: string | null): string[] {
   if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(raw)) set.add("\\d{1,2}:\\d{2}(?::\\d{2})?");
   if (/^[A-Za-z0-9][A-Za-z0-9_./-]*$/.test(raw)) set.add("[A-Za-z0-9][A-Za-z0-9_./-]*");
   if (!/[\s|;,]/.test(raw)) set.add("[^\\s|;,]+");
+  if (rightChar && !raw.includes(rightChar) && !/[\s\w]/.test(rightChar)) {
+    set.add(`[^${escapeRegex(rightChar)}]+`);
+  }
   // nombres formatés, éventuellement signés : "1 250,00", "-45,90", "3 410.90", "12 000"
   const trimmed = raw.trim();
   const isNumber =
@@ -658,6 +661,37 @@ export function synthesizeStructuredAnchorRule(
   const valid = examples.filter((e) => e.input && e.output);
   if (valid.length === 0) return null;
 
+  // 0. Détection des paires encadrantes invariantes (ex: <email>, [code], "texte", (valeur))
+  const ENCLOSING_PAIRS: [string, string][] = [
+    ["<", ">"],
+    ["[", "]"],
+    ["(", ")"],
+    ['"', '"'],
+    ["'", "'"],
+    ["{", "}"],
+  ];
+
+  for (const [open, close] of ENCLOSING_PAIRS) {
+    const isEnclosed = valid.every((ex) => {
+      const openIdx = ex.input.lastIndexOf(open, ex.input.indexOf(ex.output));
+      if (openIdx < 0) return false;
+      const afterTarget = openIdx + open.length + ex.output.length;
+      return (
+        ex.input.slice(openIdx + open.length, afterTarget) === ex.output &&
+        ex.input.startsWith(close, afterTarget)
+      );
+    });
+
+    if (isEnclosed) {
+      const escOpen = escapeRegex(open);
+      const escClose = escapeRegex(close);
+      const pattern = `${escOpen}([^${escClose}]+)${escClose}`;
+      if (validate(pattern, NO_TRANSFORM, valid)) {
+        return { source: pattern, flags: "", transform: NO_TRANSFORM };
+      }
+    }
+  }
+
   const CANDIDATE_DELIMITERS = ["|", ";", "\t", ",", "/", "-", ":"];
   let bestRule: Rule | null = null;
   let bestScore = -Infinity;
@@ -1018,7 +1052,7 @@ function explains(rule: Rule, examples: Example[]): number {
   let n = 0;
   for (const ex of examples) {
     for (const { re, transform } of chain) {
-      const g = re.exec(ex.input)?.[1];
+      const g = firstGroup(re.exec(ex.input));
       if (g !== undefined) {
         if (applyTransform(g, transform) === ex.output) n++;
         break;
@@ -1359,13 +1393,13 @@ function minimalRight(
  */
 function alternationRule(
   inputs: string[],
-  known: { index: number; value: string }[],
+  known: { index: number; value: string; input?: string }[],
   transform: Transform,
   rate?: (index: number, value: string | null) => number,
 ): Rule | null {
   const hits: { i: number; raw: string; pos: number }[] = [];
   for (const k of known) {
-    const input = inputs[k.index] ?? "";
+    const input = k.input ?? inputs[k.index] ?? "";
     const o = occurrences(input, k.value, transform)[0];
     if (!o) continue;
     hits.push({ i: k.index, raw: input.slice(o.pos, o.pos + o.len), pos: o.pos });
@@ -1470,16 +1504,17 @@ function preferAlternation(res: SynthResult, inputs: string[], examples: Example
   }
   const shapes = new Set(examples.map((e) => shapeOf(e.output)));
   const given = new Map(examples.map((e) => [e.index, e.output] as const));
-  const known: { index: number; value: string }[] = examples.map((e) => ({
+  const known: { index: number; value: string; input?: string }[] = examples.map((e) => ({
     index: e.index,
     value: e.output,
+    input: e.input,
   }));
   const unknown: number[] = [];
   for (let i = 0; i < inputs.length; i++) {
     if (given.has(i) || !inputs[i]) continue;
     unknown.push(i);
     const v = res.values[i];
-    if (v != null && shapes.has(shapeOf(v))) known.push({ index: i, value: v });
+    if (v != null && shapes.has(shapeOf(v))) known.push({ index: i, value: v, input: inputs[i] ?? "" });
   }
 
   // les hypothèses servent d'arbitre : une valeur devinée en tête de liste
@@ -1501,14 +1536,15 @@ function preferAlternation(res: SynthResult, inputs: string[], examples: Example
     values.reduce<number>((n, v, i) => n + (inputs[i] ? rate(i, v) : 0), 0);
 
   // deuxième jeu de valeurs de départ : les hypothèses les mieux classées
-  const guessed: { index: number; value: string }[] = examples.map((e) => ({
+  const guessed: { index: number; value: string; input?: string }[] = examples.map((e) => ({
     index: e.index,
     value: e.output,
+    input: e.input,
   }));
   const guessed2 = [...guessed];
   for (const [i, opts] of ranked) {
-    if (opts[0]) guessed.push({ index: i, value: opts[0] });
-    if (opts[1] ?? opts[0]) guessed2.push({ index: i, value: (opts[1] ?? opts[0])! });
+    if (opts[0]) guessed.push({ index: i, value: opts[0], input: inputs[i] ?? "" });
+    if (opts[1] ?? opts[0]) guessed2.push({ index: i, value: (opts[1] ?? opts[0])!, input: inputs[i] ?? "" });
   }
 
   let out = res;
@@ -1561,36 +1597,55 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
 
   const finalize = (res: SynthResult): SynthResult => {
     if (res.rule) {
-      res.rule.origin = "algorithmic";
+      res.rule.origin = res.rule.origin ?? "algorithmic";
+      // Garantit que le résultat contient toujours TOUTES les valeurs complétées pour 100% des lignes réelles
+      if (res.values.length !== inputs.length) {
+        return applyRule(res.rule, inputs);
+      }
     }
     return res;
   };
 
   // 1. Étape d'alignement structurel & DSL d'ancrage VSA (LCS / Needleman-Wunsch / FlashFill)
-  // Détecte instantanément les motifs délimités (ex: | dans FEC, CSV, séparateurs invariants)
+  // Détecte instantanément les motifs délimités (ex: | dans FEC, CSV, séparateurs invariants, balises <...>)
   const structural = synthesizeStructuredAnchorRule(examples, synthInputs);
   if (structural) {
-    const structRes = applyRule(structural, inputs);
-    if (explains(structural, examples) >= examples.length && structRes.matched >= inputs.filter(Boolean).length * 0.8) {
-      return finalize(structRes);
+    const structRes = applyRule(structural, synthInputs);
+    const structOk = explains(structural, examples);
+    if (structOk >= examples.length) {
+      // Si la règle structurelle explique 100% des exemples, vérifier si synthesizeRule fait mieux
+      const single = synthesizeRule(examples, synthInputs);
+      if (!single || explains(single, examples) < examples.length) {
+        return finalize(structRes);
+      }
+      const singleRes = applyRule(single, synthInputs);
+      if (structRes.matched >= singleRes.matched || structural.source.startsWith("^")) {
+        return finalize(structRes);
+      }
     }
   }
 
   const single = synthesizeRule(examples, synthInputs);
-  const singleRes = single ? applyRule(single, inputs) : null;
+  const singleRes = single ? applyRule(single, synthInputs) : null;
   const singleOk = single ? explains(single, examples) : 0;
 
   if (single && singleRes && singleOk >= examples.length) {
-    const totalLines = inputs.filter(Boolean).length;
-    if (singleRes.matched >= totalLines || single.source.startsWith("^")) {
+    const totalLines = synthInputs.filter(Boolean).length;
+    // Si la règle couvre une forte proportion des lignes, est ancrée, ou que 2+ exemples sont déjà fournis
+    if (
+      singleRes.matched >= totalLines * 0.9 ||
+      single.source.startsWith("^") ||
+      examples.length >= 2
+    ) {
       return finalize(singleRes);
     }
     const trained = selfTrain(singleRes, synthInputs, examples);
-    const fullTrained = trained.rule ? applyRule(trained.rule, inputs) : trained;
+    const fullTrained = trained.rule ? applyRule(trained.rule, synthInputs) : trained;
     if (fullTrained.matched >= totalLines || fullTrained.rule?.source.startsWith("^")) {
       return finalize(fullTrained);
     }
-    return finalize(preferAlternation(fullTrained, synthInputs, examples));
+    const altRes = preferAlternation(fullTrained, synthInputs, examples);
+    return finalize(altRes);
   }
 
   // sinon seulement : plusieurs motifs, ou une exception
@@ -1600,12 +1655,12 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
     const res = applyRule(combined, inputs);
     const comboOk = explains(combined, examples);
     // on ne complique la règle que si elle explique réellement plus d'exemples
-    if (comboOk > singleOk || (comboOk === singleOk && res.matched > (singleRes?.matched ?? -1)))
-      return finalize(preferAlternation(selfTrain(res, synthInputs, examples), synthInputs, examples));
+    if (comboOk > singleOk || (comboOk === singleOk && res.matched > (singleRes?.matched ?? -1))) {
+      return finalize(res);
+    }
   }
-  if (singleRes) return finalize(preferAlternation(selfTrain(singleRes, synthInputs, examples), synthInputs, examples));
-  if (parts[0])
-    return finalize(preferAlternation(selfTrain(applyRule(parts[0].rule, inputs), synthInputs, examples), synthInputs, examples));
+  if (singleRes) return finalize(singleRes);
+  if (parts[0]) return finalize(applyRule(parts[0].rule, inputs));
   return empty;
 }
 
