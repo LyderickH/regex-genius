@@ -12,12 +12,14 @@ import {
   ShieldCheck,
   ShieldAlert,
   Cpu,
-  RefreshCw,
   Bot,
+  Lightbulb,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { explain } from "@/lib/regex-synth/explain";
+import { explainRegexHuman } from "@/lib/regex-synth/human-explain";
 import { DIALECTS, type CodeLocale } from "@/lib/regex-synth/dialects";
 import { describeTransform } from "@/lib/regex-synth/engine";
 import type { OutputColumn } from "./types";
@@ -58,11 +60,14 @@ export function PatternPanel({
   const [codeLocale, setCodeLocale] = useState<CodeLocale>("fr");
   const [copied, setCopied] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [showCombined, setShowCombined] = useState(false);
   const [llmDialogOpen, setLlmDialogOpen] = useState(false);
   const [externalPromptOpen, setExternalPromptOpen] = useState(false);
 
   const dialect = DIALECTS.find((d) => d.id === dialectId) ?? DIALECTS[0]!;
   const segments = useMemo(() => (column?.rule ? explain(column.rule.source) : []), [column?.rule]);
+  const rule = column?.rule;
+  const humanExplanation = useMemo(() => explainRegexHuman(rule ?? null, column?.name), [rule, column?.name]);
 
   const copy = async (text: string, what: string) => {
     await navigator.clipboard.writeText(text);
@@ -98,7 +103,6 @@ export function PatternPanel({
     );
   }
 
-  const rule = column.rule;
   const examples = column.user.filter((v) => v != null && v !== "").length;
   const isLLMRule = rule?.origin === "llm";
 
@@ -131,36 +135,45 @@ export function PatternPanel({
         </div>
 
         {combined ? (
-          <div className="border-b border-grid-line bg-surface-2/40 p-4">
-            <div className="mb-1.5 flex items-center justify-between">
-              <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
-                Regex combinée — {combined.names.length > 2 ? `${combined.names.length} colonnes` : "toutes les colonnes"}
-              </span>
-              <button
-                onClick={() => copy(combined.source, "combined")}
-                className="flex items-center gap-1 text-xs text-muted-foreground transition hover:text-primary"
-              >
-                {copied === "combined" ? <Check className="size-3" /> : <Copy className="size-3" />}{" "}
-                copier
-              </button>
-            </div>
-            <div className="break-all rounded-md border border-border bg-background p-3 font-mono text-[12px] leading-relaxed text-derived">
-              {combined.source}
-            </div>
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              Un seul passage extrait {combined.names.length} valeurs : groupe 1 ={" "}
-              {combined.names.join(", groupe suivant = ")}. Couvre {combined.covered}/{combined.total}{" "}
-              lignes.
-            </p>
+          <div className="border-b border-grid-line p-3 bg-surface-2/30">
+            <button
+              onClick={() => setShowCombined((prev) => !prev)}
+              className="flex w-full items-center justify-between rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/20 transition cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <Sparkles className="size-3.5 text-primary" />
+                <span>Obtenir la regex pour toutes les colonnes ({combined.names.length})</span>
+              </div>
+              <ChevronDown className={cn("size-3.5 transition-transform", showCombined && "rotate-180")} />
+            </button>
+            {showCombined && (
+              <div className="mt-2.5 rounded-lg border border-border bg-background p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                    1 seul passage extrait {combined.names.length} colonnes
+                  </span>
+                  <button
+                    onClick={() => copy(combined.source, "combined")}
+                    className="flex items-center gap-1 text-xs text-primary hover:underline cursor-pointer"
+                  >
+                    {copied === "combined" ? <Check className="size-3" /> : <Copy className="size-3" />}
+                    <span>Copier</span>
+                  </button>
+                </div>
+                <div className="break-all rounded border border-border bg-surface-2/50 p-2.5 font-mono text-[11px] leading-relaxed text-derived">
+                  {combined.source}
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Groupes de capture : {combined.names.map((n, idx) => `$${idx + 1} = ${n}`).join(", ")}. Couvre {combined.covered}/{combined.total} lignes.
+                </p>
+              </div>
+            )}
           </div>
         ) : hasMultipleRules ? (
-          <div className="border-b border-grid-line bg-surface-2/20 p-3.5">
-            <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
-              <span>Regex combinée non disponible</span>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-              Les colonnes ne coexistent pas toujours sur les mêmes lignes ou changent d'ordre selon les lignes. Chaque colonne conserve sa regex dédiée ci-dessous.
-            </p>
+          <div className="border-b border-grid-line p-2 bg-surface-2/20 text-center">
+            <span className="text-[10px] text-muted-foreground">
+              Regex combinée non disponible (colonnes incompatibles sur les mêmes lignes)
+            </span>
           </div>
         ) : null}
 
@@ -506,15 +519,32 @@ export function PatternPanel({
                   className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 px-2.5 py-1.5 text-xs font-medium transition cursor-pointer"
                 >
                   <Bot className="size-3.5" />
-                  Prompt pour votre propre IA
+                  Prompt pour votre IA cloud si bug
                 </button>
               </div>
             )}
 
             <div>
-              <div className="mb-1.5 text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
-                Lecture du motif
+              <div
+                className="mb-1.5 flex items-center justify-between cursor-help group"
+                title={`En clair : ${humanExplanation}`}
+              >
+                <div className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground font-semibold group-hover:text-primary transition-colors">
+                  Lecture du motif
+                </div>
               </div>
+
+              {/* Phrase explicative concrète en langage naturel */}
+              <div className="mb-2.5 rounded-lg border border-primary/25 bg-primary/5 p-2.5 text-xs text-foreground/90 transition-all hover:border-primary/40 hover:bg-primary/10">
+                <div className="flex items-center gap-1.5 font-semibold text-primary mb-1">
+                  <Lightbulb className="size-3.5" />
+                  <span>En clair :</span>
+                </div>
+                <p className="leading-relaxed text-[11px] text-foreground font-medium">
+                  {humanExplanation}
+                </p>
+              </div>
+
               <ul className="space-y-1">
                 {segments.map((s, i) => (
                   <li key={i} className="flex gap-2 text-xs">
@@ -623,7 +653,7 @@ export function PatternPanel({
                   title="Générer un prompt complet avec vos exemples pour ChatGPT, Claude ou Gemini"
                 >
                   <Bot className="size-3.5" />
-                  <span>Prompt pour votre propre IA</span>
+                  <span>Prompt pour votre IA cloud si bug</span>
                 </button>
                 {!isLLMRule && onTriggerLLM && column.failures.length === 0 && (
                   <button

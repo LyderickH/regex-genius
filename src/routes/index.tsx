@@ -19,6 +19,8 @@ import {
   ShieldCheck,
   CheckCircle2,
   AlertTriangle,
+  ChevronDown,
+  Home,
 } from "lucide-react";
 import { usePwa } from "@/hooks/usePwa";
 import { Toaster } from "@/components/ui/sonner";
@@ -111,6 +113,7 @@ function Index() {
   const [externalPromptOpen, setExternalPromptOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<"csv" | "xlsx">("csv");
+  const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
   const fullSourceRef = useRef<{ file?: File; rawText?: string; totalLines: number } | null>(null);
 
   // --- Statut PWA, Mode Avion et Installation Locale
@@ -1052,7 +1055,6 @@ function detectBestSourceCol(matrix: Matrix): number {
         </button>
 
         <div className="ml-4 flex items-center gap-1.5">
-          <ToolbarButton icon={ClipboardPaste} label="Coller" onClick={() => setPasteOpen(true)} />
           <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs transition hover:border-primary hover:text-primary">
             <Upload className="size-3.5" />
             Importer
@@ -1071,44 +1073,84 @@ function detectBestSourceCol(matrix: Matrix): number {
                 label="1re ligne en en-tête"
                 onClick={promoteHeader}
               />
-              <ToolbarButton icon={FileText} label="CSV" onClick={() => doExport("csv")} />
-              <ToolbarButton
-                icon={FileSpreadsheet}
-                label="Excel"
-                onClick={() => doExport("xlsx")}
-              />
+
+              {/* Bouton Exporter unique avec choix de format */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setExportDropdownOpen((prev) => !prev)}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-foreground transition hover:border-primary hover:text-primary"
+                  title="Exporter vos données nettoyées et calculées"
+                >
+                  <Download className="size-3.5 text-primary" />
+                  <span>Exporter</span>
+                  <ChevronDown className="size-3 text-muted-foreground" />
+                </button>
+                {exportDropdownOpen && (
+                  <div className="absolute left-0 mt-1 z-50 w-44 rounded-lg border border-border bg-surface p-1 shadow-xl animate-in fade-in duration-150">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExportDropdownOpen(false);
+                        doExport("csv");
+                      }}
+                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-foreground hover:bg-surface-2 transition text-left cursor-pointer"
+                    >
+                      <FileText className="size-3.5 text-primary" />
+                      <span>Fichier CSV (.csv)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExportDropdownOpen(false);
+                        doExport("xlsx");
+                      }}
+                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-foreground hover:bg-surface-2 transition text-left cursor-pointer"
+                    >
+                      <FileSpreadsheet className="size-3.5 text-emerald-400" />
+                      <span>Classeur Excel (.xlsx)</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <ToolbarButton
                 icon={Bot}
-                label="Prompt pour votre IA"
+                label="Prompt pour votre IA cloud si bug"
                 onClick={() => setExternalPromptOpen(true)}
               />
 
               <ToolbarButton
-                icon={Trash2}
-                label="Vider"
-                onClick={() => {
-                  setRows([]);
-                  setColumns([]);
-                  setActiveId(null);
-                  setSel(null);
-                  fullSourceRef.current = null;
-                }}
+                icon={Home}
+                label="Menu"
+                onClick={returnToWelcome}
               />
             </>
           )}
         </div>
 
         <div className="ml-auto flex items-center gap-3">
+          {/* IA locale WebGPU mise en valeur */}
           <button
             onClick={() => setLlmControlOpen(true)}
-            className="flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-400 hover:bg-amber-500/20 transition cursor-pointer"
-            title="IA locale (WebGPU/WASM) — Aucune donnée envoyée sur serveur"
+            className="relative flex items-center gap-2 rounded-full border border-amber-500/40 bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-orange-500/15 px-3 py-1 text-xs font-semibold text-amber-300 hover:border-amber-400 hover:bg-amber-500/25 transition shadow-xs cursor-pointer group"
+            title="IA locale embarquée dans votre navigateur (WebGPU) : 0 octet envoyé sur Internet, 100% privé et sécurisé"
           >
-            <Sparkles className="size-3" />
-            <span>IA locale : {localLLM.getCurrentModelConfig().name}</span>
-            {llmReport.status === "ready" && (
-              <span className="size-1.5 rounded-full bg-emerald-400" title="Modèle chargé" />
-            )}
+            <span className="relative flex size-2">
+              <span className={cn(
+                "absolute inline-flex h-full w-full rounded-full opacity-75",
+                isLLMRunning ? "animate-ping bg-amber-400" : llmReport.status === "ready" ? "bg-emerald-400 animate-pulse" : "bg-amber-500"
+              )} />
+              <span className={cn(
+                "relative inline-flex size-2 rounded-full",
+                llmReport.status === "ready" ? "bg-emerald-400" : "bg-amber-400"
+              )} />
+            </span>
+            <Sparkles className="size-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
+            <span>IA locale (WebGPU)</span>
+            <span className="hidden xl:inline text-[10px] font-mono opacity-80 text-amber-200">
+              · {localLLM.getCurrentModelConfig().name}
+            </span>
           </button>
 
           {/* Badge Confidentialité & Rassurance 100% Locale */}
@@ -1194,113 +1236,80 @@ function detectBestSourceCol(matrix: Matrix): number {
         ) : (
           <div className="flex flex-1 flex-col min-w-0">
             {rows.length > 0 && (
-              <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-grid-line bg-surface/70 px-4 py-1.5 text-xs backdrop-blur-xs">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium text-foreground">Affichage :</span>
-                  <span className="rounded bg-primary/15 px-2 py-0.5 font-mono text-[11px] font-semibold text-primary">
-                    {displayedIndices.length.toLocaleString("fr-FR")} / {rows.length.toLocaleString("fr-FR")} lignes
+              <div className="flex shrink-0 items-center justify-between border-b border-grid-line bg-surface/70 px-4 py-1 text-xs backdrop-blur-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-medium text-muted-foreground">Lignes affichées :</span>
+                  <select
+                    value={displayMode}
+                    onChange={(e) => setDisplayMode(e.target.value as any)}
+                    className="rounded border border-border bg-surface px-2 py-0.5 font-mono text-xs text-foreground focus:border-primary focus:outline-none cursor-pointer"
+                    title="Filtrer le nombre de lignes affichées pour la fluidité"
+                  >
+                    <option value="all">Toutes les lignes ({rows.length.toLocaleString("fr-FR")})</option>
+                    {rows.length > 100 && (
+                      <option value="sample_100_1000">100 + 1 000 aléatoires</option>
+                    )}
+                    {rows.length > 1000 && (
+                      <option value="first_1000">1 000 premières lignes</option>
+                    )}
+                    {displayMode === "failures_only" && (
+                      <option value="failures_only">Lignes non reconnues uniquement</option>
+                    )}
+                  </select>
+                  <span className="font-mono text-[11px] text-muted-foreground">
+                    ({displayedIndices.length.toLocaleString("fr-FR")} visibles)
                   </span>
-                  {activeCol?.rule && (
-                    <>
-                      {activeFailures.length === 0 ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[11px] font-semibold text-emerald-400">
-                          <CheckCircle2 className="size-3" />
-                          100% complété sur « {activeCol.name} »
+
+                  {/* Boutons d'échecs uniquement si des lignes ne matchent pas */}
+                  {activeCol?.rule && activeFailures.length > 0 && (
+                    <div className="flex items-center gap-1.5 ml-2">
+                      <button
+                        onClick={() =>
+                          setDisplayMode((m) =>
+                            m === "failures_only" ? "all" : "failures_only",
+                          )
+                        }
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold transition cursor-pointer",
+                          displayMode === "failures_only"
+                            ? "bg-amber-500 text-amber-950 font-bold shadow-xs"
+                            : "bg-amber-500/15 border border-amber-500/40 text-amber-400 hover:bg-amber-500/25",
+                        )}
+                        title="Filtrer pour n'afficher que les lignes non reconnues"
+                      >
+                        <AlertTriangle className="size-3" />
+                        <span>
+                          {displayMode === "failures_only"
+                            ? "Afficher toutes"
+                            : `${activeFailures.length} non reconnue${activeFailures.length > 1 ? "s" : ""}`}
                         </span>
-                      ) : (
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() =>
-                              setDisplayMode((m) =>
-                                m === "failures_only" ? "all" : "failures_only",
-                              )
-                            }
-                            className={cn(
-                              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition cursor-pointer",
-                              displayMode === "failures_only"
-                                ? "bg-amber-500 text-amber-950 font-bold shadow-xs"
-                                : "bg-amber-500/15 border border-amber-500/40 text-amber-400 hover:bg-amber-500/25",
-                            )}
-                            title={
-                              displayMode === "failures_only"
-                                ? "Réafficher toutes les lignes"
-                                : "Filtrer pour n'afficher que les lignes non reconnues"
-                            }
-                          >
-                            <AlertTriangle className="size-3" />
-                            <span>
-                              {displayMode === "failures_only"
-                                ? "Afficher toutes les lignes"
-                                : `${activeFailures.length} non reconnue${activeFailures.length > 1 ? "s" : ""} — Filtrer`}
-                            </span>
-                          </button>
-                          {activeFailures.length > 0 && (
-                            <button
-                              onClick={() => {
-                                const targetRow = activeFailures[0];
-                                const colIdx = columns.findIndex((c) => c.id === activeId) + 1;
-                                setSel({ ac: colIdx, ar: targetRow, cc: colIdx, cr: targetRow });
-                                toast.info(`Ligne ${targetRow + 1} ciblée`);
-                              }}
-                              className="rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:border-primary transition cursor-pointer"
-                              title="Sauter à la première ligne non reconnue"
-                            >
-                              ↓ 1er échec
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </>
+                      </button>
+                      <button
+                        onClick={() => {
+                          const targetRow = activeFailures[0];
+                          if (targetRow != null) {
+                            const colIdx = columns.findIndex((c) => c.id === activeId) + 1;
+                            setSel({ ac: colIdx, ar: targetRow, cc: colIdx, cr: targetRow });
+                            toast.info(`Ligne ${targetRow + 1} ciblée`);
+                          }
+                        }}
+                        className="rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:border-primary transition cursor-pointer"
+                        title="Sauter à la première ligne non reconnue"
+                      >
+                        ↓ 1er échec
+                      </button>
+                    </div>
                   )}
                 </div>
-                {rows.length > 100 && (
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => setDisplayMode("sample_100_1000")}
-                      className={cn(
-                        "rounded px-2.5 py-1 text-[11px] font-medium transition cursor-pointer",
-                        displayMode === "sample_100_1000"
-                          ? "bg-primary text-primary-foreground font-semibold shadow-xs"
-                          : "border border-border bg-background hover:bg-surface-2 text-muted-foreground hover:text-foreground",
-                      )}
-                      title="Afficher les 100 premières lignes et 1 000 lignes aléatoires représentatives"
-                    >
-                      100 + 1 000 aléatoires
-                    </button>
-                    <button
-                      onClick={() => setDisplayMode("first_1000")}
-                      className={cn(
-                        "rounded px-2.5 py-1 text-[11px] font-medium transition cursor-pointer",
-                        displayMode === "first_1000"
-                          ? "bg-primary text-primary-foreground font-semibold shadow-xs"
-                          : "border border-border bg-background hover:bg-surface-2 text-muted-foreground hover:text-foreground",
-                      )}
-                      title="Afficher les 1 000 premières lignes du fichier"
-                    >
-                      1 000 premières
-                    </button>
-                    {rows.length > displayedIndices.length && (
-                      <button
-                        onClick={() => setExtraCount((c) => c + 1000)}
-                        className="rounded border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:border-primary hover:text-primary hover:bg-primary/5 transition cursor-pointer"
-                        title="Charger 1 000 lignes supplémentaires dans l'affichage"
-                      >
-                        + 1 000 lignes
-                      </button>
-                    )}
-                    <button
-                      onClick={() => setDisplayMode("all")}
-                      className={cn(
-                        "rounded px-2.5 py-1 text-[11px] font-medium transition cursor-pointer",
-                        displayMode === "all"
-                          ? "bg-primary text-primary-foreground font-semibold shadow-xs"
-                          : "border border-border bg-background hover:bg-surface-2 text-muted-foreground hover:text-foreground",
-                      )}
-                      title="Afficher l'intégralité du jeu de données"
-                    >
-                      Tout afficher ({rows.length.toLocaleString("fr-FR")})
-                    </button>
-                  </div>
+
+                {rows.length > displayedIndices.length && (
+                  <button
+                    onClick={() => setExtraCount((c) => c + 1000)}
+                    className="rounded border border-border bg-surface px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:border-primary hover:text-primary transition cursor-pointer"
+                    title="Charger 1 000 lignes supplémentaires dans l'affichage"
+                  >
+                    + 1 000 lignes
+                  </button>
                 )}
               </div>
             )}

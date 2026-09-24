@@ -11,7 +11,7 @@ const NUM_W = 56;
 const ADD_W = 52;
 const MIN_W = 100;
 const DEFAULT_SOURCE_W = 460;
-const DEFAULT_OUT_W = 190;
+const DEFAULT_OUT_W = 240;
 /** Identifiant fictif de la colonne « Données source ». */
 export const SOURCE_COL = "__source__";
 
@@ -121,13 +121,13 @@ export function DataGrid({
         const col = columns[c];
         if (!col) continue;
         if (manuallyResized.current.has(col.id)) continue;
-        let required = measure(col.name) + 52;
+        let required = Math.max(220, measure(col.name) + 110);
         for (let r = 0; r < sampleLimit; r++) {
           const realR = getRealRow(r);
           const v = cellValue(col, realR);
-          if (v) required = Math.max(required, measure(v));
+          if (v) required = Math.max(required, measure(v) + 24);
         }
-        next[c + 1] = rows.length ? Math.min(600, required) : DEFAULT_OUT_W;
+        next[c + 1] = rows.length ? Math.min(700, required) : DEFAULT_OUT_W;
       }
 
       return next.some((value, index) => value !== w[index]) || w.length !== need ? next : w;
@@ -429,6 +429,7 @@ export function DataGrid({
           >
             <input
               value={col.name}
+              title={col.name}
               onChange={(e) => onRename(col.id, e.target.value)}
               className="min-w-0 flex-1 bg-transparent font-semibold text-foreground outline-none"
             />
