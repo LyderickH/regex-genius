@@ -77,6 +77,7 @@ describe("generateExternalAIPrompt", () => {
       targetDialect: "Excel 365 (=REGEXEXTRACT)",
     });
     expect(excelPrompt).toContain("Spécificités Excel 365 / Tableur");
+    expect(excelPrompt).toContain("EXTRAIRE.REGEX");
     expect(excelPrompt).toContain("REGEXEXTRACT");
 
     const alteryxPrompt = generateExternalAIPrompt({

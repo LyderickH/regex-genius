@@ -129,10 +129,11 @@ export function generateExternalAIPrompt({
   const dLower = targetDialect.toLowerCase();
   if (dLower.includes("excel")) {
     promptParts.push(
-      `5. **Spécificités Excel 365 / Tableur** :`,
-      `   - Fournis la formule Excel 365 prête à l'emploi avec \`=REGEXEXTRACT(A2; "motif"; 1)\`.`,
+      `5. **Spécificités Excel 365 / Tableur (Versions Française et Anglaise)** :`,
+      `   - Fournis la formule Excel 365 en **version française** : \`=EXTRAIRE.REGEX(A2; "motif"; 1)\` (séparateur point-virgule \`;\`).`,
+      `   - Fournis également la formule en **version anglaise** : \`=REGEXEXTRACT(A2, "motif", 1)\` (séparateur virgule \`,\`).`,
       `   - Échappe correctement les guillemets dans la formule Excel en les doublant (\`""\`).`,
-      `   - Si une formule native simple sans regex convient mieux (ex: \`=TEXTE.AVANT(...)\`, \`=TEXTE.APRES(...)\`), mentionne-la également.`,
+      `   - Si une formule native sans regex convient (ex: \`=TEXTE.AVANT(...)\` en FR / \`=TEXTBEFORE(...)\` en EN), mentionne les deux versions.`,
     );
   } else if (dLower.includes("alteryx")) {
     promptParts.push(

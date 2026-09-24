@@ -18,7 +18,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { explain } from "@/lib/regex-synth/explain";
-import { DIALECTS } from "@/lib/regex-synth/dialects";
+import { DIALECTS, type CodeLocale } from "@/lib/regex-synth/dialects";
 import { describeTransform } from "@/lib/regex-synth/engine";
 import type { OutputColumn } from "./types";
 import { LLMControlDialog } from "./LLMControlDialog";
@@ -54,13 +54,14 @@ export function PatternPanel({
   isLLMRunning?: boolean;
   llmReport?: ModelProgressReport;
 }) {
-  const [dialectId, setDialectId] = useState("python");
+  const [dialectId, setDialectId] = useState("excel");
+  const [codeLocale, setCodeLocale] = useState<CodeLocale>("fr");
   const [copied, setCopied] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [llmDialogOpen, setLlmDialogOpen] = useState(false);
   const [externalPromptOpen, setExternalPromptOpen] = useState(false);
 
-  const dialect = DIALECTS.find((d) => d.id === dialectId)!;
+  const dialect = DIALECTS.find((d) => d.id === dialectId) ?? DIALECTS[0]!;
   const segments = useMemo(() => (column?.rule ? explain(column.rule.source) : []), [column?.rule]);
 
   const copy = async (text: string, what: string) => {
@@ -512,13 +513,45 @@ export function PatternPanel({
             </div>
 
             <div>
-              <div className="mb-1.5 text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
-                Pour votre outil
+              <div className="mb-2 flex items-center justify-between">
+                <div className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground font-semibold">
+                  Pour votre outil
+                </div>
+                {/* Sélecteur FR / EN */}
+                <div className="flex items-center rounded-md border border-border bg-surface-2 p-0.5 text-[10px]">
+                  <button
+                    type="button"
+                    onClick={() => setCodeLocale("fr")}
+                    className={cn(
+                      "rounded px-2 py-0.5 font-medium transition cursor-pointer",
+                      codeLocale === "fr"
+                        ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                    title="Formules adaptées aux versions françaises (ex: EXTRAIRE.REGEX avec séparateur point-virgule ;)"
+                  >
+                    🇫🇷 FR
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCodeLocale("en")}
+                    className={cn(
+                      "rounded px-2 py-0.5 font-medium transition cursor-pointer",
+                      codeLocale === "en"
+                        ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                    title="English formulas & comma separators (e.g. REGEXEXTRACT with comma ,)"
+                  >
+                    🇬🇧 EN
+                  </button>
+                </div>
               </div>
+
               <select
                 value={dialectId}
                 onChange={(e) => setDialectId(e.target.value)}
-                className="mb-2 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+                className="mb-2 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring cursor-pointer"
               >
                 {DIALECTS.map((d) => (
                   <option key={d.id} value={d.id}>
@@ -526,28 +559,41 @@ export function PatternPanel({
                   </option>
                 ))}
               </select>
-              <div className="rounded-md border border-border bg-background p-3">
-                <pre className="whitespace-pre-wrap break-all font-mono text-[12px] leading-relaxed text-foreground">
-                  {dialect.snippet(rule.source, "texte")}
-                </pre>
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-2">
-                <button
-                  onClick={() => copy(dialect.snippet(rule.source, "texte"), "snippet")}
-                  className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition hover:border-primary hover:text-primary"
-                >
-                  {copied === "snippet" ? <Check className="size-3" /> : <Copy className="size-3" />}{" "}
-                  Copier la formule
-                </button>
-                <button
-                  onClick={() => copy(dialect.pattern(rule.source), "pattern")}
-                  className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition hover:border-primary hover:text-primary"
-                >
-                  {copied === "pattern" ? <Check className="size-3" /> : <Copy className="size-3" />}{" "}
-                  Copier le motif
-                </button>
-              </div>
-              {dialect.note && <p className="mt-2 text-xs text-muted-foreground">{dialect.note}</p>}
+
+              {(() => {
+                const snippet = dialect.snippet(rule.source, codeLocale === "fr" ? "texte" : "text", codeLocale);
+                const note = typeof dialect.note === "function" ? dialect.note(codeLocale) : dialect.note;
+                return (
+                  <>
+                    <div className="rounded-md border border-border bg-background p-3 shadow-inner">
+                      <pre className="whitespace-pre-wrap break-all font-mono text-[12px] leading-relaxed text-foreground">
+                        {snippet}
+                      </pre>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <button
+                        onClick={() => copy(snippet, "snippet")}
+                        className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium transition hover:border-primary hover:text-primary cursor-pointer active:scale-95"
+                      >
+                        {copied === "snippet" ? <Check className="size-3 text-emerald-400" /> : <Copy className="size-3" />}{" "}
+                        Copier la formule ({codeLocale.toUpperCase()})
+                      </button>
+                      <button
+                        onClick={() => copy(dialect.pattern(rule.source), "pattern")}
+                        className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium transition hover:border-primary hover:text-primary cursor-pointer active:scale-95"
+                      >
+                        {copied === "pattern" ? <Check className="size-3 text-emerald-400" /> : <Copy className="size-3" />}{" "}
+                        Copier le motif
+                      </button>
+                    </div>
+                    {note && (
+                      <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+                        {note}
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
 
               <div className="mt-4 pt-3 border-t border-border flex items-center justify-between gap-2">
                 <button
