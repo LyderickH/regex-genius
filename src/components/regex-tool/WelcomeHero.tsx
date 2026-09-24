@@ -12,6 +12,10 @@ import {
   CheckCircle2,
   Database,
   HelpCircle,
+  Plane,
+  WifiOff,
+  Download,
+  Laptop,
 } from "lucide-react";
 import {
   HoverCard,
@@ -26,6 +30,10 @@ interface WelcomeHeroProps {
   onImportFile: (file: File) => void;
   onOpenPaste: () => void;
   onStartBlank: () => void;
+  isOffline?: boolean;
+  canInstall?: boolean;
+  isInstalled?: boolean;
+  onInstall?: () => void;
 }
 
 export function WelcomeHero({
@@ -35,6 +43,10 @@ export function WelcomeHero({
   onImportFile,
   onOpenPaste,
   onStartBlank,
+  isOffline = false,
+  canInstall = false,
+  isInstalled = false,
+  onInstall,
 }: WelcomeHeroProps) {
   const [isDragging, setIsDragging] = useState(false);
 
@@ -255,6 +267,96 @@ export function WelcomeHero({
                 <ClipboardPaste className="size-3" />
                 <span>Coller</span>
                 <kbd className="text-[10px] font-mono text-muted-foreground">Ctrl+V</kbd>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Bannière Défi Mode Avion & Installation Locale PWA */}
+        <div
+          className={`mt-8 w-full rounded-2xl border p-5 backdrop-blur-md transition-all duration-300 text-left ${
+            isOffline
+              ? "border-emerald-500/70 bg-gradient-to-r from-emerald-950/40 via-surface to-emerald-950/30 shadow-xl shadow-emerald-950/50"
+              : "border-primary/30 bg-gradient-to-r from-amber-500/10 via-surface/80 to-cyan-500/10 shadow-md"
+          }`}
+        >
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div
+                className={`flex size-11 shrink-0 items-center justify-center rounded-xl transition-colors ${
+                  isOffline
+                    ? "bg-emerald-500/20 text-emerald-400"
+                    : "bg-primary/20 text-primary"
+                }`}
+              >
+                {isOffline ? (
+                  <WifiOff className="size-6 animate-pulse" />
+                ) : (
+                  <Plane className="size-6" />
+                )}
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-bold text-foreground">
+                    {isOffline
+                      ? "✈️ Défi relevé : Mode avion actif !"
+                      : "✈️ Défi Confidentialité : Testez en Mode Avion"}
+                  </span>
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide ${
+                      isOffline
+                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                        : "bg-surface-2 text-muted-foreground border border-border"
+                    }`}
+                  >
+                    <span
+                      className={`size-2 rounded-full ${
+                        isOffline
+                          ? "bg-emerald-400 animate-ping"
+                          : "bg-amber-400"
+                      }`}
+                    />
+                    <span>
+                      {isOffline ? "0 Réseau · 100% Local en RAM" : "En ligne (Prêt pour le test)"}
+                    </span>
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground leading-relaxed max-w-2xl">
+                  {isOffline ? (
+                    <span className="text-foreground">
+                      <strong>Zéro octet ne quitte votre machine.</strong> Toutes les déductions
+                      s'exécutent strictement dans la mémoire vive de votre processeur. Même sans
+                      Wi-Fi ni 4G, le site est pleinement opérationnel.
+                    </span>
+                  ) : (
+                    <span>
+                      <strong>Vous avez un doute sur la confidentialité ?</strong> Coupez votre Wi-Fi
+                      ou activez le mode avion sur votre PC : le site continue de fonctionner à 100%
+                      à l'identique grâce au Service Worker PWA embarqué.
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={onInstall}
+                className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-semibold text-primary-foreground shadow-md transition hover:bg-primary/90 hover:scale-102 cursor-pointer"
+                title="Installer Regex Genius comme une application locale autonome sur votre PC"
+              >
+                {isInstalled ? (
+                  <>
+                    <Laptop className="size-4" />
+                    <span>Application installée</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="size-4" />
+                    <span>Installer sur mon PC</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

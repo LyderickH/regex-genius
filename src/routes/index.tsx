@@ -13,7 +13,11 @@ import {
   ArrowUpToLine,
   Bot,
   Layers,
+  Plane,
+  Download,
+  Laptop,
 } from "lucide-react";
+import { usePwa } from "@/hooks/usePwa";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -104,6 +108,9 @@ function Index() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<"csv" | "xlsx">("csv");
   const fullSourceRef = useRef<{ file?: File; rawText?: string; totalLines: number } | null>(null);
+
+  // --- Statut PWA, Mode Avion et Installation Locale
+  const { isOffline, canInstall, isInstalled, installApp } = usePwa();
 
   useEffect(() => {
     return localLLM.subscribe(setLlmReport);
@@ -1051,6 +1058,40 @@ function detectBestSourceCol(matrix: Matrix): number {
             )}
           </button>
 
+          {/* Badge Mode Avion / Hors-ligne en direct */}
+          {isOffline && (
+            <div
+              className="flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-400 animate-pulse"
+              title="Mode avion actif : aucune connexion Internet, calculs 100% locaux dans votre RAM"
+            >
+              <Plane className="size-3" />
+              <span>Mode Avion (0 réseau)</span>
+            </div>
+          )}
+
+          {/* Bouton d'installation PWA dans le header */}
+          {!isInstalled && (
+            <button
+              type="button"
+              onClick={installApp}
+              className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-[11px] font-medium text-foreground hover:border-primary hover:text-primary transition cursor-pointer"
+              title="Installer Regex Genius sur votre PC (PWA autonome utilisable hors-ligne)"
+            >
+              <Download className="size-3 text-primary" />
+              <span>Installer sur PC</span>
+            </button>
+          )}
+
+          {isInstalled && (
+            <div
+              className="hidden md:inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground"
+              title="Application locale installée sur votre ordinateur"
+            >
+              <Laptop className="size-3.5 text-primary" />
+              <span>App locale</span>
+            </div>
+          )}
+
           {rows.length > 0 && (
             <div className="flex items-center gap-2">
               {fullSourceRef.current && fullSourceRef.current.totalLines > rows.length && (
@@ -1081,6 +1122,10 @@ function detectBestSourceCol(matrix: Matrix): number {
             onImportFile={handleFile}
             onOpenPaste={() => setPasteOpen(true)}
             onStartBlank={startBlank}
+            isOffline={isOffline}
+            canInstall={canInstall}
+            isInstalled={isInstalled}
+            onInstall={installApp}
           />
         ) : (
           <div className="flex flex-1 flex-col min-w-0">
