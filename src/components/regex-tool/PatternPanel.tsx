@@ -29,7 +29,7 @@ import type { OutputColumn } from "./types";
 import { LLMControlDialog } from "./LLMControlDialog";
 import { ExternalPromptDialog } from "./ExternalPromptDialog";
 import type { ModelProgressReport } from "@/lib/llm/types";
-import { localLLM } from "@/lib/llm/webllm-service";
+import { localLLM, type DecryptedPatternResult } from "@/lib/llm/webllm-service";
 
 const TOK_COLOR: Record<string, string> = {
   literal: "text-tok-literal",
@@ -82,11 +82,11 @@ export function PatternPanel({
   );
   const humanExplanation = analysis.human;
 
-  const [llmDecryptedText, setLlmDecryptedText] = useState<string | null>(null);
+  const [llmDecrypted, setLlmDecrypted] = useState<DecryptedPatternResult | null>(null);
   const [isDecrypting, setIsDecrypting] = useState(false);
 
   useEffect(() => {
-    setLlmDecryptedText(null);
+    setLlmDecrypted(null);
   }, [column?.rule?.source]);
 
   const handleDecryptWithLocalLLM = async () => {
@@ -104,10 +104,10 @@ export function PatternPanel({
           }
         }
       }
-      const explanation = await localLLM.explainPattern(rule.source, examples);
-      if (explanation) {
-        setLlmDecryptedText(explanation);
-        toast.success("Motif décrypté par l'IA locale !");
+      const res = await localLLM.explainPattern(rule.source, examples);
+      if (res) {
+        setLlmDecrypted(res);
+        toast.success("Motif décrypté par l'IA locale (angles technique & humain) !");
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erreur de décryptage IA");
@@ -632,13 +632,28 @@ export function PatternPanel({
                   type="button"
                   onClick={handleDecryptWithLocalLLM}
                   disabled={isDecrypting}
-                  className="flex items-center gap-1 text-[11px] text-purple-400 hover:text-purple-300 font-medium transition cursor-pointer disabled:opacity-50"
-                  title="Demander à l'IA locale (WebLLM / WebGPU) de rédiger une explication en langage naturel de ce motif"
+                  className="flex items-center gap-1.5 rounded-md border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 px-2 py-1 text-[11px] text-purple-300 font-semibold transition cursor-pointer disabled:opacity-50 shadow-xs"
+                  title="Demander à l'IA locale (WebLLM / WebGPU) d'expliquer chaque token sous un angle technique et humain"
                 >
-                  <Sparkles className={cn("size-3", isDecrypting && "animate-spin text-purple-300")} />
-                  <span>{isDecrypting ? "Décryptage IA..." : "Décrypter avec l'IA locale"}</span>
+                  <Sparkles className={cn("size-3 text-purple-400", isDecrypting && "animate-spin text-purple-300")} />
+                  <span>{isDecrypting ? (llmReport?.text || "Décryptage IA...") : "Décrypter avec l'IA locale"}</span>
                 </button>
               </div>
+
+              {isDecrypting && llmReport && (llmReport.status === "downloading" || llmReport.status === "loading") && (
+                <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-2.5 space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] text-purple-300">
+                    <span className="truncate">{llmReport.text || "Chargement du modèle..."}</span>
+                    <span className="font-mono font-semibold">{Math.round(llmReport.progressPercent)}%</span>
+                  </div>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
+                    <div
+                      className="h-full bg-purple-500 transition-all duration-300"
+                      style={{ width: `${llmReport.progressPercent}%` }}
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* 1. En langage humain (clair et immédiat) */}
               <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-1">
@@ -647,7 +662,7 @@ export function PatternPanel({
                     <Lightbulb className="size-3.5 text-primary" />
                     <span>En langage humain :</span>
                   </div>
-                  {(llmDecryptedText || rule.llmMetadata?.explanation) && (
+                  {(llmDecrypted || rule.llmMetadata?.explanation) && (
                     <span className="text-[10px] text-purple-300 bg-purple-500/15 border border-purple-500/30 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
                       <Sparkles className="size-2.5" />
                       Rédigé par IA locale
@@ -655,39 +670,79 @@ export function PatternPanel({
                   )}
                 </div>
                 <p className="text-xs text-foreground leading-relaxed font-normal">
-                  {llmDecryptedText || analysis.human}
+                  {llmDecrypted?.summary || analysis.human}
                 </p>
               </div>
 
-              {/* 2. Ce que fait le motif techniquement (analyse du mécanisme & hypothèses de raisonnement) */}
-              <div className="rounded-lg border border-border bg-surface-2/60 p-3 space-y-2.5">
+              {/* 2. Décryptage détaillé des tokens (angles technique & humain) */}
+              <div className="rounded-lg border border-border bg-surface-2/60 p-3 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                     <Cpu className="size-3.5 text-amber-400" />
-                    <span>Décryptage du motif :</span>
+                    <span>Explication détaillée des tokens :</span>
                   </span>
-                  <span className="text-[10px] font-mono rounded bg-surface px-1.5 py-0.5 border border-border text-muted-foreground">
-                    {analysis.technical.mechanism}
-                  </span>
+                  {llmDecrypted ? (
+                    <span className="text-[10px] text-purple-300 bg-purple-500/15 border border-purple-500/30 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
+                      <Sparkles className="size-2.5" />
+                      Analysé par IA locale
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-mono rounded bg-surface px-1.5 py-0.5 border border-border text-muted-foreground">
+                      {analysis.technical.mechanism}
+                    </span>
+                  )}
                 </div>
 
-                <div className="space-y-1.5">
-                  {analysis.technical.steps.map((st, i) => (
+                <div className="space-y-2.5">
+                  {(llmDecrypted?.steps && llmDecrypted.steps.length > 0 ? llmDecrypted.steps : analysis.technical.steps).map((st, i) => (
                     <div
                       key={i}
-                      className="flex items-start gap-2 bg-background/60 p-1.5 rounded border border-border/60 text-xs"
+                      className="bg-background/85 p-3 rounded-lg border border-border text-xs space-y-2 shadow-xs"
                     >
-                      {st.token && (
-                        <code className="shrink-0 font-mono text-[11px] font-bold text-amber-300 bg-amber-500/10 px-1 py-0.5 rounded border border-amber-500/20">
-                          {st.token}
-                        </code>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-foreground text-[11px]">{st.label}</div>
-                        <div className="text-muted-foreground text-[11px] leading-tight">{st.detail}</div>
+                      <div className="flex items-center justify-between gap-2">
+                        {st.token && (
+                          <code className="shrink-0 font-mono text-[11px] font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/25">
+                            {st.token}
+                          </code>
+                        )}
+                        <span className="text-[11px] font-semibold text-foreground truncate">{st.label}</span>
+                      </div>
+
+                      <div className="space-y-1.5 pt-1.5 border-t border-border/50 text-[11px]">
+                        <div className="text-muted-foreground flex items-start gap-1.5 leading-relaxed">
+                          <span className="font-semibold text-foreground/90 shrink-0">⚙️ D'un pdv technique :</span>
+                          <span>{st.technical || st.detail}</span>
+                        </div>
+                        {st.human && (
+                          <div className="text-emerald-400/90 flex items-start gap-1.5 leading-relaxed">
+                            <span className="font-semibold text-emerald-400 shrink-0">💡 D'un pdv humain :</span>
+                            <span>{st.human}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
+
+                  {rule.replacement !== undefined && (
+                    <div className="bg-cyan-500/5 p-3 rounded-lg border border-cyan-500/20 text-xs space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <code className="shrink-0 font-mono text-[11px] font-bold text-cyan-300 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/25">
+                          ➜ {rule.replacement}
+                        </code>
+                        <span className="text-[11px] font-semibold text-cyan-300">Formule de substitution</span>
+                      </div>
+                      <div className="space-y-1.5 pt-1.5 border-t border-cyan-500/20 text-[11px]">
+                        <div className="text-muted-foreground flex items-start gap-1.5 leading-relaxed">
+                          <span className="font-semibold text-foreground/90 shrink-0">⚙️ D'un pdv technique :</span>
+                          <span>Recompose le texte en substituant la chaîne par les groupes capturés selon le schéma « {rule.replacement} ».</span>
+                        </div>
+                        <div className="text-cyan-400/90 flex items-start gap-1.5 leading-relaxed">
+                          <span className="font-semibold text-cyan-400 shrink-0">💡 D'un pdv humain :</span>
+                          <span>Réordonne les fragments extraits pour produire le format cible demandé.</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Hypothèses & Risques de raisonnement (masqué par défaut, dépliable) */}
@@ -711,32 +766,6 @@ export function PatternPanel({
                   </details>
                 )}
               </div>
-
-              {/* 3. Détail des tokens syntaxiques (dépliable) */}
-              <details className="group/tokens text-xs">
-                <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground hover:text-foreground transition list-none flex items-center gap-1.5 select-none py-0.5">
-                  <ChevronDown className="size-3 transition-transform group-open/tokens:rotate-180" />
-                  <span>Détail syntaxique des tokens ({segments.length})</span>
-                </summary>
-                <ul className="mt-2 space-y-1 pl-4 border-l border-border/60">
-                  {segments.map((s, i) => (
-                    <li key={i} className="flex gap-2 text-xs">
-                      <code className={cn("shrink-0 font-mono", TOK_COLOR[s.kind])}>{s.text}</code>
-                      <span className="text-muted-foreground">{s.label}</span>
-                    </li>
-                  ))}
-                  {rule.replacement !== undefined && (
-                    <li className="flex items-center gap-2 text-xs pt-1.5 mt-1 border-t border-border/50 text-cyan-400">
-                      <code className="shrink-0 font-mono font-bold bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20 text-cyan-300">
-                        ➜ {rule.replacement}
-                      </code>
-                      <span className="text-muted-foreground">
-                        formule de remplacement appliquée aux groupes
-                      </span>
-                    </li>
-                  )}
-                </ul>
-              </details>
             </div>
 
             <div>

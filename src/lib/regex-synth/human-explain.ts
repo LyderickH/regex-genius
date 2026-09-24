@@ -230,6 +230,8 @@ export interface TechnicalStep {
   label: string;
   detail: string;
   token?: string;
+  technical?: string;
+  human?: string;
 }
 
 export interface TechnicalExplanation {
@@ -288,6 +290,8 @@ export function explainRegexTechnical(
           token: `(${inner})`,
           label: `Groupe capturant $${groupIdx}`,
           detail: `Capture la sous-chaîne pour la réinjecter dans la formule de substitution via $${groupIdx}.`,
+          technical: `Groupe de capture parenthésé ($${groupIdx}) contenant « ${inner} ».`,
+          human: `Isole le fragment numéro ${groupIdx} pour le repositionner lors du remplacement.`,
         });
       }
     }
@@ -296,6 +300,8 @@ export function explainRegexTechnical(
       token: repl,
       label: "Formule de substitution",
       detail: `Réassemble les groupes capturés selon le schéma : « ${repl} ».`,
+      technical: `Gabarit de remplacement réinjectant les variables $1, $2... selon le motif « ${repl} ».`,
+      human: `Recompose la chaîne finale en agençant les fragments capturés dans l'ordre voulu.`,
     });
 
     if (transformDesc) {
@@ -303,6 +309,8 @@ export function explainRegexTechnical(
         token: "Post-traitement",
         label: "Normalisation finale",
         detail: `Applique la transformation : ${transformDesc}.`,
+        technical: `Fonction de transformation javascript appliquée après l'extraction regex.`,
+        human: `Nettoie ou formate la valeur extraite (${transformDesc}).`,
       });
     }
 
@@ -330,12 +338,16 @@ export function explainRegexTechnical(
       token: "^",
       label: "Ancrage initial",
       detail: "La recherche commence impérativement au tout premier caractère de la ligne.",
+      technical: "Ancre début de ligne (^)",
+      human: "Garantit le comptage des colonnes depuis le début absolu de la ligne",
     });
 
     steps.push({
       token: `(?:[^\\${sep}]*\\${sep}){${n}}`,
       label: "Saut des colonnes initiales",
       detail: `Consomme et ignore les ${n} premières colonnes délimitées par une ${sepName}.`,
+      technical: `Répétition de ${n} groupes non-capturants pour passer les délimiteurs ${sep}`,
+      human: `Passe les ${n} premières colonnes sans les enregistrer pour arriver à la colonne voulue`,
     });
 
     if (p.includes("\\s*")) {
@@ -343,6 +355,8 @@ export function explainRegexTechnical(
         token: "\\s*",
         label: "Espaces ignorés",
         detail: "Ignore les espaces ou blancs facultatifs au début de la colonne ciblée.",
+        technical: "Classe \\s avec quantificateur * (0 ou plusieurs espaces)",
+        human: "Nettoie les éventuels espaces de marge avant la valeur",
       });
     }
 
@@ -350,12 +364,16 @@ export function explainRegexTechnical(
       token: `([^\\${sep}]+?)`,
       label: "Capture de la colonne (Groupe 1)",
       detail: `Capture de façon non-gourmande (+?) tout le texte de la ${n + 1}ᵉ colonne jusqu'au délimiteur suivant.`,
+      technical: `Négation de classe [^${sep}]+? (lecture non-gloutonne jusqu'au ${sep})`,
+      human: `Extrait la valeur complète de la ${n + 1}ᵉ colonne`,
     });
 
     steps.push({
       token: `(?:\\${sep}|$)`,
       label: "Clôture de la cellule",
       detail: `Vérifie que la valeur est immédiatement suivie d'une ${sepName} ou de la fin de ligne.`,
+      technical: `Alternative non-capturante entre délimiteur ${sep} ou fin de ligne $`,
+      human: "S'assure que la cellule est bien terminée",
     });
 
     if (transformDesc) {
@@ -394,6 +412,8 @@ export function explainRegexTechnical(
       token: "^",
       label: "Ancrage de début de ligne",
       detail: "La correspondance doit démarrer obligatoirement au début de la ligne.",
+      technical: "Ancre début de chaîne (^)",
+      human: "Oblige la détection à s'aligner sur le tout premier caractère de la ligne",
     });
   }
 
@@ -404,6 +424,8 @@ export function explainRegexTechnical(
       token: rawPrefix,
       label: "Texte repère avant la valeur (préfixe)",
       detail: `Repère « ${cleanP || rawPrefix} » situé juste avant la valeur à extraire.`,
+      technical: `Correspondance littérale avec le motif « ${cleanP || rawPrefix} »`,
+      human: `Sert d'ancre de départ pour situer où commence l'information cible`,
     });
     if (cleanP) {
       assumptions.push(`Dépendance au préfixe : Suppose que la valeur est précédée de « ${cleanP} » sur chaque ligne.`);
@@ -415,22 +437,36 @@ export function explainRegexTechnical(
     const { what } = describeCaptureContent(rawCapture, p, columnName);
 
     let captureDetail = `Extrait ${what}.`;
+    let technical = "Groupe de capture parenthésé (...) constituant le résultat $1.";
+    let human = `Isole et extrait la donnée cible (${what}).`;
+
     if (/\\d\+/.test(rawCapture)) {
       captureDetail = "Extrait une suite continue de chiffres (nombre, identifiant ou code).";
+      technical = "Classe numérique \\d avec quantificateur + (au moins un chiffre décimal).";
+      human = "Capture les chiffres constituant le nombre, l'identifiant ou le code statut.";
       assumptions.push("Hypothèse numérique : Suppose que la valeur cible est composée uniquement de chiffres.");
     } else if (rawCapture.includes("[^")) {
       const excluded = rawCapture.match(/\[\^([^\]]+)\]/)?.[1] ?? "";
       captureDetail = `Extrait tous les caractères jusqu'au délimiteur « ${excluded} ».`;
+      technical = `Négation de classe [^${excluded}]+ : capture sans déborder sur le délimiteur « ${excluded} ».`;
+      human = `Prend l'intégralité du texte de la cellule jusqu'au séparateur suivant.`;
       assumptions.push(`Arrêt au délimiteur : La capture s'arrête au premier caractère « ${excluded} ».`);
     } else if (rawCapture === ".*" || rawCapture === ".+") {
       captureDetail = "Extrait le texte jusqu'au repère suivant.";
+      technical = "Quantificateur glouton prenant tous les caractères intermédiaires.";
+      human = "Prend tout le contenu textuel situé entre le préfixe et le suffixe.";
       assumptions.push("Quantificateur gourmand : Le motif '.*' prend tout le texte possible jusqu'au suffixe.");
+    } else {
+      technical = `Classe de caractères [${rawCapture.replace(/[[\]()]/g, "")}] répétée avec le quantificateur +.`;
+      human = `Extrait la séquence alphanumérique correspondante.`;
     }
 
     steps.push({
       token: `(${rawCapture})`,
       label: "Valeur extraite (Groupe 1)",
       detail: captureDetail,
+      technical,
+      human,
     });
   }
 
@@ -442,6 +478,8 @@ export function explainRegexTechnical(
         token: rawSuffix,
         label: "Texte repère après la valeur (suffixe)",
         detail: `S'arrête dès qu'il rencontre « ${cleanS || rawSuffix} » juste après la valeur.`,
+        technical: `Correspondance littérale avec le délimiteur « ${cleanS || rawSuffix} »`,
+        human: `Marque la borne d'arrêt pour ne pas capturer le reste de la ligne`,
       });
       if (cleanS) {
         assumptions.push(`Dépendance au suffixe : Suppose la présence de « ${cleanS} » immédiatement après la valeur.`);
@@ -454,6 +492,8 @@ export function explainRegexTechnical(
       token: "$",
       label: "Fin de ligne ($)",
       detail: "La correspondance doit aller jusqu'au bout de la ligne.",
+      technical: "Ancre fin de chaîne ($)",
+      human: "Exige que la règle corresponde jusqu'à la fin de la ligne",
     });
   }
 

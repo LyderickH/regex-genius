@@ -18,6 +18,18 @@ import {
 
 export type ProgressSubscriber = (report: ModelProgressReport) => void;
 
+export interface DecryptedPatternStep {
+  token: string;
+  label: string;
+  technical: string;
+  human: string;
+}
+
+export interface DecryptedPatternResult {
+  summary: string;
+  steps: DecryptedPatternStep[];
+}
+
 class LocalLLMService {
   private engine: WebWorkerMLCEngine | null = null;
   private worker: Worker | null = null;
@@ -242,12 +254,13 @@ class LocalLLMService {
   }
 
   /**
-   * Demande au LLM local de décrypter et expliquer un motif regex en français naturel
+   * Demande au LLM local de décrypter et expliquer un motif regex sous un double angle :
+   * technique (syntaxe regex) et humain (sens concret dans les données).
    */
   public async explainPattern(
     pattern: string,
     examples: Array<{ input: string; output: string }>,
-  ): Promise<string> {
+  ): Promise<DecryptedPatternResult> {
     if (!this.engine || !this.isLoadedState) {
       await this.load();
     }
@@ -269,7 +282,26 @@ class LocalLLMService {
 
     const prompt = `Voici une expression régulière JavaScript : \`${pattern}\`
 ${sampleText ? `Exemples concrets de données traitées :\n${sampleText}\n` : ""}
-Explique en 1 ou 2 phrases concises, claires et en français naturel ce que fait cette regex (comment elle repère la valeur et ce qu'elle extrait). Reste direct et accessible, sans jargon excessif.`;
+
+Décompose cette expression régulière en ses tokens ou composants logiques essentiels (ex: préfixe repère, groupe(s) de capture, quantificateurs, suffixe, ancres).
+Pour CHAQUE composant / token, explique obligatoirement :
+1. "technical" : Ce que ça veut dire d'un point de vue technique (la règle regex, la syntaxe, classes de caractères autorisées, échappements, quantificateurs, groupes).
+2. "human" : Ce que ça veut dire concrètement d'un point de vue humain (ce que cette partie représente dans les données réelles de l'utilisateur).
+
+Ne découpe pas en caractères isolés sans contexte (ne sépare pas inutilement '1' puis '.' puis '1'), regroupe par token logique signifiant.
+
+Réponds EXCLUSIVEMENT par un objet JSON valide de la forme :
+{
+  "summary": "Résumé limpide en français en une phrase",
+  "steps": [
+    {
+      "token": "morceau_du_motif",
+      "label": "Rôle du composant (ex: Préfixe textuel repère, Valeur extraite (Groupe 1)...)",
+      "technical": "Explication technique détaillée de la syntaxe regex",
+      "human": "Explication concrète dans le contexte des données réelles"
+    }
+  ]
+}`;
 
     try {
       const completion = await this.engine.chat.completions.create({
@@ -277,12 +309,12 @@ Explique en 1 ou 2 phrases concises, claires et en français naturel ce que fait
           {
             role: "system",
             content:
-              "Tu es un assistant expert en expressions régulières. Tu expliques les regex en français de façon limpide, humaine et concise.",
+              "Tu es un expert pédagogique en expressions régulières. Tu décomposes les regex sous un double angle technique et humain. Réponds UNIQUEMENT par du JSON valide sans Markdown.",
           },
           { role: "user", content: prompt },
         ],
         temperature: 0.1,
-        max_tokens: 150,
+        max_tokens: 600,
       });
 
       const responseText = completion.choices[0]?.message?.content?.trim() || "";
@@ -290,7 +322,38 @@ Explique en 1 ou 2 phrases concises, claires et en français naturel ce que fait
         status: "ready",
         text: "Décryptage terminé",
       });
-      return responseText;
+
+      let jsonStr = responseText;
+      const fenceMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (fenceMatch) {
+        jsonStr = fenceMatch[1];
+      }
+      const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed && typeof parsed.summary === "string") {
+            return {
+              summary: parsed.summary,
+              steps: Array.isArray(parsed.steps)
+                ? parsed.steps.map((st: Record<string, unknown>) => ({
+                    token: String(st.token || ""),
+                    label: String(st.label || "Étape"),
+                    technical: String(st.technical || ""),
+                    human: String(st.human || ""),
+                  }))
+                : [],
+            };
+          }
+        } catch {
+          // Fallback sur le texte brut
+        }
+      }
+
+      return {
+        summary: responseText,
+        steps: [],
+      };
     } catch (err) {
       this.notify({
         status: "error",
