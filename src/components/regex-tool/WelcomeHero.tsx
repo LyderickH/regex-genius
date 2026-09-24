@@ -88,7 +88,7 @@ export function WelcomeHero({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`relative flex min-h-full flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-8 transition-colors ${
+      className={`relative flex min-h-full flex-1 flex-col items-center overflow-y-auto px-4 py-8 sm:py-12 transition-colors ${
         isDragging ? "bg-primary/5 border-2 border-dashed border-primary" : "bg-background"
       }`}
     >
@@ -97,7 +97,7 @@ export function WelcomeHero({
         <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 h-[450px] w-[800px] rounded-full bg-gradient-to-b from-amber-500/15 via-cyan-500/10 to-transparent blur-3xl opacity-70" />
       </div>
 
-      <div className="relative z-10 mx-auto flex w-full max-w-5xl flex-col items-center text-center">
+      <div className="relative z-10 mx-auto my-auto flex w-full max-w-5xl flex-col items-center text-center">
         {/* Badge technologique */}
         <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-surface px-3.5 py-1.5 text-xs font-medium text-primary shadow-sm backdrop-blur-sm">
           <Sparkles className="size-3.5 text-primary animate-pulse" />

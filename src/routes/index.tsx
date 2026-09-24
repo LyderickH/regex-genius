@@ -1169,9 +1169,12 @@ function detectBestSourceCol(matrix: Matrix): number {
         >
           <Regex className="size-5 text-primary transition-transform group-hover:scale-105" />
           <div className="leading-tight">
-            <div className="text-sm font-semibold group-hover:text-primary transition-colors">Regex par l'exemple</div>
+            <div className="text-sm font-bold tracking-tight text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5">
+              <span>Regex Genius</span>
+              <span className="text-[9px] font-mono font-semibold uppercase px-1.5 py-0.2 rounded bg-primary/10 text-primary border border-primary/20">v1.0</span>
+            </div>
             <div className="text-[11px] text-muted-foreground">
-              Tout reste dans votre navigateur
+              Déduction de regex par l'exemple
             </div>
           </div>
         </button>
@@ -1350,7 +1353,7 @@ function detectBestSourceCol(matrix: Matrix): number {
         </div>
       </header>
 
-      <div className="relative flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
         {rows.length === 0 ? (
           <WelcomeHero
             onLoadPreset={loadBusinessPreset}
