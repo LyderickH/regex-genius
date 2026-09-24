@@ -113,7 +113,9 @@ function Index() {
     const set = new Set<number>();
     // Toujours inclure impérativement les lignes contenant des exemples saisis par l'utilisateur
     columns.forEach((c) => {
-      for (let r = 0; r < c.user.length; r++) {
+      // Optimisation pour tableaux creux : Object.keys visite uniquement les cellules réellement saisies !
+      for (const k of Object.keys(c.user)) {
+        const r = Number(k);
         if (c.user[r] != null && c.user[r] !== "") set.add(r);
       }
     });
@@ -317,27 +319,31 @@ function Index() {
       const colsKey = cols
         .map((c) => {
           if (isHuge) {
-            let userCount = 0;
+            const keys = Object.keys(c.user);
             let sample = "";
-            for (let i = 0; i < c.user.length; i++) {
-              if (c.user[i] != null) {
-                userCount++;
-                if (userCount <= 8) sample += `${i}:${c.user[i]};`;
-              }
+            for (let i = 0; i < Math.min(keys.length, 8); i++) {
+              const k = Number(keys[i]);
+              sample += `${k}:${c.user[k]};`;
             }
-            return `${c.id}:${c.name}:${userCount}:${sample}`;
+            return `${c.id}:${c.name}:${keys.length}:${sample}`;
           }
           return `${c.id}:${c.name}:${c.user.join("\u0001")}`;
         })
         .join("\u0002");
 
       return {
-        rows: rs.slice(),
-        columns: cols.map((c) => ({
-          ...c,
-          user: c.user.slice(),
-          derived: c.derived,
-        })),
+        rows: isHuge ? rs : rs.slice(),
+        columns: cols.map((c) => {
+          if (isHuge) {
+            const userCopy = new Array(c.user.length);
+            for (const k of Object.keys(c.user)) {
+              const idx = Number(k);
+              userCopy[idx] = c.user[idx];
+            }
+            return { ...c, user: userCopy, derived: c.derived };
+          }
+          return { ...c, user: c.user.slice(), derived: c.derived };
+        }),
         key: `${rsKey}||${colsKey}`,
       };
     },
@@ -353,7 +359,7 @@ function Index() {
     }
     if (lastSnap.current && lastSnap.current.key !== snap.key) {
       past.current.push(lastSnap.current);
-      const maxHistory = rows.length > 50_000 ? 10 : 120;
+      const maxHistory = rows.length > 50_000 ? 5 : 120;
       if (past.current.length > maxHistory) past.current.shift();
       futureSnaps.current = [];
     }
@@ -427,11 +433,21 @@ function Index() {
       toast.error("Aucune donnée détectée");
       return;
     }
-    const source = matrix.map((r) => (r[0] ?? "").toString());
-    let maxCols = 0;
-    for (let i = 0; i < matrix.length; i++) {
-      if (matrix[i].length > maxCols) maxCols = matrix[i].length;
+    const len = matrix.length;
+    const firstRowLen = matrix[0]?.length ?? 1;
+    let maxCols = firstRowLen;
+    const source: string[] = new Array(len);
+
+    if (firstRowLen <= 1) {
+      for (let i = 0; i < len; i++) source[i] = matrix[i][0] ?? "";
+    } else {
+      const sampleLimit = Math.min(len, 300);
+      for (let i = 0; i < sampleLimit; i++) {
+        if (matrix[i].length > maxCols) maxCols = matrix[i].length;
+      }
+      for (let i = 0; i < len; i++) source[i] = (matrix[i][0] ?? "").toString();
     }
+
     const extra = Math.max(0, maxCols - 1);
     const cols: OutputColumn[] = [];
     const count = Math.max(1, extra);
@@ -439,10 +455,10 @@ function Index() {
       const given = names?.[c + 1]?.trim();
       const col = emptyColumn(given ? given : `Résultat ${c + 1}`, source.length);
       if (c < extra) {
-        col.user = matrix.map((r) => {
-          const v = r[c + 1];
-          return v == null || v === "" ? null : String(v);
-        });
+        for (let i = 0; i < len; i++) {
+          const v = matrix[i][c + 1];
+          if (v != null && v !== "") col.user[i] = String(v);
+        }
       }
       cols.push(col);
     }
@@ -460,10 +476,19 @@ function Index() {
 
   const handleFile = async (file: File) => {
     try {
+      const isBig = file.size > 5 * 1024 * 1024;
+      if (isBig) toast.loading("Chargement du fichier...", { id: "file-load" });
       const matrix = await parseFile(file);
-      if (matrix.length > 1) setHeaderAsk(matrix);
-      else loadMatrix(matrix);
+      if (isBig) toast.dismiss("file-load");
+
+      // Ne demander la confirmation d'en-tête QUE s'il y a plusieurs colonnes
+      if (matrix.length > 1 && (matrix[0]?.length ?? 0) > 1) {
+        setHeaderAsk(matrix);
+      } else {
+        loadMatrix(matrix);
+      }
     } catch {
+      toast.dismiss("file-load");
       toast.error("Impossible de lire ce fichier");
     }
   };

@@ -16,8 +16,8 @@ export interface OutputColumn {
 export const emptyColumn = (name: string, length: number): OutputColumn => ({
   id: Math.random().toString(36).slice(2, 9),
   name,
-  user: Array(length).fill(null),
-  derived: Array(length).fill(null),
+  user: length > 10_000 ? new Array(length) : Array(length).fill(null),
+  derived: length > 10_000 ? new Array(length) : Array(length).fill(null),
   rule: null,
   matched: 0,
   failures: [],

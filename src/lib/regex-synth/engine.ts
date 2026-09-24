@@ -1699,17 +1699,38 @@ export function combineColumns(
 ): { source: string; names: string[]; covered: number; total: number } | null {
   const usable = cols.filter((c) => c.rule && c.rule.source);
   if (usable.length < 2) return null;
-  const rows = inputs.filter(Boolean);
+  if (inputs.length === 0) return null;
+
+  // Optimisation haute performance : sur les grands volumes (jusqu'à 1M lignes),
+  // échantillonner à max 1 000 lignes pour que l'exécution reste < 5ms sur le thread UI
+  const isLarge = inputs.length > 2000;
+  let rows: string[];
+  if (isLarge) {
+    const sample: string[] = [];
+    const step = Math.max(1, Math.floor(inputs.length / 1000));
+    for (let i = 0; i < inputs.length && sample.length < 1000; i += step) {
+      if (inputs[i]) sample.push(inputs[i]!);
+    }
+    rows = sample;
+  } else {
+    rows = inputs.filter(Boolean);
+  }
   if (rows.length === 0) return null;
 
   // ordre des colonnes = ordre d'apparition de la capture dans la ligne
   const posOf = (rule: Rule): number => {
     let sum = 0;
     let n = 0;
+    let re: RegExp;
+    try {
+      re = new RegExp(rule.source, rule.flags);
+    } catch {
+      return Infinity;
+    }
     for (const input of rows) {
       let m: RegExpExecArray | null = null;
       try {
-        m = new RegExp(rule.source, rule.flags).exec(input);
+        m = re.exec(input);
       } catch {
         return Infinity;
       }
@@ -1902,10 +1923,11 @@ export function combineColumns(
   }
 
   if (!best || best.covered === 0) return null;
+  const scale = isLarge ? inputs.length / rows.length : 1;
   return {
     source: best.source,
     names: selectedColumns.map((c) => c.name),
-    covered: best.covered,
-    total: rows.length,
+    covered: Math.min(inputs.length, Math.round(best.covered * scale)),
+    total: inputs.length,
   };
 }

@@ -19,7 +19,7 @@ self.onmessage = (event: MessageEvent) => {
   } catch {
     result = {
       rule: null,
-      values: effectiveInputs.map(() => null),
+      values: new Array(effectiveInputs.length),
       failures: [],
       matched: 0,
       total: effectiveInputs.length,

@@ -5,20 +5,32 @@ export type Matrix = string[][];
 
 /** Texte collé : TSV (Excel), CSV point-virgule, ou lignes simples. */
 export function parsePastedText(text: string): Matrix {
-  const clean = text.replace(/\r\n?/g, "\n").replace(/\n+$/, "");
-  if (!clean) return [];
-  const lines = clean.split("\n");
-  if (clean.includes("\t")) {
-    const parsed = Papa.parse<string[]>(clean, { delimiter: "\t", skipEmptyLines: true });
+  if (!text) return [];
+  // Éviter replace(/\r\n?/g, "\n") qui duplique la chaîne entière en mémoire sur 50+ Mo
+  const lines = text.split(/\r?\n/);
+  if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+  if (lines.length === 0) return [];
+
+  // Détection rapide sur les 200 premières lignes
+  const sampleLimit = Math.min(lines.length, 200);
+  let hasTab = false;
+  let hasSemi = true;
+  for (let i = 0; i < sampleLimit; i++) {
+    if (lines[i].includes("\t")) hasTab = true;
+    if (!lines[i].includes(";")) hasSemi = false;
+  }
+
+  if (hasTab) {
+    const parsed = Papa.parse<string[]>(text, { delimiter: "\t", skipEmptyLines: true });
     if (parsed.data.length)
       return (parsed.data as Matrix).map((r) => r.map((c) => (c == null ? "" : String(c))));
   }
-  // point-virgule uniquement : la virgule est trop souvent un séparateur décimal
-  const sample = lines.length > 200 ? lines.slice(0, 200) : lines;
-  if (sample.length > 0 && sample.every((l) => l.includes(";"))) {
-    const parsed = Papa.parse<string[]>(clean, { delimiter: ";", skipEmptyLines: true });
+  if (hasSemi && sampleLimit > 0) {
+    const parsed = Papa.parse<string[]>(text, { delimiter: ";", skipEmptyLines: true });
     if (parsed.data.length) return parsed.data as Matrix;
   }
+
+  // Pour un fichier à colonne unique (ex: 1M lignes de log/texte brut)
   return lines.map((l) => [l]);
 }
 
@@ -50,7 +62,6 @@ export async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
-
 export async function parseFile(file: File): Promise<Matrix> {
   const name = file.name.toLowerCase();
   if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
@@ -61,11 +72,20 @@ export async function parseFile(file: File): Promise<Matrix> {
     const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, blankrows: false, raw: false });
     return rows.map((r) => (r as unknown[]).map((c) => (c == null ? "" : String(c))));
   }
+
   const text = await file.text();
   if (name.endsWith(".csv")) {
-    const parsed = Papa.parse<string[]>(text.trim(), { skipEmptyLines: true });
-    return (parsed.data as Matrix).map((r) => r.map((c) => (c == null ? "" : String(c))));
+    // Échantillon pour détecter si le CSV contient réellement plusieurs colonnes
+    const firstChunk = text.slice(0, 4000);
+    const hasDelimiter = firstChunk.includes(";") || firstChunk.includes(",") || firstChunk.includes("\t");
+    if (hasDelimiter) {
+      const parsed = Papa.parse<string[]>(text, { skipEmptyLines: true });
+      if (parsed.data.length) {
+        return (parsed.data as Matrix).map((r) => r.map((c) => (c == null ? "" : String(c))));
+      }
+    }
   }
+
   return parsePastedText(text);
 }
 
