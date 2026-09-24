@@ -76,10 +76,20 @@ describe("DIALECTS - French & English modes", () => {
     const py = DIALECTS.find((d) => d.id === "python")!;
     const pyRepl = py.snippet("^([a-z]).*([a-z])$", "texte", "fr", "$1$2");
     expect(pyRepl).toContain("re.sub(");
-    expect(pyRepl).toContain("\\\\1\\\\2");
+    expect(pyRepl).toContain("\\\\g<1>\\\\g<2>");
 
     const js = DIALECTS.find((d) => d.id === "javascript")!;
     const jsRepl = js.snippet("^([a-z]).*([a-z])$", "texte", "fr", "$1$2");
     expect(jsRepl).toContain('.replace(/^([a-z]).*([a-z])$/g, "$1$2")');
+  });
+
+  it("génère les dialectes SQL spécialisés (Snowflake, BigQuery, PostgreSQL)", () => {
+    const sf = DIALECTS.find((d) => d.id === "snowflake")!;
+    expect(sf).toBeDefined();
+    expect(sf.snippet("([0-9]+)", "col", "fr")).toContain("REGEXP_SUBSTR(col, '([0-9]+)', 1, 1, 'e', 1)");
+
+    const bq = DIALECTS.find((d) => d.id === "bigquery")!;
+    expect(bq).toBeDefined();
+    expect(bq.snippet("([0-9]+)", "col", "fr")).toContain("REGEXP_EXTRACT(col, r'([0-9]+)')");
   });
 });
