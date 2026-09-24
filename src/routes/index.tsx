@@ -41,7 +41,7 @@ import { localLLM } from "@/lib/llm/webllm-service";
 import { runSynthesisPipeline } from "@/lib/llm/pipeline";
 import type { ModelProgressReport } from "@/lib/llm/types";
 import { emptyColumn, cellValue, type OutputColumn } from "@/components/regex-tool/types";
-import { combineColumns, type SynthResult } from "@/lib/regex-synth/engine";
+import { combineColumns, applyRule, type Rule, type SynthResult } from "@/lib/regex-synth/engine";
 import {
   parseFile,
   parseFileDataset,
@@ -353,6 +353,55 @@ function Index() {
     [],
   );
   triggerLLMFallbackRef.current = triggerLLMFallback;
+
+  const handleUpdateRule = useCallback(
+    (colId: string, newRule: Rule) => {
+      setColumns((cols) =>
+        cols.map((c) => {
+          if (c.id !== colId) return c;
+          const res = applyRule(newRule, rowsRef.current);
+          return {
+            ...c,
+            rule: newRule,
+            derived: res.values,
+            matched: res.matched,
+            failures: res.failures,
+          };
+        }),
+      );
+      toast.success("Expression régulière modifiée manuellement et appliquée au tableau !");
+    },
+    [],
+  );
+
+  const handleResetRule = useCallback(
+    (colId: string) => {
+      const col = colsRef.current.find((c) => c.id === colId);
+      if (!col) return;
+      if (col.rule?.originalAutoRule) {
+        const original = col.rule.originalAutoRule;
+        const res = applyRule(original, rowsRef.current);
+        setColumns((cols) =>
+          cols.map((c) =>
+            c.id === colId
+              ? {
+                  ...c,
+                  rule: original,
+                  derived: res.values,
+                  matched: res.matched,
+                  failures: res.failures,
+                }
+              : c,
+          ),
+        );
+        toast.success("Motif initial rétabli avec succès !");
+      } else {
+        runSynth(colId, rowsRef.current, col.user);
+        toast.info("Déduction automatique relancée.");
+      }
+    },
+    [runSynth],
+  );
 
   const snapshot = useCallback(
     (rs: string[], cols: OutputColumn[]): Snap => {
@@ -1552,6 +1601,8 @@ function detectBestSourceCol(matrix: Matrix): number {
                 isLLMRunning={isLLMRunning}
                 llmReport={llmReport}
                 onCopyTable={copyTable}
+                onUpdateRule={(newRule) => activeId && handleUpdateRule(activeId, newRule)}
+                onResetRule={() => activeId && handleResetRule(activeId)}
               />
             </div>
           </div>

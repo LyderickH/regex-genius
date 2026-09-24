@@ -19,13 +19,16 @@ import {
   RefreshCw,
   AlertTriangle,
   Info,
+  Pencil,
+  RotateCcw,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { explain, type Segment } from "@/lib/regex-synth/explain";
 import { analyzeRegexFull } from "@/lib/regex-synth/human-explain";
 import { DIALECTS, type CodeLocale } from "@/lib/regex-synth/dialects";
-import { describeTransform } from "@/lib/regex-synth/engine";
+import { describeTransform, applyRule, type Rule } from "@/lib/regex-synth/engine";
 import type { OutputColumn } from "./types";
 import { LLMControlDialog } from "./LLMControlDialog";
 import { ExternalPromptDialog } from "./ExternalPromptDialog";
@@ -61,6 +64,8 @@ export function PatternPanel({
   isLLMRunning,
   llmReport,
   onCopyTable,
+  onUpdateRule,
+  onResetRule,
 }: {
   column: OutputColumn | null;
   rowCount: number;
@@ -72,6 +77,8 @@ export function PatternPanel({
   isLLMRunning?: boolean;
   llmReport?: ModelProgressReport;
   onCopyTable?: () => void;
+  onUpdateRule?: (newRule: Rule) => void;
+  onResetRule?: () => void;
 }) {
   const [dialectId, setDialectId] = useState("excel");
   const [codeLocale, setCodeLocale] = useState<CodeLocale>("fr");
@@ -99,6 +106,71 @@ export function PatternPanel({
   const [hoveredSegment, setHoveredSegment] = useState<Segment | null>(null);
   const isDecryptingRef = useRef(false);
   const lastAnalyzedPatternRef = useRef<string | null>(null);
+
+  // --- État de modification manuelle de la regex
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedSource, setEditedSource] = useState(rule?.source ?? "");
+
+  useEffect(() => {
+    if (!isEditing) {
+      setEditedSource(rule?.source ?? "");
+    }
+  }, [rule?.source, isEditing]);
+
+  const { isValid, syntaxError, liveCoverage } = useMemo(() => {
+    if (!editedSource.trim()) {
+      return { isValid: false, syntaxError: "L'expression ne peut pas être vide.", liveCoverage: null };
+    }
+    try {
+      new RegExp(editedSource, rule?.flags || "u");
+    } catch (e) {
+      return {
+        isValid: false,
+        syntaxError: e instanceof Error ? e.message : "Erreur de syntaxe regex",
+        liveCoverage: null,
+      };
+    }
+
+    if (!rule) {
+      return { isValid: true, syntaxError: null, liveCoverage: null };
+    }
+
+    try {
+      const tempRule: Rule = {
+        ...rule,
+        source: editedSource,
+      };
+      const res = applyRule(tempRule, rows ?? []);
+      return { isValid: true, syntaxError: null, liveCoverage: res };
+    } catch (e) {
+      return {
+        isValid: false,
+        syntaxError: e instanceof Error ? e.message : "Erreur d'exécution de la regex",
+        liveCoverage: null,
+      };
+    }
+  }, [editedSource, rule, rows]);
+
+  const handleApplyCustomRule = useCallback(() => {
+    if (!rule || !isValid || !onUpdateRule) return;
+    const updatedRule: Rule = {
+      ...rule,
+      source: editedSource.trim(),
+      origin: "manual",
+      originalAutoRule: rule.originalAutoRule ?? rule,
+    };
+    onUpdateRule(updatedRule);
+    setIsEditing(false);
+  }, [rule, isValid, onUpdateRule, editedSource]);
+
+  const handleRevertToAuto = useCallback(() => {
+    if (onResetRule) {
+      onResetRule();
+    } else if (rule?.originalAutoRule && onUpdateRule) {
+      onUpdateRule(rule.originalAutoRule);
+    }
+    setIsEditing(false);
+  }, [onResetRule, onUpdateRule, rule]);
 
   const handleDecryptWithLocalLLM = useCallback(async () => {
     if (!rule || isDecryptingRef.current) return;
@@ -199,6 +271,8 @@ export function PatternPanel({
 
   const examples = column.user.filter((v) => v != null && v !== "").length;
   const isLLMRule = rule?.origin === "llm";
+  const isManualRule = rule?.origin === "manual";
+  const hasOriginalAuto = Boolean(rule?.originalAutoRule);
 
   return (
     <>
@@ -409,26 +483,156 @@ export function PatternPanel({
               )}
 
             <div>
-              <div className="mb-1.5 flex items-center justify-between">
-                <div className="flex items-center gap-2">
+              <div className="mb-2 flex items-center justify-between gap-1 flex-wrap">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground font-semibold">
                     Expression
                   </span>
-                  {!isLLMRule && (
+                  {isManualRule ? (
+                    <span className="text-[10px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30 flex items-center gap-1 font-medium">
+                      <Pencil className="size-2.5 text-amber-400" />
+                      <span>Modifiée manuellement</span>
+                    </span>
+                  ) : isLLMRule ? null : (
                     <span className="text-[10px] text-muted-foreground bg-surface-2 px-1.5 py-0.5 rounded border border-border/80 flex items-center gap-1">
                       <Settings2 className="size-2.5 text-primary" />
                       <span>Déduit automatiquement</span>
                     </span>
                   )}
+                  {(isManualRule || hasOriginalAuto) && (
+                    <button
+                      type="button"
+                      onClick={handleRevertToAuto}
+                      className="inline-flex items-center gap-1 rounded bg-amber-500/10 hover:bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-300 border border-amber-500/30 transition cursor-pointer"
+                      title="Revenir au motif initial déduit par le moteur"
+                    >
+                      <RotateCcw className="size-2.5" />
+                      <span>Revenir à l'origine</span>
+                    </button>
+                  )}
                 </div>
-                <button
-                  onClick={() => copy(rule.source, "raw")}
-                  className="flex items-center gap-1 text-xs text-muted-foreground transition hover:text-primary cursor-pointer"
-                >
-                  {copied === "raw" ? <Check className="size-3" /> : <Copy className="size-3" />}{" "}
-                  copier
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!isEditing) {
+                        setEditedSource(rule.source);
+                      }
+                      setIsEditing((v) => !v);
+                    }}
+                    className={cn(
+                      "flex items-center gap-1 text-xs transition cursor-pointer px-1.5 py-0.5 rounded",
+                      isEditing
+                        ? "bg-primary/20 text-primary font-semibold border border-primary/30"
+                        : "text-muted-foreground hover:text-primary hover:bg-surface-2",
+                    )}
+                    title={isEditing ? "Fermer l'éditeur de regex" : "Modifier et tester la regex manuellement"}
+                  >
+                    <Pencil className="size-3" />
+                    <span>{isEditing ? "Fermer" : "Modifier"}</span>
+                  </button>
+                  <button
+                    onClick={() => copy(rule.source, "raw")}
+                    className="flex items-center gap-1 text-xs text-muted-foreground transition hover:text-primary cursor-pointer px-1.5 py-0.5 rounded hover:bg-surface-2"
+                  >
+                    {copied === "raw" ? <Check className="size-3" /> : <Copy className="size-3" />}{" "}
+                    copier
+                  </button>
+                </div>
               </div>
+
+              {/* Panneau interactif d'édition et test direct de la Regex */}
+              {isEditing && (
+                <div className="mb-3 rounded-lg border border-primary/40 bg-surface-2/80 p-3 shadow-md space-y-2.5 animate-in fade-in duration-150">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+                      <Pencil className="size-3.5" />
+                      <span>Tester & modifier l'expression</span>
+                    </div>
+                    {(isManualRule || hasOriginalAuto) && (
+                      <button
+                        type="button"
+                        onClick={handleRevertToAuto}
+                        className="flex items-center gap-1 text-[11px] text-amber-400 hover:text-amber-300 hover:underline cursor-pointer"
+                        title="Rétablir l'expression initiale calculée par le moteur"
+                      >
+                        <RotateCcw className="size-3" />
+                        <span>Rétablir l'origine</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="relative">
+                    <textarea
+                      value={editedSource}
+                      onChange={(e) => setEditedSource(e.target.value)}
+                      placeholder="Saisissez ou adaptez votre expression régulière..."
+                      rows={2}
+                      spellCheck={false}
+                      className="w-full resize-y rounded-md border border-border bg-background p-2.5 font-mono text-[13px] leading-relaxed text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+
+                  {syntaxError && (
+                    <div className="flex items-center gap-1.5 rounded-md border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-300">
+                      <AlertTriangle className="size-3.5 shrink-0 text-rose-400" />
+                      <span className="font-mono text-[11px]">{syntaxError}</span>
+                    </div>
+                  )}
+
+                  {!syntaxError && liveCoverage && (
+                    <div
+                      className={cn(
+                        "flex items-center justify-between rounded-md border px-2.5 py-1.5 text-xs",
+                        liveCoverage.matched === rowCount && rowCount > 0
+                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                          : liveCoverage.matched > 0
+                            ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                            : "border-rose-500/30 bg-rose-500/10 text-rose-300",
+                      )}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        {liveCoverage.matched === rowCount && rowCount > 0 ? (
+                          <CheckCircle2 className="size-3.5 text-emerald-400" />
+                        ) : (
+                          <Info className="size-3.5" />
+                        )}
+                        <span className="font-medium">
+                          {liveCoverage.matched} / {rowCount} lignes couvertes (
+                          {rowCount > 0 ? Math.round((liveCoverage.matched / rowCount) * 100) : 0}%)
+                        </span>
+                      </div>
+                      {liveCoverage.failures.length > 0 && (
+                        <span className="text-[11px] opacity-80">
+                          {liveCoverage.failures.length} non reconnue{liveCoverage.failures.length > 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-end gap-2 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditedSource(rule.source);
+                        setIsEditing(false);
+                      }}
+                      className="rounded-md border border-border bg-surface px-2.5 py-1 text-xs text-muted-foreground hover:bg-surface-2 hover:text-foreground transition cursor-pointer"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!isValid || editedSource.trim() === rule.source.trim()}
+                      onClick={handleApplyCustomRule}
+                      className="flex items-center gap-1.5 rounded-md bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1 text-xs font-semibold text-primary-foreground shadow-sm transition cursor-pointer"
+                    >
+                      <Check className="size-3.5" />
+                      <span>Appliquer au tableau</span>
+                    </button>
+                  </div>
+                </div>
+              )}
               <TooltipProvider delayDuration={80}>
                 <div className="break-all rounded-md border border-border bg-background p-3 font-mono text-[13px] leading-relaxed">
                   {segments.map((s, i) => (

@@ -87,8 +87,10 @@ export interface Rule {
   transform: Transform;
   /** règles alternatives, essayées dans l'ordre quand la principale ne s'applique pas */
   extra?: Rule[];
-  /** Origine de la règle : algorithmique ou IA locale validée */
-  origin?: "algorithmic" | "llm";
+  /** Origine de la règle : algorithmique, IA locale ou modification manuelle */
+  origin?: "algorithmic" | "llm" | "manual";
+  /** Sauvegarde de la règle déduite automatiquement avant modification manuelle */
+  originalAutoRule?: Rule;
   llmMetadata?: {
     modelName: string;
     runtime: "webgpu" | "wasm" | "unsupported";
