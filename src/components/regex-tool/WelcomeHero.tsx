@@ -93,54 +93,79 @@ export function WelcomeHero({
           <span>Synthèse d'expressions régulières par l'exemple</span>
         </div>
 
-        {/* Titre principal avec mini-bloc info au survol du mot Regex */}
-        <h1 className="mt-5 text-3xl font-extrabold tracking-tight sm:text-4xl md:text-5xl lg:text-6xl text-foreground max-w-3xl leading-tight">
+        {/* Titre principal */}
+        <h1 className="mt-5 text-3xl font-extrabold tracking-tight sm:text-4xl md:text-5xl lg:text-6xl text-foreground max-w-4xl leading-tight">
           Extrayez vos données,{" "}
           <span className="bg-gradient-to-r from-amber-400 via-amber-200 to-cyan-400 bg-clip-text text-transparent">
-            sans écrire de{" "}
-            <HoverCard openDelay={100} closeDelay={150}>
-              <HoverCardTrigger asChild>
-                <span className="inline-flex items-center gap-1 cursor-help underline decoration-primary/60 decoration-wavy decoration-from-font underline-offset-4 hover:decoration-primary text-foreground transition-all">
-                  Regex
-                  <HelpCircle className="size-4 sm:size-5 text-amber-400 inline-block align-middle animate-pulse" />
-                </span>
-              </HoverCardTrigger>
-              <HoverCardContent
-                align="center"
-                side="bottom"
-                sideOffset={8}
-                className="z-50 w-84 sm:w-96 rounded-xl border border-primary/40 bg-surface/95 p-4 text-foreground shadow-2xl backdrop-blur-md text-left"
-              >
-                <div className="flex items-start gap-2.5">
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/20 text-primary">
-                    <Sparkles className="size-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-foreground">
-                      C'est quoi une « Regex » ?
-                    </h3>
-                    <p className="text-[11px] text-muted-foreground font-mono">
-                      Expression Régulière / Regular Expression
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-3 space-y-2 text-xs leading-relaxed text-muted-foreground">
-                  <p>
-                    Une <strong>Regex</strong> est une formule de recherche textuelle avancée. Elle décrit un <span className="text-foreground font-medium">motif</span> pour extraire ou valider précisément des données (ex. un email, une date, un montant ou une référence) noyées dans du texte brut.
-                  </p>
-                  <div className="rounded-md border border-border bg-surface-2 p-2 font-mono text-[11px] text-amber-300">
-                    <span className="text-muted-foreground">Syntaxe habituelle (complexe) :</span><br />
-                    <code>[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]&#123;2,&#125;</code>
-                  </div>
-                  <p className="text-[11px] text-foreground font-medium">
-                    ⚡ <strong>Pourquoi Regex Genius ?</strong> Écrire des regex à la main est difficile et source d'erreurs. Ici, donnez simplement <strong>1 ou 2 exemples</strong> de ce que vous voulez, et l'outil déduit la formule exacte instantanément pour Excel, Google Sheets, Power Query ou Python !
-                  </p>
-                </div>
-              </HoverCardContent>
-            </HoverCard>
+            sans écrire de Regex
           </span>
         </h1>
+
+        {/* Mini-badge d'explication interactif C'est quoi une Regex ? */}
+        <div className="mt-3.5 flex items-center justify-center">
+          <HoverCard openDelay={80} closeDelay={150}>
+            <HoverCardTrigger asChild>
+              <button
+                type="button"
+                className="group inline-flex items-center gap-2 rounded-full border border-primary/30 bg-surface/80 px-3.5 py-1 text-xs font-medium text-muted-foreground shadow-xs backdrop-blur-sm transition-all hover:border-primary/60 hover:bg-surface-2 hover:text-foreground cursor-help"
+              >
+                <HelpCircle className="size-3.5 text-primary transition-transform group-hover:scale-110" />
+                <span>
+                  C'est quoi une <strong className="text-foreground">Regex</strong> ?
+                </span>
+                <span className="rounded-full bg-primary/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-primary">
+                  Explication 30s
+                </span>
+              </button>
+            </HoverCardTrigger>
+            <HoverCardContent
+              align="center"
+              side="bottom"
+              sideOffset={10}
+              className="z-50 w-96 max-w-[calc(100vw-2rem)] rounded-2xl border border-border/90 bg-surface/98 p-5 text-foreground shadow-2xl backdrop-blur-2xl text-left tracking-normal font-sans"
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-cyan-500 text-slate-950 font-bold shadow-sm">
+                  <Sparkles className="size-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">
+                    C'est quoi une « Regex » ?
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground font-medium">
+                    Expression Régulière · Regular Expression
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3.5 space-y-3 text-xs leading-relaxed text-muted-foreground">
+                <p className="text-foreground/90 leading-normal">
+                  C'est une <strong>formule de recherche textuelle avancée</strong> permettant de détecter, extraire ou vérifier des motifs précis (emails, dates, montants, numéros de facture) perdus dans des blocs de texte brut.
+                </p>
+
+                <div className="rounded-xl border border-border/80 bg-surface-2/80 p-3">
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground mb-1.5">
+                    <span>Syntaxe manuelle classique :</span>
+                    <span className="text-[10px] text-amber-400 font-medium">Complexe & cryptique</span>
+                  </div>
+                  <code className="block rounded bg-background/90 px-2.5 py-1.5 font-mono text-[11px] text-amber-300 break-all select-all border border-border/50">
+                    (?&lt;=FAC-)\d&#123;4&#125;-[A-Z0-9]+(?=\s*\|)
+                  </code>
+                </div>
+
+                <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 text-foreground">
+                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-primary mb-1">
+                    <CheckCircle2 className="size-3.5 text-primary" />
+                    <span>La solution Regex Genius :</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-normal">
+                    <strong>Vous n'avez rien à apprendre.</strong> Saisissez simplement 1 ou 2 exemples attendus dans votre colonne, et l'outil calcule la formule optimale instantanément pour Excel, Google Sheets, Power Query ou Python !
+                  </p>
+                </div>
+              </div>
+            </HoverCardContent>
+          </HoverCard>
+        </div>
 
         {/* Sous-titre */}
         <p className="mt-4 max-w-2xl text-sm sm:text-base text-muted-foreground leading-relaxed">
