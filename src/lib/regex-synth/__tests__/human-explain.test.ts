@@ -2,6 +2,17 @@ import { describe, expect, it } from "vitest";
 import { explainRegexHuman } from "../human-explain";
 
 describe("explainRegexHuman", () => {
+  it("explains contextual prefix and suffix around brackets (audit log case)", () => {
+    const text = explainRegexHuman({
+      source: "at timestamp \\[\\[([^\\r\\n]+?)\\]\\] with context",
+      pattern: "at timestamp \\[\\[([^\\r\\n]+?)\\]\\] with context",
+      flags: "g",
+      transform: { strip: "none", dec: "none", casing: "none", fmt: "none" },
+    });
+    expect(text).toContain("at timestamp [[");
+    expect(text).toContain("]] with context");
+  });
+
   it("explains chevron delimited text", () => {
     const text = explainRegexHuman({
       source: "<([^>]+)>",
@@ -9,7 +20,8 @@ describe("explainRegexHuman", () => {
       flags: "g",
       transform: { strip: "none", dec: "none", casing: "none", fmt: "none" },
     });
-    expect(text).toContain("chevrons");
+    expect(text).toContain("<");
+    expect(text).toContain(">");
   });
 
   it("explains delimited field structure (FEC)", () => {
@@ -33,7 +45,7 @@ describe("explainRegexHuman", () => {
       flags: "g",
       transform: { strip: "none", dec: "none", casing: "none", fmt: "none" },
     });
-    expect(text).toContain("utm_campaign");
+    expect(text).toContain("utm_campaign=");
   });
 
   it("uses LLM explanation if available", () => {

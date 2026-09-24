@@ -15,6 +15,7 @@ import {
   Bot,
   Lightbulb,
   ChevronDown,
+  HelpCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -525,24 +526,34 @@ export function PatternPanel({
             )}
 
             <div>
-              <div
-                className="mb-1.5 flex items-center justify-between cursor-help group"
-                title={`En clair : ${humanExplanation}`}
-              >
-                <div className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground font-semibold group-hover:text-primary transition-colors">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground font-semibold">
                   Lecture du motif
-                </div>
-              </div>
+                </span>
 
-              {/* Phrase explicative concrète en langage naturel */}
-              <div className="mb-2.5 rounded-lg border border-primary/25 bg-primary/5 p-2.5 text-xs text-foreground/90 transition-all hover:border-primary/40 hover:bg-primary/10">
-                <div className="flex items-center gap-1.5 font-semibold text-primary mb-1">
-                  <Lightbulb className="size-3.5" />
-                  <span>En clair :</span>
+                {/* Bulle d'explication au survol (? / + info) */}
+                <div className="relative group/info">
+                  <div
+                    tabIndex={0}
+                    role="button"
+                    className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/20 transition cursor-help shadow-xs active:scale-95"
+                    title={`En clair : ${humanExplanation}`}
+                  >
+                    <HelpCircle className="size-3" />
+                    <span>+ info</span>
+                  </div>
+
+                  {/* Popover / Tooltip au survol */}
+                  <div className="pointer-events-none absolute right-0 top-full mt-1.5 z-50 w-72 rounded-lg border border-border bg-surface-2 p-3 shadow-xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible group-focus-within/info:opacity-100 group-focus-within/info:visible transition-all duration-150">
+                    <div className="flex items-center gap-1.5 font-semibold text-primary text-xs mb-1">
+                      <Lightbulb className="size-3.5" />
+                      <span>En clair :</span>
+                    </div>
+                    <p className="text-xs text-foreground leading-relaxed font-normal">
+                      {humanExplanation}
+                    </p>
+                  </div>
                 </div>
-                <p className="leading-relaxed text-[11px] text-foreground font-medium">
-                  {humanExplanation}
-                </p>
               </div>
 
               <ul className="space-y-1">
