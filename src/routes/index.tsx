@@ -20,6 +20,8 @@ import {
   AlertTriangle,
   ChevronDown,
   Home,
+  Github,
+  Globe,
 } from "lucide-react";
 import { usePwa } from "@/hooks/usePwa";
 import { Toaster } from "@/components/ui/sonner";
@@ -1305,6 +1307,32 @@ function detectBestSourceCol(matrix: Matrix): number {
               <span>App locale</span>
             </div>
           )}
+
+          <div className="h-4 w-px bg-border/60 mx-0.5 hidden sm:block" />
+
+          {/* Lien Portfolio */}
+          <a
+            href="https://lyderickh.github.io/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-[11px] font-medium text-foreground hover:border-primary hover:text-primary transition cursor-pointer"
+            title="Consulter le portfolio de Lydérick Henry (Data & Finance)"
+          >
+            <Globe className="size-3 text-primary" />
+            <span>Portfolio</span>
+          </a>
+
+          {/* Lien GitHub Repo */}
+          <a
+            href="https://github.com/LyderickH/regex-genius"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-[11px] font-medium text-foreground hover:border-primary hover:text-primary transition cursor-pointer"
+            title="Voir le code source sur GitHub"
+          >
+            <Github className="size-3 text-foreground" />
+            <span className="hidden sm:inline">GitHub</span>
+          </a>
         </div>
       </header>
 

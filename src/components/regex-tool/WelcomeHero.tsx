@@ -20,6 +20,7 @@ import {
   Users,
   Globe,
   Landmark,
+  Github,
 } from "lucide-react";
 import {
   HoverCard,
@@ -437,6 +438,43 @@ export function WelcomeHero({
             <span>Copier-coller Excel fluide</span>
           </div>
         </div>
+
+        {/* Pied de page : liens Portfolio & Repo GitHub */}
+        <footer className="mt-12 flex flex-wrap items-center justify-center gap-4 sm:gap-6 border-t border-border/50 pt-6 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1.5">
+            <span>Créé par</span>
+            <a
+              href="https://lyderickh.github.io/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-foreground hover:text-primary transition inline-flex items-center gap-1"
+            >
+              <Globe className="size-3.5 text-primary" />
+              <span>Lydérick Henry</span>
+            </a>
+          </div>
+          <span className="text-border hidden sm:inline">•</span>
+          <a
+            href="https://lyderickh.github.io/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+          >
+            <span>Mon Portfolio</span>
+          </a>
+          <span className="text-border hidden sm:inline">•</span>
+          <a
+            href="https://github.com/LyderickH/regex-genius"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 font-medium text-foreground/80 hover:text-foreground transition"
+          >
+            <Github className="size-3.5" />
+            <span>Code source GitHub</span>
+          </a>
+          <span className="text-border hidden sm:inline">•</span>
+          <span className="opacity-80">100% Client-Side & Open Source</span>
+        </footer>
       </div>
     </div>
   );
