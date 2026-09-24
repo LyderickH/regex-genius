@@ -18,6 +18,7 @@ import {
   HelpCircle,
   RefreshCw,
   AlertTriangle,
+  Info,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -84,9 +85,11 @@ export function PatternPanel({
 
   const [llmDecrypted, setLlmDecrypted] = useState<DecryptedPatternResult | null>(null);
   const [isDecrypting, setIsDecrypting] = useState(false);
+  const [showUnexpectedOptions, setShowUnexpectedOptions] = useState(false);
 
   useEffect(() => {
     setLlmDecrypted(null);
+    setShowUnexpectedOptions(false);
   }, [column?.rule?.source]);
 
   const handleDecryptWithLocalLLM = async () => {
@@ -458,72 +461,72 @@ export function PatternPanel({
               )}
             </div>
 
-            <div className="flex items-center gap-2 rounded-md border border-border bg-surface-2 px-3 py-2 text-xs">
-              {column.failures.length === 0 ? (
-                <CircleCheck className="size-4 text-derived" />
-              ) : (
-                <CircleAlert className="size-4 text-warn" />
-              )}
-              <span>
-                <span className="font-mono text-foreground">{column.matched}</span> / {rowCount}{" "}
-                lignes couvertes
-                {column.failures.length > 0 && (
-                  <span className="text-warn"> · {column.failures.length} en échec</span>
-                )}
-              </span>
-            </div>
-
-            {column.failures.length === 0 && onTriggerLLM && (
-              <div className="rounded-lg border border-border/80 bg-surface-2/40 p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                    <Sparkles className="size-3.5 text-amber-400" />
-                    <span>Résultat inattendu ?</span>
-                  </div>
-                  <button
-                    onClick={() => setLlmDialogOpen(true)}
-                    className="text-[10px] text-muted-foreground hover:text-foreground underline underline-offset-2 cursor-pointer"
-                  >
-                    Gérer l'IA
-                  </button>
+            <div className="rounded-md border border-border bg-surface-2 p-2.5 text-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {column.failures.length === 0 ? (
+                    <CircleCheck className="size-4 text-derived shrink-0" />
+                  ) : (
+                    <CircleAlert className="size-4 text-warn shrink-0" />
+                  )}
+                  <span>
+                    <span className="font-mono font-semibold text-foreground">{column.matched}</span> / {rowCount}{" "}
+                    lignes couvertes
+                    {column.failures.length > 0 && (
+                      <span className="text-warn font-semibold"> · {column.failures.length} en échec</span>
+                    )}
+                  </span>
                 </div>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  L'algorithme couvre 100 % des lignes. Si le motif déduit ne correspond pas exactement à votre intention :
-                </p>
-
-                {isLLMRunning ? (
-                  <div className="space-y-1.5 pt-1">
-                    <div className="flex items-center gap-2 text-xs text-amber-300">
-                      <RefreshCw className="size-3.5 animate-spin" />
-                      <span>{llmReport?.text || "Recherche d'une alternative par l'IA..."}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-1.5 pt-0.5">
-                    <button
-                      type="button"
-                      onClick={onTriggerLLM}
-                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1.5 text-xs font-medium text-amber-300 transition cursor-pointer"
-                      title="Forcer l'IA locale (WebGPU) à chercher une expression régulière alternative"
-                    >
-                      <Sparkles className="size-3 text-amber-400" />
-                      <span>Forcer une alternative par l'IA locale</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setExternalPromptOpen(true)}
-                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 px-2.5 py-1 text-[11px] font-medium text-purple-300 transition cursor-pointer"
-                    >
-                      <Bot className="size-3 text-purple-400" />
-                      <span>Prompt ChatGPT / Claude</span>
-                    </button>
-                  </div>
+                {column.failures.length === 0 && onTriggerLLM && (
+                  <button
+                    type="button"
+                    onClick={() => setShowUnexpectedOptions((prev) => !prev)}
+                    className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2 transition cursor-pointer flex items-center gap-1"
+                  >
+                    <span>Pas tout à fait ça ?</span>
+                    <ChevronDown className={cn("size-3 transition-transform", showUnexpectedOptions && "rotate-180")} />
+                  </button>
                 )}
-                <p className="text-[10px] text-muted-foreground/80 italic pt-0.5">
-                  💡 Conseil : Vous pouvez aussi saisir le résultat attendu sur une autre ligne du tableau pour corriger directement l'algorithme.
-                </p>
               </div>
-            )}
+
+              {column.failures.length === 0 && onTriggerLLM && showUnexpectedOptions && (
+                <div className="pt-2 border-t border-border/60 space-y-2 text-[11px] text-muted-foreground">
+                  <p className="leading-snug">
+                    L'algorithme couvre toutes les lignes, mais si l'expression ne reflète pas votre règle métier :
+                  </p>
+                  {isLLMRunning ? (
+                    <div className="flex items-center gap-2 text-xs text-amber-300 py-1">
+                      <RefreshCw className="size-3.5 animate-spin" />
+                      <span>{llmReport?.text || "Recherche d'une alternative..."}</span>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={onTriggerLLM}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 py-1.5 px-2 text-xs font-medium text-amber-300 transition cursor-pointer"
+                        title="Demander à l'IA locale de déduire une autre regex"
+                      >
+                        <Sparkles className="size-3 text-amber-400" />
+                        <span>Alternative IA locale</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setExternalPromptOpen(true)}
+                        className="inline-flex items-center justify-center gap-1 rounded-md border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 py-1.5 px-2.5 text-xs font-medium text-purple-300 transition cursor-pointer"
+                        title="Générer un prompt optimisé pour ChatGPT / Claude"
+                      >
+                        <Bot className="size-3 text-purple-400" />
+                        <span>Prompt IA externe</span>
+                      </button>
+                    </div>
+                  )}
+                  <p className="text-[10px] text-muted-foreground/70 italic">
+                    💡 Astuce : saisir un exemple supplémentaire dans une autre cellule affine aussi directement la règle.
+                  </p>
+                </div>
+              )}
+            </div>
 
             {column.failures.length > 0 && (
               <div>
@@ -850,56 +853,40 @@ export function PatternPanel({
                         Copier le motif
                       </button>
                     </div>
-                    {/* Alerte rouge clignotante pour utilisateurs Excel hors Office 365 */}
+                    {/* Alerte compatibilité concise pour utilisateurs Excel */}
                     {dialectId === "excel" && (
-                      <div className="mt-3 rounded-lg border-2 border-red-500/60 bg-red-950/25 p-3 text-xs space-y-2 shadow-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="relative flex size-2.5 shrink-0">
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
-                            <span className="relative inline-flex size-2.5 rounded-full bg-red-500" />
-                          </span>
-                          <span className="font-bold text-red-400 uppercase tracking-wide text-[11px] flex items-center gap-1.5">
-                            <AlertTriangle className="size-3.5 text-red-400" />
-                            Alerte compatibilité : Nécessite Office 365 / Excel 2024+
-                          </span>
+                      <div className="mt-2.5 rounded-lg border border-amber-500/25 bg-amber-500/5 p-2.5 text-xs text-muted-foreground space-y-1.5">
+                        <div className="flex items-center gap-1.5 font-semibold text-amber-300 text-[11px]">
+                          <AlertTriangle className="size-3.5 text-amber-400 shrink-0" />
+                          <span>Compatibilité : Requiert Microsoft 365 ou Excel Web</span>
                         </div>
-                        <p className="text-[11px] leading-relaxed text-red-200/90 font-medium">
-                          La fonction <code className="rounded bg-red-950/80 px-1 py-0.5 font-mono text-red-300 font-semibold">{codeLocale === "fr" ? "REGEX.EXTRAIRE" : "REGEXEXTRACT"}</code> n'existe <strong>que</strong> dans Microsoft 365 et Excel Web.
+                        <p className="text-[11px] leading-relaxed">
+                          La formule renvoie <code className="rounded bg-rose-500/15 border border-rose-500/30 px-1 py-0.5 font-mono text-rose-300 font-semibold">#NOM?</code> sur Excel 2016, 2019 ou 2021.
                         </p>
-                        <div className="rounded bg-red-900/40 border border-red-500/40 p-2 text-[11px] text-red-200 leading-normal">
-                          ⚠️ <strong>Pour les dinosaures sur Excel 2016, 2019 ou 2021 :</strong> cette formule provoquera l'erreur <span className="font-mono font-bold text-white bg-red-600 px-1 py-0.5 rounded">#NOM?</span> !
-                        </div>
-                        <div className="text-[11px] text-red-200/90 space-y-1.5 pt-0.5">
-                          <div className="font-semibold text-red-300">💡 Solutions simples sans Office 365 :</div>
-                          <ul className="pl-1 space-y-1.5 text-muted-foreground list-none">
-                            <li className="flex items-start gap-1.5">
-                              <span className="text-primary font-bold">1.</span>
-                              <div>
-                                <strong className="text-foreground">Recommandé :</strong> Cliquez sur {onCopyTable ? (
-                                  <button
-                                    type="button"
-                                    onClick={onCopyTable}
-                                    className="font-bold text-primary underline underline-offset-2 hover:text-primary/80 cursor-pointer"
-                                  >
-                                    « Copier le tableau »
-                                  </button>
-                                ) : "« Copier le tableau »"} en haut pour coller directement les résultats déjà calculés !
-                              </div>
-                            </li>
-                            <li className="flex items-start gap-1.5">
-                              <span className="text-amber-400 font-bold">2.</span>
-                              <div>
-                                <strong className="text-foreground">Option Macro VBA :</strong> Basculez sur <button type="button" onClick={() => setDialectId("excel-vba")} className="font-semibold text-amber-300 underline underline-offset-2 hover:text-amber-200 cursor-pointer">« Excel 2010 - 2021 (Sans REGEX.EXTRAIRE / VBA) »</button> pour générer le code VBA compatible.
-                              </div>
-                            </li>
-                          </ul>
-                        </div>
+                        <p className="text-[11px] leading-relaxed pt-1 border-t border-border/40 text-muted-foreground/90">
+                          💡 <strong>Sans Office 365 :</strong> {onCopyTable ? (
+                            <button
+                              type="button"
+                              onClick={onCopyTable}
+                              className="font-semibold text-primary underline underline-offset-2 hover:text-primary/80 cursor-pointer"
+                            >
+                              Copier le tableau calculé
+                            </button>
+                          ) : "Copiez le tableau calculé"} ou basculez sur l'option <button
+                            type="button"
+                            onClick={() => setDialectId("excel-vba")}
+                            className="font-semibold text-amber-300 underline underline-offset-2 hover:text-amber-200 cursor-pointer"
+                          >
+                            Excel VBA
+                          </button>.
+                        </p>
                       </div>
                     )}
                     {note && (
-                      <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
-                        {note}
-                      </p>
+                      <div className="mt-2.5 flex items-start gap-1.5 text-[11px] text-muted-foreground/80 leading-relaxed pt-1.5 border-t border-border/40">
+                        <Info className="size-3.5 shrink-0 mt-0.5 text-muted-foreground/60" />
+                        <span>{note}</span>
+                      </div>
                     )}
                   </>
                 );
