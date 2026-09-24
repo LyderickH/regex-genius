@@ -87,7 +87,14 @@ export function usePwa() {
             if (installing) {
               installing.onstatechange = () => {
                 if (installing.state === "installed" && navigator.serviceWorker.controller) {
-                  console.log("PWA: Nouvelle version disponible en cache.");
+                  toast.info("Nouvelle version de Regex Genius disponible !", {
+                    id: "pwa-update",
+                    duration: 10000,
+                    action: {
+                      label: "Mettre à jour",
+                      onClick: () => window.location.reload(),
+                    },
+                  });
                 }
               };
             }

@@ -1,4 +1,4 @@
-const CACHE_NAME = "regex-genius-v1";
+const CACHE_NAME = "regex-genius-v2.2";
 const STATIC_ASSETS = [
   "./",
   "./manifest.json",
