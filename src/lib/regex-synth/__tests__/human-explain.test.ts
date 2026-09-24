@@ -5,7 +5,6 @@ describe("explainRegexHuman", () => {
   it("explains contextual prefix and suffix around brackets (audit log case)", () => {
     const text = explainRegexHuman({
       source: "at timestamp \\[\\[([^\\r\\n]+?)\\]\\] with context",
-      pattern: "at timestamp \\[\\[([^\\r\\n]+?)\\]\\] with context",
       flags: "g",
       transform: { strip: "none", dec: "none", casing: "none", fmt: "none" },
     });
@@ -16,7 +15,6 @@ describe("explainRegexHuman", () => {
   it("explains chevron delimited text", () => {
     const text = explainRegexHuman({
       source: "<([^>]+)>",
-      pattern: "<([^>]+)>",
       flags: "g",
       transform: { strip: "none", dec: "none", casing: "none", fmt: "none" },
     });
@@ -28,7 +26,6 @@ describe("explainRegexHuman", () => {
     const text = explainRegexHuman(
       {
         source: "^(?:[^\\|]*\\|){8}\\s*([^\\|]+?)\\s*(?:\\||$)",
-        pattern: "^(?:[^\\|]*\\|){8}\\s*([^\\|]+?)\\s*(?:\\||$)",
         flags: "m",
         transform: { strip: "none", dec: "none", casing: "none", fmt: "none" },
       },
@@ -41,7 +38,6 @@ describe("explainRegexHuman", () => {
   it("explains URL parameter", () => {
     const text = explainRegexHuman({
       source: "utm_campaign=([A-Za-z0-9/_-]+)",
-      pattern: "utm_campaign=([A-Za-z0-9/_-]+)",
       flags: "g",
       transform: { strip: "none", dec: "none", casing: "none", fmt: "none" },
     });
@@ -51,16 +47,18 @@ describe("explainRegexHuman", () => {
   it("uses LLM explanation if available", () => {
     const text = explainRegexHuman({
       source: "foo",
-      pattern: "foo",
       flags: "g",
       transform: { strip: "none", dec: "none", casing: "none", fmt: "none" },
       llmMetadata: {
         modelName: "test",
         runtime: "webgpu",
-        promptTokens: 0,
-        completionTokens: 0,
-        generationTimeMs: 0,
         explanation: "Explication LLM spécifique personnalisée.",
+        verified: true,
+        securityRisk: "low",
+        positivePassed: 1,
+        positiveTotal: 1,
+        negativePassed: 0,
+        negativeTotal: 0,
         attemptsCount: 1,
       },
     });

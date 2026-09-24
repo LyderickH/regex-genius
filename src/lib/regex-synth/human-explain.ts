@@ -35,7 +35,7 @@ export function explainRegexHuman(
     return `${clean}, puis applique : ${transformDesc}.`;
   };
 
-  const p = rule.pattern || rule.source;
+  const p = rule.source;
 
   // 1. Remplacement / Substitution explicite
   if (rule.replacement !== undefined) {
@@ -95,7 +95,13 @@ export function explainRegexHuman(
 
   // Recherche du groupe de capture principal '(' et ')'
   const openIdx = segments.findIndex((s) => s.text === "(");
-  const closeIdx = segments.findLastIndex ? segments.findLastIndex((s) => s.text === ")") : segments.map(s => s.text).lastIndexOf(")");
+  let closeIdx = -1;
+  for (let idx = segments.length - 1; idx >= 0; idx--) {
+    if (segments[idx]?.text === ")") {
+      closeIdx = idx;
+      break;
+    }
+  }
 
   if (openIdx !== -1 && closeIdx !== -1 && closeIdx > openIdx) {
     // Préfixe : tous les segments avant '('
