@@ -23,11 +23,11 @@ export const DIALECTS: Dialect[] = [
     pattern: (s) => `"${excelQ(s)}"`,
     snippet: (s, _f, loc = "fr") =>
       loc === "fr"
-        ? `=EXTRAIRE.REGEX(A2; "${excelQ(s)}"; 1)`
+        ? `=REGEX.EXTRAIRE(A2; "${excelQ(s)}"; 1)`
         : `=REGEXEXTRACT(A2, "${excelQ(s)}", 1)`,
     note: (loc = "fr") =>
       loc === "fr"
-        ? "EXTRAIRE.REGEX est la formule officielle pour Excel 365 en français (séparateur point-virgule « ; »). Si votre Excel utilise les noms anglais, basculez sur l'onglet EN pour =REGEXEXTRACT."
+        ? "REGEX.EXTRAIRE est la formule officielle pour Excel 365 en français (séparateur point-virgule « ; »). Si votre Excel utilise les noms anglais, basculez sur l'onglet EN pour =REGEXEXTRACT."
         : "REGEXEXTRACT requires Excel 365 (comma delimiter ','). The 3rd argument '1' returns the 1st capture group.",
   },
   {

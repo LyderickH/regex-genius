@@ -528,7 +528,7 @@ export function PatternPanel({
                         ? "bg-primary text-primary-foreground font-semibold shadow-xs"
                         : "text-muted-foreground hover:text-foreground",
                     )}
-                    title="Formules adaptées aux versions françaises (ex: EXTRAIRE.REGEX avec séparateur point-virgule ;)"
+                    title="Formules adaptées aux versions françaises (ex: REGEX.EXTRAIRE avec séparateur point-virgule ;)"
                   >
                     🇫🇷 FR
                   </button>

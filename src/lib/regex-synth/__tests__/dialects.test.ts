@@ -2,14 +2,14 @@ import { describe, it, expect } from "vitest";
 import { DIALECTS } from "../dialects";
 
 describe("DIALECTS - French & English modes", () => {
-  it("fournit la formule Excel 365 en français (EXTRAIRE.REGEX avec point-virgule) et en anglais (REGEXEXTRACT avec virgule)", () => {
+  it("fournit la formule Excel 365 en français (REGEX.EXTRAIRE avec point-virgule) et en anglais (REGEXEXTRACT avec virgule)", () => {
     const excel = DIALECTS.find((d) => d.id === "excel")!;
     expect(excel).toBeDefined();
 
     // Mode français (par défaut)
     const frSnippet = excel.snippet("([A-Z0-9]+)", "texte", "fr");
-    expect(frSnippet).toBe('=EXTRAIRE.REGEX(A2; "([A-Z0-9]+)"; 1)');
-    expect(typeof excel.note === "function" ? excel.note("fr") : excel.note).toContain("EXTRAIRE.REGEX");
+    expect(frSnippet).toBe('=REGEX.EXTRAIRE(A2; "([A-Z0-9]+)"; 1)');
+    expect(typeof excel.note === "function" ? excel.note("fr") : excel.note).toContain("REGEX.EXTRAIRE");
 
     // Mode anglais
     const enSnippet = excel.snippet("([A-Z0-9]+)", "text", "en");

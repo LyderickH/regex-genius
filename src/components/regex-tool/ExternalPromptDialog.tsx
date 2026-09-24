@@ -208,7 +208,7 @@ export function ExternalPromptDialog({
                 onChange={(e) => setDialect(e.target.value)}
                 className="rounded border border-border bg-background px-2 py-0.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary cursor-pointer"
               >
-                <option value="Excel 365 (=EXTRAIRE.REGEX / =REGEXEXTRACT)">Excel 365 (=EXTRAIRE.REGEX / =REGEXEXTRACT)</option>
+                <option value="Excel 365 (=REGEX.EXTRAIRE / =REGEXEXTRACT)">Excel 365 (=REGEX.EXTRAIRE / =REGEXEXTRACT)</option>
                 <option value="Alteryx (Outil RegEx / Formula)">Alteryx (Outil RegEx / Formula)</option>
                 <option value="KNIME (regexReplace / Regex Split)">KNIME (regexReplace / Split)</option>
                 <option value="Power Query (M) / Excel">Power Query (M) / Excel</option>
