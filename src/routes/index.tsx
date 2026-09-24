@@ -1116,7 +1116,7 @@ function detectBestSourceCol(matrix: Matrix): number {
 
               <ToolbarButton
                 icon={Bot}
-                label="Prompt pour votre IA cloud si bug"
+                label="Prompt ChatGPT / Claude"
                 onClick={() => setExternalPromptOpen(true)}
               />
 

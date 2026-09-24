@@ -519,7 +519,7 @@ export function PatternPanel({
                   className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 px-2.5 py-1.5 text-xs font-medium transition cursor-pointer"
                 >
                   <Bot className="size-3.5" />
-                  Prompt pour votre IA cloud si bug
+                  Prompt ChatGPT / Claude
                 </button>
               </div>
             )}
@@ -650,10 +650,10 @@ export function PatternPanel({
                 <button
                   onClick={() => setExternalPromptOpen(true)}
                   className="inline-flex items-center gap-1.5 text-xs font-medium text-purple-400 hover:text-purple-300 transition cursor-pointer"
-                  title="Générer un prompt complet avec vos exemples pour ChatGPT, Claude ou Gemini"
+                  title="Générer un prompt complet avec vos exemples pour ChatGPT, Claude ou Gemini en cas de cas complexe"
                 >
                   <Bot className="size-3.5" />
-                  <span>Prompt pour votre IA cloud si bug</span>
+                  <span>Prompt ChatGPT / Claude</span>
                 </button>
                 {!isLLMRule && onTriggerLLM && column.failures.length === 0 && (
                   <button
