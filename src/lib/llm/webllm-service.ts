@@ -242,6 +242,65 @@ class LocalLLMService {
   }
 
   /**
+   * Demande au LLM local de décrypter et expliquer un motif regex en français naturel
+   */
+  public async explainPattern(
+    pattern: string,
+    examples: Array<{ input: string; output: string }>,
+  ): Promise<string> {
+    if (!this.engine || !this.isLoadedState) {
+      await this.load();
+    }
+
+    if (!this.engine) {
+      throw new Error("Moteur LLM local non disponible.");
+    }
+
+    this.notify({
+      status: "generating",
+      text: "Décryptage du motif par l'IA locale...",
+    });
+
+    const sampleText = examples
+      .filter((e) => e.input && e.output)
+      .slice(0, 4)
+      .map((e) => `• "${e.input}" ➜ "${e.output}"`)
+      .join("\n");
+
+    const prompt = `Voici une expression régulière JavaScript : \`${pattern}\`
+${sampleText ? `Exemples concrets de données traitées :\n${sampleText}\n` : ""}
+Explique en 1 ou 2 phrases concises, claires et en français naturel ce que fait cette regex (comment elle repère la valeur et ce qu'elle extrait). Reste direct et accessible, sans jargon excessif.`;
+
+    try {
+      const completion = await this.engine.chat.completions.create({
+        messages: [
+          {
+            role: "system",
+            content:
+              "Tu es un assistant expert en expressions régulières. Tu expliques les regex en français de façon limpide, humaine et concise.",
+          },
+          { role: "user", content: prompt },
+        ],
+        temperature: 0.1,
+        max_tokens: 150,
+      });
+
+      const responseText = completion.choices[0]?.message?.content?.trim() || "";
+      this.notify({
+        status: "ready",
+        text: "Décryptage terminé",
+      });
+      return responseText;
+    } catch (err) {
+      this.notify({
+        status: "error",
+        text: `Erreur lors du décryptage : ${err instanceof Error ? err.message : String(err)}`,
+      });
+      throw err;
+    }
+  }
+
+  /**
    * Libère la mémoire VRAM/RAM et termine le worker
    */
   public async unload(): Promise<void> {

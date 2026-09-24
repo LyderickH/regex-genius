@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Check,
   Copy,
@@ -29,6 +29,7 @@ import type { OutputColumn } from "./types";
 import { LLMControlDialog } from "./LLMControlDialog";
 import { ExternalPromptDialog } from "./ExternalPromptDialog";
 import type { ModelProgressReport } from "@/lib/llm/types";
+import { localLLM } from "@/lib/llm/webllm-service";
 
 const TOK_COLOR: Record<string, string> = {
   literal: "text-tok-literal",
@@ -80,6 +81,40 @@ export function PatternPanel({
     [rule, column?.name],
   );
   const humanExplanation = analysis.human;
+
+  const [llmDecryptedText, setLlmDecryptedText] = useState<string | null>(null);
+  const [isDecrypting, setIsDecrypting] = useState(false);
+
+  useEffect(() => {
+    setLlmDecryptedText(null);
+  }, [column?.rule?.source]);
+
+  const handleDecryptWithLocalLLM = async () => {
+    if (!rule) return;
+    setIsDecrypting(true);
+    try {
+      const examples: Array<{ input: string; output: string }> = [];
+      if (column?.user && rows) {
+        for (let i = 0; i < rows.length; i++) {
+          const u = column.user[i];
+          const inp = rows[i];
+          if (u && inp) {
+            examples.push({ input: inp, output: u });
+            if (examples.length >= 6) break;
+          }
+        }
+      }
+      const explanation = await localLLM.explainPattern(rule.source, examples);
+      if (explanation) {
+        setLlmDecryptedText(explanation);
+        toast.success("Motif décrypté par l'IA locale !");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erreur de décryptage IA");
+    } finally {
+      setIsDecrypting(false);
+    }
+  };
 
   const copy = async (text: string, what: string) => {
     await navigator.clipboard.writeText(text);
@@ -593,16 +628,34 @@ export function PatternPanel({
                 <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground font-semibold">
                   Lecture & Raisonnement du motif
                 </span>
+                <button
+                  type="button"
+                  onClick={handleDecryptWithLocalLLM}
+                  disabled={isDecrypting}
+                  className="flex items-center gap-1 text-[11px] text-purple-400 hover:text-purple-300 font-medium transition cursor-pointer disabled:opacity-50"
+                  title="Demander à l'IA locale (WebLLM / WebGPU) de rédiger une explication en langage naturel de ce motif"
+                >
+                  <Sparkles className={cn("size-3", isDecrypting && "animate-spin text-purple-300")} />
+                  <span>{isDecrypting ? "Décryptage IA..." : "Décrypter avec l'IA locale"}</span>
+                </button>
               </div>
 
               {/* 1. En langage humain (clair et immédiat) */}
               <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-1">
-                <div className="flex items-center gap-1.5 font-semibold text-primary text-xs">
-                  <Lightbulb className="size-3.5 text-primary" />
-                  <span>En langage humain :</span>
+                <div className="flex items-center justify-between font-semibold text-primary text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <Lightbulb className="size-3.5 text-primary" />
+                    <span>En langage humain :</span>
+                  </div>
+                  {(llmDecryptedText || rule.llmMetadata?.explanation) && (
+                    <span className="text-[10px] text-purple-300 bg-purple-500/15 border border-purple-500/30 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
+                      <Sparkles className="size-2.5" />
+                      Rédigé par IA locale
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-foreground leading-relaxed font-normal">
-                  {analysis.human}
+                  {llmDecryptedText || analysis.human}
                 </p>
               </div>
 
