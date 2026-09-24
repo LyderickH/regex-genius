@@ -150,7 +150,8 @@ export function generateExternalAIPrompt({
   } else if (dLower.includes("power query")) {
     promptParts.push(
       `5. **Spécificités Power Query (M)** :`,
-      `   - Fournis le code M adapté (ex: \`Text.BetweenDelimiters\`, \`Text.Select\` ou script personnalisé).`,
+      `   - Rappel important : le langage M n'a AUCUNE fonction Regex native (et sa syntaxe n'est pas traduite, toujours avec des virgules \`,\`).`,
+      `   - Fournis soit le contournement JavaScript standard via \`Web.Page\`, soit une étape \`Python.Execute\` pour Power BI, soit une combinaison de fonctions M natives sans regex (\`Text.BetweenDelimiters\`, \`Text.Select\`, \`Text.Split\`).`,
     );
   } else {
     promptParts.push(

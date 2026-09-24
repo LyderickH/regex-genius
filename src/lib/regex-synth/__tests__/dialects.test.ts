@@ -47,4 +47,14 @@ describe("DIALECTS - French & English modes", () => {
     expect(js.snippet("pat", undefined, "fr")).toContain("valeur =");
     expect(js.snippet("pat", undefined, "en")).toContain("value =");
   });
+
+  it("génère le contournement Web.Page pour Power Query M avec virgules", () => {
+    const pq = DIALECTS.find((d) => d.id === "powerquery")!;
+    expect(pq).toBeDefined();
+    const snip = pq.snippet("([0-9]+)", "MaCol", "fr");
+    expect(snip).toContain("Table.AddColumn(Source, \"Resultat\"");
+    expect(snip).toContain("Web.Page(");
+    expect(snip).toContain("[MaCol]");
+    expect(snip).not.toContain("; each"); // M syntax uses commas
+  });
 });

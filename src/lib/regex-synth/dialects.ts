@@ -73,14 +73,15 @@ export const DIALECTS: Dialect[] = [
     id: "powerquery",
     label: "Power Query (M)",
     pattern: (s) => `"${dq(s)}"`,
-    snippet: (s, _f, loc = "fr") =>
-      loc === "fr"
-        ? `= Table.AddColumn(Source; "Extrait"; each let t = Text.From([Colonne1]) in Text.BetweenDelimiters(t; ""; "")) // motif : ${s}`
-        : `= Table.AddColumn(Source, "Extracted", each let t = Text.From([Column1]) in Text.BetweenDelimiters(t, "", "")) // pattern: ${s}`,
+    snippet: (s, f, loc = "fr") => {
+      const col = f || (loc === "fr" ? "Colonne1" : "Column1");
+      const outCol = loc === "fr" ? "Resultat" : "Result";
+      return `= Table.AddColumn(Source, "${outCol}", each Web.Page("<script>var m = new RegExp('" & "${dq(s)}" & "').exec('" & Text.From([${col}]) & "'); document.write(m ? m[1] || m[0] : '');</script>")[Data]{0}[Children]{0}[Children]{1}[Text]{0})`;
+    },
     note: (loc = "fr") =>
       loc === "fr"
-        ? "Power Query n'a pas de moteur regex natif ; utilisez Text.BetweenDelimiters ou une fonction R/Python."
-        : "Power Query has no native regex engine; use Text.BetweenDelimiters or an R/Python step.",
+        ? "Power Query (M) n'a aucune fonction Regex native (le langage M n'est pas traduit et utilise toujours des virgules « , »). Ce snippet utilise le contournement standard Web.Page (JavaScript) pour Excel Desktop. Sur Power BI Desktop / Service, utilisez une étape Python.Execute ou des fonctions natives (Text.BetweenDelimiters, Text.Select)."
+        : "Power Query (M) has no native Regex engine (M syntax always uses commas ','). This snippet uses the standard Web.Page (JavaScript) hack for Excel Desktop. On Power BI, use Python.Execute or native M functions (Text.BetweenDelimiters, Text.Select).",
   },
   {
     id: "python",
