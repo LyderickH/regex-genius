@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   Copy,
@@ -30,7 +30,11 @@ import type { OutputColumn } from "./types";
 import { LLMControlDialog } from "./LLMControlDialog";
 import { ExternalPromptDialog } from "./ExternalPromptDialog";
 import type { ModelProgressReport } from "@/lib/llm/types";
-import { localLLM, type DecryptedPatternResult } from "@/lib/llm/webllm-service";
+import {
+  localLLM,
+  type DecryptedPatternResult,
+  type KnownPatternStep,
+} from "@/lib/llm/webllm-service";
 
 const TOK_COLOR: Record<string, string> = {
   literal: "text-tok-literal",
@@ -86,9 +90,12 @@ export function PatternPanel({
   const [llmDecrypted, setLlmDecrypted] = useState<DecryptedPatternResult | null>(null);
   const [isDecrypting, setIsDecrypting] = useState(false);
   const [showUnexpectedOptions, setShowUnexpectedOptions] = useState(false);
+  const isDecryptingRef = useRef(false);
+  const lastAnalyzedPatternRef = useRef<string | null>(null);
 
   const handleDecryptWithLocalLLM = useCallback(async () => {
-    if (!rule) return;
+    if (!rule || isDecryptingRef.current) return;
+    isDecryptingRef.current = true;
     setIsDecrypting(true);
     try {
       const examples: Array<{ input: string; output: string }> = [];
@@ -102,25 +109,52 @@ export function PatternPanel({
           }
         }
       }
-      const res = await localLLM.explainPattern(rule.source, examples);
+
+      const knownSteps: KnownPatternStep[] = (analysis.technical?.steps ?? []).map((s) => ({
+        token: s.token,
+        label: s.label,
+        technical: s.technical || s.detail,
+        human: s.human,
+      }));
+
+      const res = await localLLM.explainPattern(rule.source, examples, knownSteps);
       if (res && res.steps && res.steps.length > 0) {
         setLlmDecrypted(res);
-        toast.success("Explication IA générée (angles technique & humain) !");
+        lastAnalyzedPatternRef.current = rule.source;
+        toast.success("Explication IA générée !");
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erreur de décryptage IA");
     } finally {
       setIsDecrypting(false);
+      isDecryptingRef.current = false;
     }
-  }, [rule, column, rows]);
+  }, [rule, column, rows, analysis]);
+
+  const decryptFnRef = useRef(handleDecryptWithLocalLLM);
+  decryptFnRef.current = handleDecryptWithLocalLLM;
+
+  const currentRuleSource = column?.rule?.source;
 
   useEffect(() => {
-    setLlmDecrypted(null);
     setShowUnexpectedOptions(false);
-    if (rule?.source && localLLM.isLoaded()) {
-      handleDecryptWithLocalLLM();
+    if (!currentRuleSource) {
+      setLlmDecrypted(null);
+      lastAnalyzedPatternRef.current = null;
+      return;
     }
-  }, [column?.rule?.source, handleDecryptWithLocalLLM]);
+
+    // Réinitialiser uniquement si le motif a changé par rapport au motif analysé
+    if (currentRuleSource !== lastAnalyzedPatternRef.current) {
+      setLlmDecrypted(null);
+      // Auto-décryptage UNIQUEMENT si le modèle est DÉJÀ chargé en mémoire
+      // et qu'aucune analyse n'est déjà en cours.
+      if (localLLM.isLoaded() && !isDecryptingRef.current) {
+        lastAnalyzedPatternRef.current = currentRuleSource;
+        void decryptFnRef.current();
+      }
+    }
+  }, [currentRuleSource]);
 
   const copy = async (text: string, what: string) => {
     await navigator.clipboard.writeText(text);
@@ -686,31 +720,45 @@ export function PatternPanel({
                 </div>
 
                 <div className="rounded-lg border border-border/70 bg-background/80 overflow-hidden divide-y divide-border/40 text-[11px]">
-                  {(llmDecrypted?.steps && llmDecrypted.steps.length > 0 ? llmDecrypted.steps : analysis.technical.steps).map((st, i) => (
-                    <div key={i} className="p-2 space-y-0.5 hover:bg-surface-2/30 transition-colors">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        {st.token && (
-                          <code className="shrink-0 font-mono text-[10px] font-bold text-amber-300 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">
-                            {st.token}
-                          </code>
-                        )}
-                        <span className="font-semibold text-foreground text-[11px] truncate">{st.label}</span>
-                      </div>
+                  {(llmDecrypted?.steps && llmDecrypted.steps.length > 0 ? llmDecrypted.steps : analysis.technical.steps).map((st, i) => {
+                    const fallbackStep = analysis.technical.steps[i];
+                    const tokenDisplay =
+                      st.token && st.token.toLowerCase() !== "morceau"
+                        ? st.token
+                        : fallbackStep?.token || "Token";
+                    const labelDisplay = st.label || fallbackStep?.label || `Étape ${i + 1}`;
+                    const techDisplay =
+                      st.technical || (st as { detail?: string }).detail || fallbackStep?.technical || fallbackStep?.detail;
+                    const humanDisplay = st.human || fallbackStep?.human;
 
-                      <div className="space-y-0.5 pl-0.5 text-[10px] leading-tight">
-                        <div className="text-muted-foreground flex items-start gap-1">
-                          <span className="font-bold text-foreground/80 shrink-0">⚙️ Tech :</span>
-                          <span>{st.technical || st.detail}</span>
+                    return (
+                      <div key={i} className="p-2 space-y-0.5 hover:bg-surface-2/30 transition-colors">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {tokenDisplay && (
+                            <code className="shrink-0 font-mono text-[10px] font-bold text-amber-300 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">
+                              {tokenDisplay}
+                            </code>
+                          )}
+                          <span className="font-semibold text-foreground text-[11px] truncate">{labelDisplay}</span>
                         </div>
-                        {st.human && (
-                          <div className="text-emerald-400/90 flex items-start gap-1">
-                            <span className="font-bold text-emerald-400 shrink-0">💡 Humain :</span>
-                            <span>{st.human}</span>
-                          </div>
-                        )}
+
+                        <div className="space-y-0.5 pl-0.5 text-[10px] leading-tight">
+                          {techDisplay && (
+                            <div className="text-muted-foreground flex items-start gap-1">
+                              <span className="font-bold text-foreground/80 shrink-0">⚙️ Tech :</span>
+                              <span>{techDisplay}</span>
+                            </div>
+                          )}
+                          {humanDisplay && (
+                            <div className="text-emerald-400/90 flex items-start gap-1">
+                              <span className="font-bold text-emerald-400 shrink-0">💡 Humain :</span>
+                              <span>{humanDisplay}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {rule.replacement !== undefined && (
                     <div className="p-2 space-y-0.5 bg-cyan-500/5 hover:bg-cyan-500/10 transition-colors">

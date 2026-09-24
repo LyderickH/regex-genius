@@ -18,6 +18,13 @@ import {
 
 export type ProgressSubscriber = (report: ModelProgressReport) => void;
 
+export interface KnownPatternStep {
+  token: string;
+  label: string;
+  technical?: string;
+  human?: string;
+}
+
 export interface DecryptedPatternStep {
   token: string;
   label: string;
@@ -260,6 +267,7 @@ class LocalLLMService {
   public async explainPattern(
     pattern: string,
     examples: Array<{ input: string; output: string }>,
+    knownSteps?: KnownPatternStep[],
   ): Promise<DecryptedPatternResult> {
     if (!this.engine || !this.isLoadedState) {
       await this.load();
@@ -280,23 +288,48 @@ class LocalLLMService {
       .map((e) => `• "${e.input}" ➜ "${e.output}"`)
       .join("\n");
 
-    const prompt = `Voici une expression régulière JavaScript : \`${pattern}\`
-${sampleText ? `Exemples de données concrètes :\n${sampleText}\n` : ""}
+    const stepsListText =
+      knownSteps && knownSteps.length > 0
+        ? `Le motif est précisément décomposé en ces segments réels à analyser :\n` +
+          knownSteps
+            .map(
+              (st, idx) =>
+                `${idx + 1}. Token exact : "${st.token}" (Rôle identifié : ${st.label})`,
+            )
+            .join("\n")
+        : "";
 
-Donne une explication TRÈS SIMPLE, COURTE et point par point de chaque morceau logique du motif (repère de départ, valeur extraite, repère de fin).
-Pour chaque morceau :
-1. "technical" : 1 seule phrase courte et simple (règle regex).
-2. "human" : 1 seule phrase courte et concrète (ce que ça représente dans les données de l'exemple).
+    const exampleToken = knownSteps?.[0]?.token
+      ? JSON.stringify(knownSteps[0].token)
+      : `"HTTP\\\\/1\\\\.1"`;
 
-Réponds EXCLUSIVEMENT par un objet JSON valide :
+    const prompt = `Tu dois analyser et expliquer cette expression régulière JavaScript : \`${pattern}\`
+${sampleText ? `\nDonnées observées (Texte source ➜ Valeur extraite/transformée) :\n${sampleText}\n` : ""}
+${stepsListText ? `\n${stepsListText}\n` : ""}
+
+OBJECTIF : Rédiger une explication claire, pédagogique, concise et percutante.
+
+CONSIGNES STRICTES :
+1. "summary" : En 1 phrase concise et percutante, explique ce que la regex extrait ou transforme à partir du contexte textuel des données (ex: "Extrait la valeur du paramètre 'utm_campaign' situé entre '&utm_campaign=' et le prochain '&'").
+   ⚠️ INTERDIT : Ne dis JAMAIS "en utilisant un groupe d'expression régulière" ni de formule générique vide. Décris le rôle métier concret.
+
+2. "steps" : Fournis la décomposition pour chaque morceau du motif.
+   ${knownSteps && knownSteps.length > 0 ? `Tu DOIS renvoyer exactement ${knownSteps.length} éléments correspondant dans l'ordre aux segments réels listés ci-dessus.` : ""}
+   Pour chaque morceau :
+   - "token" : RECOPIE STRICTEMENT le token exact fourni ci-dessus. ⚠️ N'ÉCRIS JAMAIS le mot "morceau".
+   - "label" : Nom court et clair du rôle (ex: "Préfixe de repère", "Valeur extraite", "Délimiteur de fin").
+   - "technical" : 1 phrase courte sur la syntaxe regex (ce que ce token détecte techniquement dans la chaîne).
+   - "human" : 1 phrase courte sur le rôle concret dans les données exemples (pourquoi ce token est là et ce qu'il cible). Attention : si c'est un délimiteur de fin, ne dis PAS que c'est le début de la valeur !
+
+Format de réponse STRICTEMENT en JSON :
 {
-  "summary": "1 phrase très simple résumant l'extraction",
+  "summary": "Résumé concret et sans jargon générique",
   "steps": [
     {
-      "token": "morceau",
-      "label": "Rôle simple (ex: Délimiteur début, Valeur extraite, Délimiteur fin)",
-      "technical": "Explication technique courte et simple",
-      "human": "Ce que ça représente concrètement dans l'exemple"
+      "token": ${exampleToken},
+      "label": "Rôle clair",
+      "technical": "Règle regex précise",
+      "human": "Rôle concret dans les données"
     }
   ]
 }`;
@@ -312,7 +345,7 @@ Réponds EXCLUSIVEMENT par un objet JSON valide :
           { role: "user", content: prompt },
         ],
         temperature: 0.1,
-        max_tokens: 600,
+        max_tokens: 650,
       });
 
       const responseText = completion.choices[0]?.message?.content?.trim() || "";
@@ -331,16 +364,59 @@ Réponds EXCLUSIVEMENT par un objet JSON valide :
         try {
           const parsed = JSON.parse(jsonMatch[0]);
           if (parsed && typeof parsed.summary === "string") {
+            const rawSteps = Array.isArray(parsed.steps) ? parsed.steps : [];
+            let cleanSteps: DecryptedPatternStep[] = [];
+
+            if (knownSteps && knownSteps.length > 0) {
+              cleanSteps = knownSteps.map((ks, i) => {
+                const llm = (rawSteps[i] || {}) as Record<string, unknown>;
+                const rawTok = String(llm.token || "").trim();
+                // Si le token renvoyé est "morceau" ou vide ou invalide, on force le vrai token ks.token
+                const validToken =
+                  !rawTok || rawTok.toLowerCase() === "morceau" || rawTok.toLowerCase() === "sous_motif"
+                    ? ks.token
+                    : rawTok;
+
+                let humanText = String(llm.human || ks.human || "");
+                // Corriger l'hallucination fréquente "début de la valeur" sur un repère de fin
+                const isEnding =
+                  ks.label.toLowerCase().includes("fin") ||
+                  ks.label.toLowerCase().includes("suffixe") ||
+                  ks.label.toLowerCase().includes("après");
+                if (isEnding && humanText.toLowerCase().includes("début de la valeur")) {
+                  humanText = "Marque la borne d'arrêt pour isoler la valeur extraite.";
+                }
+
+                return {
+                  token: validToken || ks.token,
+                  label: String(llm.label || ks.label || `Étape ${i + 1}`),
+                  technical: String(llm.technical || ks.technical || ""),
+                  human: humanText,
+                };
+              });
+            } else {
+              cleanSteps = rawSteps.map((st: Record<string, unknown>, i: number) => {
+                const rawTok = String(st.token || "").trim();
+                return {
+                  token: !rawTok || rawTok.toLowerCase() === "morceau" ? `Token ${i + 1}` : rawTok,
+                  label: String(st.label || `Étape ${i + 1}`),
+                  technical: String(st.technical || ""),
+                  human: String(st.human || ""),
+                };
+              });
+            }
+
+            let summary = parsed.summary.trim();
+            if (
+              summary.toLowerCase().includes("en utilisant un groupe d'expression régulière") ||
+              summary.length < 10
+            ) {
+              summary = `Isole la valeur cible en s'appuyant sur les repères contextuels de la ligne.`;
+            }
+
             return {
-              summary: parsed.summary,
-              steps: Array.isArray(parsed.steps)
-                ? parsed.steps.map((st: Record<string, unknown>) => ({
-                    token: String(st.token || ""),
-                    label: String(st.label || "Étape"),
-                    technical: String(st.technical || ""),
-                    human: String(st.human || ""),
-                  }))
-                : [],
+              summary,
+              steps: cleanSteps,
             };
           }
         } catch {
