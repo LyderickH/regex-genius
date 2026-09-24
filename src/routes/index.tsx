@@ -731,9 +731,27 @@ function detectBestSourceCol(matrix: Matrix): number {
   };
 
   const loadSample1 = () => {
-    loadBusinessPreset(BUSINESS_PRESETS[0]);
+    const p = BUSINESS_PRESETS[0];
+    if (p) loadBusinessPreset(p);
   };
   const loadSample = loadSample1;
+
+  /** Réinitialise le tableau et revient à l'écran d'accueil */
+  const returnToWelcome = () => {
+    if (rows.length > 0) {
+      const ok = window.confirm(
+        "Voulez-vous fermer le tableau en cours et revenir au menu d'accueil ?",
+      );
+      if (!ok) return;
+    }
+    setRows([]);
+    setColumns([]);
+    setActiveId(null);
+    setSel(null);
+    fullSourceRef.current = null;
+    setDisplayMode("all");
+    setExtraCount(0);
+  };
 
   const loadSample2 = () => {
     const source = AUDIT_LOGS_SAMPLE.slice();
@@ -1018,15 +1036,20 @@ function detectBestSourceCol(matrix: Matrix): number {
 
 
       <header className="flex shrink-0 items-center gap-3 border-b border-grid-line bg-surface px-4 py-2.5">
-        <div className="flex items-center gap-2">
-          <Regex className="size-5 text-primary" />
+        <button
+          type="button"
+          onClick={returnToWelcome}
+          className="flex items-center gap-2 text-left hover:opacity-85 transition cursor-pointer group"
+          title="Revenir au menu d'accueil"
+        >
+          <Regex className="size-5 text-primary transition-transform group-hover:scale-105" />
           <div className="leading-tight">
-            <div className="text-sm font-semibold">Regex par l'exemple</div>
+            <div className="text-sm font-semibold group-hover:text-primary transition-colors">Regex par l'exemple</div>
             <div className="text-[11px] text-muted-foreground">
               Tout reste dans votre navigateur
             </div>
           </div>
-        </div>
+        </button>
 
         <div className="ml-4 flex items-center gap-1.5">
           <ToolbarButton icon={ClipboardPaste} label="Coller" onClick={() => setPasteOpen(true)} />
@@ -1132,22 +1155,23 @@ function detectBestSourceCol(matrix: Matrix): number {
           )}
 
           {rows.length > 0 && (
-            <div className="flex items-center gap-2">
-              {fullSourceRef.current && fullSourceRef.current.totalLines > rows.length && (
+            <div className="flex items-center gap-2 font-mono text-[11px]">
+              {fullSourceRef.current && fullSourceRef.current.totalLines > rows.length ? (
                 <div
-                  className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary shadow-xs"
+                  className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 font-medium text-primary shadow-xs"
                   title="Échantillon interactif de 50 000 lignes pour une fluidité maximale. L'export traitera l'intégralité du fichier."
                 >
                   <Layers className="size-3" />
                   <span>
                     Échantillon : {rows.length.toLocaleString("fr-FR")} /{" "}
-                    {fullSourceRef.current.totalLines.toLocaleString("fr-FR")} lignes
+                    {fullSourceRef.current.totalLines.toLocaleString("fr-FR")} lignes · {columns.length} col.
                   </span>
                 </div>
+              ) : (
+                <div className="text-muted-foreground">
+                  {rows.length.toLocaleString("fr-FR")} lignes · {columns.length} colonne{columns.length > 1 ? "s" : ""}
+                </div>
               )}
-              <div className="font-mono text-[11px] text-muted-foreground">
-                {rows.length.toLocaleString("fr-FR")} lignes · {columns.length} colonne{columns.length > 1 ? "s" : ""}
-              </div>
             </div>
           )}
         </div>

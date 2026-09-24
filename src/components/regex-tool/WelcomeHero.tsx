@@ -46,6 +46,7 @@ export function WelcomeHero({
   onLoadSample1,
   onLoadSample2,
   onLoadSample,
+  onLoadPreset,
   onImportFile,
   onOpenPaste,
   onStartBlank,
@@ -326,7 +327,7 @@ export function WelcomeHero({
           })}
         </div>
 
-        {/* Bannière Défi Mode Avion & Installation Locale PWA */}
+        {/* Bannière Défi Mode Avion (Hors-ligne immédiat dans le navigateur) */}
         <div
           className={`mt-8 w-full rounded-2xl border p-5 backdrop-blur-md transition-all duration-300 text-left ${
             isOffline
@@ -334,7 +335,7 @@ export function WelcomeHero({
               : "border-primary/30 bg-gradient-to-r from-amber-500/10 via-surface/80 to-cyan-500/10 shadow-md"
           }`}
         >
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-start gap-3.5">
               <div
                 className={`flex size-11 shrink-0 items-center justify-center rounded-xl transition-colors ${
@@ -371,7 +372,7 @@ export function WelcomeHero({
                       }`}
                     />
                     <span>
-                      {isOffline ? "0 Réseau · 100% Local en RAM" : "En ligne (Prêt pour le test)"}
+                      {isOffline ? "0 Réseau · 100% Local en RAM" : "Fonctionne déjà sans connexion"}
                     </span>
                   </span>
                 </div>
@@ -379,97 +380,35 @@ export function WelcomeHero({
                   {isOffline ? (
                     <span className="text-foreground">
                       <strong>Zéro octet ne quitte votre machine.</strong> Toutes les déductions
-                      s'exécutent strictement dans la mémoire vive de votre processeur. Même sans
+                      s'exécutent strictement dans la mémoire vive de votre ordinateur. Même sans
                       Wi-Fi ni 4G, le site est pleinement opérationnel.
                     </span>
                   ) : (
                     <span>
-                      <strong>Vous avez un doute sur la confidentialité ?</strong> Coupez votre Wi-Fi
-                      ou activez le mode avion sur votre PC : le site continue de fonctionner à 100%
-                      à l'identique grâce au Service Worker PWA embarqué.
+                      <strong>Inutile d'installer quoi que ce soit :</strong> coupez simplement votre Wi-Fi
+                      ou activez le mode avion sur votre PC. Grâce au Service Worker, cette page continue
+                      immédiatement de fonctionner à 100% dans cet onglet, sans aucun accès réseau.
                     </span>
                   )}
                 </p>
               </div>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2">
-              <button
-                type="button"
-                onClick={onInstall}
-                className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-semibold text-primary-foreground shadow-md transition hover:bg-primary/90 hover:scale-102 cursor-pointer"
-                title="Installer Regex Genius comme une application locale autonome sur votre PC"
-              >
-                {isInstalled ? (
-                  <>
-                    <Laptop className="size-4" />
-                    <span>Application installée</span>
-                  </>
-                ) : (
-                  <>
-                    <Download className="size-4" />
-                    <span>Installer sur mon PC</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Aperçu interactif explicatif : Comment ça marche */}
-        <div className="mt-10 w-full rounded-xl border border-grid-line bg-surface/60 p-4 backdrop-blur-sm sm:p-5">
-          <div className="flex items-center justify-between border-b border-grid-line pb-3 text-left">
-            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Principe en action
-            </div>
-            <div className="flex items-center gap-1.5 text-[11px] text-primary">
-              <CheckCircle2 className="size-3.5" />
-              <span>100% automatique</span>
-            </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3 text-left text-xs font-mono">
-            {/* Étape 1 */}
-            <div className="rounded-lg border border-border/80 bg-surface-2/60 p-3">
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground font-sans mb-1.5">
-                <span className="font-semibold text-foreground">1. Données brutes</span>
-                <span className="text-[10px] text-amber-400">Entrée</span>
+            {/* Bouton d'installation facultatif clairement séparé */}
+            {!isInstalled && (
+              <div className="flex shrink-0 sm:flex-col sm:items-end justify-between items-center gap-1 border-t sm:border-t-0 sm:border-l border-border/60 pt-3 sm:pt-0 sm:pl-4">
+                <span className="text-[10px] text-muted-foreground">Optionnel :</span>
+                <button
+                  type="button"
+                  onClick={onInstall}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-foreground hover:border-primary hover:text-primary transition cursor-pointer"
+                  title="Installer comme application autonome sur votre bureau Windows"
+                >
+                  <Download className="size-3.5 text-primary" />
+                  <span>Installer sur PC</span>
+                </button>
               </div>
-              <div className="truncate text-foreground font-medium">
-                FAC-2024-001 | 1 250,00 EUR
-              </div>
-              <div className="truncate text-muted-foreground text-[11px] mt-0.5">
-                FAC-2024-002 | 980,50 EUR
-              </div>
-            </div>
-
-            {/* Étape 2 */}
-            <div className="rounded-lg border border-primary/40 bg-primary/5 p-3">
-              <div className="flex items-center justify-between text-[11px] text-primary font-sans mb-1.5">
-                <span className="font-semibold text-foreground">2. Votre exemple (1 seule ligne)</span>
-                <span className="text-[10px] text-primary font-bold">Vous</span>
-              </div>
-              <div className="truncate text-primary font-bold">
-                1250,00
-              </div>
-              <div className="truncate text-muted-foreground text-[11px] mt-0.5 italic font-sans">
-                (vous saisissez juste la 1re valeur)
-              </div>
-            </div>
-
-            {/* Étape 3 */}
-            <div className="rounded-lg border border-border/80 bg-surface-2/60 p-3">
-              <div className="flex items-center justify-between text-[11px] text-cyan-400 font-sans mb-1.5">
-                <span className="font-semibold text-foreground">3. Regex déduite & résultat</span>
-                <span className="text-[10px] text-cyan-400 font-bold">Moteur</span>
-              </div>
-              <div className="truncate text-cyan-400 font-medium">
-                980,50 <span className="text-[10px] text-muted-foreground">(complété !)</span>
-              </div>
-              <div className="truncate text-muted-foreground text-[10px] mt-0.5">
-                Regex : <code className="text-foreground">\|\s*([\d\s,]+)\s*EUR</code>
-              </div>
-            </div>
+            )}
           </div>
         </div>
 
