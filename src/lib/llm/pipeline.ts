@@ -91,7 +91,7 @@ export async function runSynthesisPipeline(
     });
   }
 
-  if (algoResult.rule && algoExplainsAll) {
+  if (!forceLLM && algoResult.rule && algoExplainsAll) {
     // Si le résultat est parfait (0 échec sur toutes les lignes du fichier)
     if (algoResult.failures.length === 0) {
       return {
@@ -228,11 +228,11 @@ export async function runSynthesisPipeline(
     }
   }
 
-  // Si les 3 tentatives ont échoué, mais qu'un résultat algorithmique partiel existait
-  if (partialAlgoResult && partialAlgoResult.rule) {
+  // Si les tentatives ont échoué, mais qu'un résultat algorithmique existait (partiel ou complet)
+  if ((partialAlgoResult && partialAlgoResult.rule) || (algoResult && algoResult.rule)) {
     return {
       origin: "algorithmic",
-      result: partialAlgoResult,
+      result: partialAlgoResult?.rule ? partialAlgoResult : algoResult,
     };
   }
 

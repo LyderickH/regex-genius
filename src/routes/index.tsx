@@ -259,8 +259,13 @@ function Index() {
       const col = colsRef.current.find((c) => c.id === colId);
       if (!col) return;
       if (col.rule && col.failures.length === 0) {
-        toast.info("Le motif algorithmique couvre déjà 100 % de vos lignes.", { id: "llm-status" });
-        return;
+        const ok = window.confirm(
+          "Le motif algorithmique couvre déjà 100 % de vos lignes (0 échec).\n\nSi le résultat déduit ne correspond pas à vos attentes (ex: mauvais groupe capturé ou règle inadaptée), vous pouvez forcer l'analyse par l'IA locale (WebGPU).\n\nVoulez-vous quand même lancer la recherche d'une regex alternative par l'IA locale ?",
+        );
+        if (!ok) {
+          toast.info("Le motif algorithmique couvre déjà 100 % de vos lignes.", { id: "llm-status" });
+          return;
+        }
       }
       setIsLLMRunning(true);
       setColumns((cols) =>

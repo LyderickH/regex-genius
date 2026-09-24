@@ -431,6 +431,58 @@ export function PatternPanel({
               </span>
             </div>
 
+            {column.failures.length === 0 && onTriggerLLM && (
+              <div className="rounded-lg border border-border/80 bg-surface-2/40 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                    <Sparkles className="size-3.5 text-amber-400" />
+                    <span>Résultat inattendu ?</span>
+                  </div>
+                  <button
+                    onClick={() => setLlmDialogOpen(true)}
+                    className="text-[10px] text-muted-foreground hover:text-foreground underline underline-offset-2 cursor-pointer"
+                  >
+                    Gérer l'IA
+                  </button>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  L'algorithme couvre 100 % des lignes. Si le motif déduit ne correspond pas exactement à votre intention :
+                </p>
+
+                {isLLMRunning ? (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center gap-2 text-xs text-amber-300">
+                      <RefreshCw className="size-3.5 animate-spin" />
+                      <span>{llmReport?.text || "Recherche d'une alternative par l'IA..."}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1.5 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={onTriggerLLM}
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1.5 text-xs font-medium text-amber-300 transition cursor-pointer"
+                      title="Forcer l'IA locale (WebGPU) à chercher une expression régulière alternative"
+                    >
+                      <Sparkles className="size-3 text-amber-400" />
+                      <span>Forcer une alternative par l'IA locale</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExternalPromptOpen(true)}
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 px-2.5 py-1 text-[11px] font-medium text-purple-300 transition cursor-pointer"
+                    >
+                      <Bot className="size-3 text-purple-400" />
+                      <span>Prompt ChatGPT / Claude</span>
+                    </button>
+                  </div>
+                )}
+                <p className="text-[10px] text-muted-foreground/80 italic pt-0.5">
+                  💡 Conseil : Vous pouvez aussi saisir le résultat attendu sur une autre ligne du tableau pour corriger directement l'algorithme.
+                </p>
+              </div>
+            )}
+
             {column.failures.length > 0 && (
               <div>
                 <div className="mb-1.5 text-[11px] uppercase tracking-[0.15em] text-warn">
