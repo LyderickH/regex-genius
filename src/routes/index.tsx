@@ -211,27 +211,20 @@ function Index() {
           ),
         );
       } else {
-        const col = colsRef.current.find((c) => c.id === colId);
-        const hasExamples = col && col.user.some((v) => v != null && v !== "");
-        if (hasExamples) {
-          // Déclencher AUTOMATIQUEMENT le fallback IA locale lorsque l'algorithme échoue !
-          triggerLLMFallbackRef.current?.(colId);
-        } else {
-          setColumns((cols) =>
-            cols.map((c) =>
-              c.id === colId
-                ? {
-                    ...c,
-                    pending: false,
-                    rule: null,
-                    derived: result.values,
-                    matched: 0,
-                    failures: [],
-                  }
-                : c,
-            ),
-          );
-        }
+        setColumns((cols) =>
+          cols.map((c) =>
+            c.id === colId
+              ? {
+                  ...c,
+                  pending: false,
+                  rule: null,
+                  derived: result.values,
+                  matched: 0,
+                  failures: [],
+                }
+              : c,
+          ),
+        );
       }
     };
     workerRef.current = w;
@@ -266,16 +259,29 @@ function Index() {
     async (colId: string) => {
       const col = colsRef.current.find((c) => c.id === colId);
       if (!col) return;
+      if (col.rule && col.failures.length === 0) {
+        toast.info("Le motif algorithmique couvre déjà 100 % de vos lignes.", { id: "llm-status" });
+        return;
+      }
       setIsLLMRunning(true);
       setColumns((cols) =>
         cols.map((c) => (c.id === colId ? { ...c, pending: true } : c)),
       );
-      toast.info("Moteur classique insuffisant : activation de l'IA locale (WebGPU)...", { id: "llm-status" });
+      toast.info("Recherche par IA locale (WebGPU) en cours...", { id: "llm-status" });
       try {
         const outcome = await runSynthesisPipeline(rowsRef.current, col.user, {
           colName: col.name,
           forceLLM: true,
         });
+
+        const latest = colsRef.current.find((c) => c.id === colId);
+        // Si entre-temps l'algorithme a trouvé une règle parfaite
+        if (latest?.rule && latest.failures.length === 0 && outcome.origin !== "llm") {
+          setColumns((cols) =>
+            cols.map((c) => (c.id === colId ? { ...c, pending: false } : c)),
+          );
+          return;
+        }
 
         if (outcome.origin === "llm") {
           setColumns((cols) =>
@@ -315,7 +321,13 @@ function Index() {
           setColumns((cols) =>
             cols.map((c) => (c.id === colId ? { ...c, pending: false } : c)),
           );
-          toast.error(outcome.error, { id: "llm-status" });
+          if (latest?.rule) {
+            toast.info("L'IA locale n'a pas trouvé de motif alternatif : la règle actuelle est conservée.", {
+              id: "llm-status",
+            });
+          } else {
+            toast.error(outcome.error, { id: "llm-status" });
+          }
         }
       } catch (err) {
         setColumns((cols) =>

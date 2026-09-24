@@ -77,31 +77,30 @@ export async function runSynthesisPipeline(
   }
 
   // 2. MOTEUR ALGORITHMIQUE D'ABORD (sauf si forceLLM est expressément demandé)
+  // 2. MOTEUR ALGORITHMIQUE D'ABORD
   let partialAlgoResult: SynthResult | null = null;
-  if (!forceLLM) {
-    const algoResult = synthesize(inputs, expected);
+  const algoResult = synthesize(inputs, expected);
 
-    // Vérifier si le moteur algorithmique a expliqué 100% des exemples positifs
-    let algoExplainsAll = false;
-    if (algoResult.rule) {
-      algoExplainsAll = positiveExamples.every((ex) => {
-        const idx = inputs.findIndex((inp) => inp === ex.input);
-        if (idx < 0) return true;
-        return algoResult.values[idx] === ex.expected;
-      });
-    }
+  // Vérifier si le moteur algorithmique a expliqué 100% des exemples positifs
+  let algoExplainsAll = false;
+  if (algoResult.rule) {
+    algoExplainsAll = positiveExamples.every((ex) => {
+      const idx = inputs.findIndex((inp) => inp === ex.input);
+      if (idx < 0) return true;
+      return algoResult.values[idx] === ex.expected;
+    });
+  }
 
-    if (algoResult.rule && algoExplainsAll) {
-      // Si le résultat est parfait (0 échec sur toutes les lignes du fichier)
-      if (algoResult.failures.length === 0) {
-        return {
-          origin: "algorithmic",
-          result: algoResult,
-        };
-      }
-      // Si la règle est partielle (ex: 8/10), la garder en réserve comme fallback
-      partialAlgoResult = algoResult;
+  if (algoResult.rule && algoExplainsAll) {
+    // Si le résultat est parfait (0 échec sur toutes les lignes du fichier)
+    if (algoResult.failures.length === 0) {
+      return {
+        origin: "algorithmic",
+        result: algoResult,
+      };
     }
+    // Si la règle est partielle (ex: 8/10), la garder en réserve comme fallback
+    partialAlgoResult = algoResult;
   }
 
   // 3. FALLBACK LLM LOCAL (si l'algorithme n'a pas réussi ou est insuffisant)
