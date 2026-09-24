@@ -96,19 +96,34 @@ export async function parseFile(file: File): Promise<Matrix> {
  * pour que le studio de Regex reste ultra-fluide, tout en conservant la référence
  * au fichier source pour appliquer les regex à 100% des lignes lors de l'export.
  */
+export interface FileLoadProgress {
+  percent: number;
+  step: string;
+}
+
 export async function parseFileDataset(
   file: File,
   maxInteractive = MAX_INTERACTIVE_ROWS,
+  onProgress?: (progress: FileLoadProgress) => void,
 ): Promise<ParsedDataset> {
   const name = file.name.toLowerCase();
+  const totalBytes = file.size || 1;
+  const sizeMb = (totalBytes / (1024 * 1024)).toFixed(1);
+
   if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+    onProgress?.({ percent: 15, step: `Lecture du fichier Excel (${sizeMb} Mo)...` });
     const buf = await file.arrayBuffer();
+    onProgress?.({ percent: 50, step: "Décodage du classeur Excel..." });
+    await new Promise((r) => setTimeout(r, 0));
     const wb = XLSX.read(buf, { type: "array" });
+    onProgress?.({ percent: 75, step: "Extraction des données tabulaires..." });
     const sheet = wb.Sheets[wb.SheetNames[0] ?? ""];
     if (!sheet) return { matrix: [], totalLines: 0, isSampled: false };
     const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, blankrows: false, raw: false });
+    onProgress?.({ percent: 90, step: "Conversion de l'échantillon interactif..." });
     const full = rows.map((r) => (r as unknown[]).map((c) => (c == null ? "" : String(c))));
     const isSampled = full.length > maxInteractive;
+    onProgress?.({ percent: 100, step: "Chargement terminé !" });
     return {
       matrix: isSampled ? full.slice(0, maxInteractive) : full,
       totalLines: full.length,
@@ -117,15 +132,52 @@ export async function parseFileDataset(
     };
   }
 
-  const text = await file.text();
+  // Lecture des fichiers texte (CSV, TSV, TXT, LOG)
+  let text = "";
+  if (typeof file.stream === "function") {
+    onProgress?.({ percent: 5, step: `Lecture du fichier (${sizeMb} Mo)...` });
+    const reader = file.stream().getReader();
+    const decoder = new TextDecoder("utf-8");
+    let bytesRead = 0;
+    const chunks: string[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytesRead += value.length;
+      chunks.push(decoder.decode(value, { stream: true }));
+      const readMb = (bytesRead / (1024 * 1024)).toFixed(1);
+      const pct = Math.min(80, Math.round((bytesRead / totalBytes) * 75) + 5);
+      onProgress?.({
+        percent: pct,
+        step: `Lecture : ${readMb} Mo / ${sizeMb} Mo (${pct}%)`,
+      });
+      // Permettre le rafraîchissement régulier de l'affichage
+      if (chunks.length % 4 === 0) {
+        await new Promise((r) => setTimeout(r, 0));
+      }
+    }
+    chunks.push(decoder.decode());
+    text = chunks.join("");
+  } else {
+    onProgress?.({ percent: 40, step: `Lecture du fichier (${sizeMb} Mo)...` });
+    text = await file.text();
+  }
+
+  onProgress?.({ percent: 82, step: "Analyse de la structure et des délimiteurs..." });
+  await new Promise((r) => setTimeout(r, 0));
+
   if (name.endsWith(".csv")) {
     const firstChunk = text.slice(0, 4000);
     const hasDelimiter = firstChunk.includes(";") || firstChunk.includes(",") || firstChunk.includes("\t");
     if (hasDelimiter) {
+      onProgress?.({ percent: 88, step: "Découpage CSV structuré..." });
       const parsed = Papa.parse<string[]>(text, { skipEmptyLines: true });
       if (parsed.data.length) {
+        onProgress?.({ percent: 95, step: "Préparation de l'échantillon interactif..." });
         const full = (parsed.data as Matrix).map((r) => r.map((c) => (c == null ? "" : String(c))));
         const isSampled = full.length > maxInteractive;
+        onProgress?.({ percent: 100, step: "Chargement terminé !" });
         return {
           matrix: isSampled ? full.slice(0, maxInteractive) : full,
           totalLines: full.length,
@@ -136,7 +188,9 @@ export async function parseFileDataset(
     }
   }
 
+  onProgress?.({ percent: 92, step: "Découpage des lignes..." });
   const parsed = parsePastedDataset(text, maxInteractive);
+  onProgress?.({ percent: 100, step: "Chargement terminé !" });
   return {
     ...parsed,
     file: parsed.isSampled ? file : undefined,

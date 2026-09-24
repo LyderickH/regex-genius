@@ -70,4 +70,19 @@ describe("Dataset Sampling & Full Streaming Export", () => {
     global.URL.revokeObjectURL = originalRevokeObjectURL;
     (global as any).document = originalDocument;
   });
+
+  it("parseFileDataset émet des rapports de progression via onProgress", async () => {
+    const { parseFileDataset } = await import("../data-io");
+    const blob = new Blob(["id;name\n1;alice\n2;bob\n"], { type: "text/csv" });
+    const file = new File([blob], "test.csv", { type: "text/csv" });
+
+    const progressReports: { percent: number; step: string }[] = [];
+    const parsed = await parseFileDataset(file, 50000, (p) => {
+      progressReports.push(p);
+    });
+
+    expect(parsed.matrix.length).toBe(3); // header + 2 rows
+    expect(progressReports.length).toBeGreaterThan(0);
+    expect(progressReports[progressReports.length - 1]?.percent).toBe(100);
+  });
 });

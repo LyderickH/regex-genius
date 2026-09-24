@@ -23,6 +23,7 @@ import { WelcomeHero } from "@/components/regex-tool/WelcomeHero";
 import { LLMControlDialog } from "@/components/regex-tool/LLMControlDialog";
 import { ExternalPromptDialog } from "@/components/regex-tool/ExternalPromptDialog";
 import { ExportOptionsDialog } from "@/components/regex-tool/ExportOptionsDialog";
+import { FileLoadingModal, type FileLoadingState } from "@/components/regex-tool/FileLoadingModal";
 import { localLLM } from "@/lib/llm/webllm-service";
 import { runSynthesisPipeline } from "@/lib/llm/pipeline";
 import type { ModelProgressReport } from "@/lib/llm/types";
@@ -84,6 +85,7 @@ function Index() {
   const [sourceName, setSourceName] = useState<string>("Données source");
   const [headerAsk, setHeaderAsk] = useState<{ matrix: Matrix; defaultSourceIdx: number } | null>(null);
   const [selectedSourceColIdx, setSelectedSourceColIdx] = useState<number>(0);
+  const [fileLoading, setFileLoading] = useState<FileLoadingState | null>(null);
 
   // --- Modes d'échantillonnage de l'affichage
   const [displayMode, setDisplayMode] = useState<DisplayMode>("sample_100_1000");
@@ -603,10 +605,30 @@ function detectBestSourceCol(matrix: Matrix): number {
 
   const handleFile = async (file: File) => {
     try {
-      const isBig = file.size > 5 * 1024 * 1024;
-      if (isBig) toast.loading("Lecture du fichier...", { id: "file-load" });
-      const parsed = await parseFileDataset(file, 50_000);
-      if (isBig) toast.dismiss("file-load");
+      const sizeStr =
+        file.size > 1024 * 1024
+          ? `${(file.size / (1024 * 1024)).toFixed(1)} Mo`
+          : `${Math.round(file.size / 1024)} Ko`;
+
+      setFileLoading({
+        filename: file.name,
+        size: sizeStr,
+        percent: 2,
+        step: "Démarrage de la lecture...",
+      });
+
+      const parsed = await parseFileDataset(file, 50_000, (report) => {
+        setFileLoading({
+          filename: file.name,
+          size: sizeStr,
+          percent: report.percent,
+          step: report.step,
+        });
+      });
+
+      // Petite temporisation pour laisser l'utilisateur apercevoir le 100%
+      await new Promise((r) => setTimeout(r, 200));
+      setFileLoading(null);
 
       if (parsed.isSampled) {
         fullSourceRef.current = { file, totalLines: parsed.totalLines };
@@ -627,7 +649,7 @@ function detectBestSourceCol(matrix: Matrix): number {
         loadMatrix(parsed.matrix);
       }
     } catch {
-      toast.dismiss("file-load");
+      setFileLoading(null);
       toast.error("Impossible de lire ce fichier");
     }
   };
@@ -1156,6 +1178,8 @@ function detectBestSourceCol(matrix: Matrix): number {
         onExportSample={() => executeDirectExport(exportFormat)}
         onExportFull={handleExportFull}
       />
+
+      <FileLoadingModal progress={fileLoading} />
 
       {headerAsk && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6 animate-in fade-in duration-150">
