@@ -283,14 +283,16 @@ Note: VBScript.RegExp engine lacks lookbehind (?<=...) and Unicode categories (\
     snippet: (s, f, loc = "fr", replacement) => {
       const fieldName = f || (loc === "fr" ? "Champ" : "Field");
       if (replacement !== undefined) {
-        return `// Outil Formula (Remplacement) :\nREGEX_Replace([${fieldName}], "${dq(s)}", "${dq(replacement)}")`;
+        return `// Outil Formula (REGEX_Replace) :\nREGEX_Replace([${fieldName}], "${dq(s)}", "${dq(replacement)}")`;
       }
-      return `// Recommandé dans Alteryx : Utilisez l'outil 'RegEx' en mode 'Parse'.\n// Le mode Parse extrait chaque groupe (...) directement dans une nouvelle colonne dédiée.\n// Formule alternative (outil Formula, nécessite un motif capturant englobé) :\nREGEX_Replace([${fieldName}], "^.*?${dq(s)}.*$", "$1")`;
+      return loc === "fr"
+        ? `// 1. Outil RegEx (Mode 'Parse' - extraction directe) :\n// Motif à renseigner dans l'outil : "${dq(s)}"\n\n// 2. Outil Formula (REGEX_Replace) - Formule directe :\nREGEX_Replace([${fieldName}], "^.*?${dq(s)}.*$", "$1")`
+        : `// 1. RegEx Tool (Parse mode - direct extraction):\n// Pattern to enter in tool: "${dq(s)}"\n\n// 2. Formula Tool (REGEX_Replace) - Direct formula:\nREGEX_Replace([${fieldName}], "^.*?${dq(s)}.*$", "$1")`;
     },
     note: (loc = "fr") =>
       loc === "fr"
-        ? "Dans Alteryx, la méthode recommandée pour extraire des données est d'utiliser le 'RegEx Tool' configuré en méthode de sortie 'Parse' : chaque groupe entre parenthèses (...) génère automatiquement un nouveau champ. Pour l'outil Formula, REGEX_Replace nécessite d'englober toute la ligne avec ^.*? et .*$ pour ne renvoyer que $1."
-        : "In Alteryx, the recommended method for extraction is the 'RegEx' tool in 'Parse' mode, which automatically creates output columns for each capture group (...). In the Formula tool, REGEX_Replace requires wrapping the pattern with ^.*? and .*$ to return $1.",
+        ? "Dans Alteryx : (1) Utilisez l'outil 'RegEx' configuré en méthode 'Parse' pour extraire automatiquement vos groupes (...), OU (2) l'outil 'Formula' avec REGEX_Replace pour extraire ou remplacer en une formule."
+        : "In Alteryx: (1) Use 'RegEx' tool configured to 'Parse' to extract capture groups (...), OR (2) 'Formula' tool with REGEX_Replace.",
   },
   {
     id: "knime",
@@ -299,14 +301,16 @@ Note: VBScript.RegExp engine lacks lookbehind (?<=...) and Unicode categories (\
     snippet: (s, f, loc = "fr", replacement) => {
       const colName = f || (loc === "fr" ? "colonne" : "column");
       if (replacement !== undefined) {
-        return `// Nœud String Manipulation (Remplacement) :\nregexReplace($${colName}$, "${dq(s)}", "${dq(replacement)}")`;
+        return `// Nœud String Manipulation (regexReplace) :\nregexReplace($${colName}$, "${dq(s)}", "${dq(replacement)}")`;
       }
-      return `// Recommandé dans KNIME pour l'extraction : Nœud 'Regex Split'\n// Configurez le nœud Regex Split avec le motif complet : chaque groupe (...) crée une colonne 'split_0', 'split_1'...\n// Alternative dans le nœud String Manipulation :\nregexReplace($${colName}$, "^.*?${dq(s)}.*$", "$1")`;
+      return loc === "fr"
+        ? `// 1. Nœud Regex Split (Extraction directe / Parse) :\n// Motif à renseigner dans le nœud : "${dq(s)}"\n\n// 2. Nœud String Manipulation (regexReplace) - Formule directe :\nregexReplace($${colName}$, "^.*?${dq(s)}.*$", "$1")`
+        : `// 1. Regex Split node (Direct extraction / Parse):\n// Pattern to enter in node: "${dq(s)}"\n\n// 2. String Manipulation node (regexReplace) - Direct formula:\nregexReplace($${colName}$, "^.*?${dq(s)}.*$", "$1")`;
     },
     note: (loc = "fr") =>
       loc === "fr"
-        ? "Dans KNIME, distinguez : (1) Le nœud 'Regex Split' qui extrait chaque groupe capturant (...) dans de nouvelles colonnes ; (2) Le nœud 'String Manipulation' qui permet les remplacements via regexReplace()."
-        : "In KNIME, distinguish: (1) 'Regex Split' node to extract capture groups (...) into separate columns; (2) 'String Manipulation' node for substitutions using regexReplace().",
+        ? "Dans KNIME : (1) Le nœud 'Regex Split' extrait chaque groupe (...) dans de nouvelles colonnes split_0, split_1, OU (2) le nœud 'String Manipulation' applique la formule regexReplace."
+        : "In KNIME: (1) 'Regex Split' node extracts capture groups (...) into new split_0, split_1 columns, OR (2) 'String Manipulation' node applies regexReplace.",
   },
   {
     id: "pcre",

@@ -593,15 +593,6 @@ export function PatternPanel({
                 <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground font-semibold">
                   Lecture & Raisonnement du motif
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setExternalPromptOpen(true)}
-                  className="flex items-center gap-1 text-[11px] text-purple-400 hover:text-purple-300 font-medium transition cursor-pointer"
-                  title="Générer un prompt d'analyse pour ChatGPT ou Claude afin d'inspecter ou corriger ce motif"
-                >
-                  <Bot className="size-3" />
-                  <span>Corriger avec ChatGPT / Claude</span>
-                </button>
               </div>
 
               {/* 1. En langage humain (clair et immédiat) */}
@@ -646,14 +637,17 @@ export function PatternPanel({
                   ))}
                 </div>
 
-                {/* Hypothèses & Risques de raisonnement (permet de repérer les erreurs de déduction) */}
+                {/* Hypothèses & Risques de raisonnement (masqué par défaut, dépliable) */}
                 {analysis.technical.assumptions.length > 0 && (
-                  <div className="pt-2 border-t border-border/70 space-y-1">
-                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-400">
-                      <AlertTriangle className="size-3" />
-                      <span>Hypothèses & Risques de raisonnement :</span>
-                    </div>
-                    <ul className="space-y-1 text-[11px] text-muted-foreground">
+                  <details className="group/assumptions pt-2 border-t border-border/70 text-xs">
+                    <summary className="cursor-pointer text-[11px] font-medium text-amber-400 hover:text-amber-300 transition list-none flex items-center justify-between select-none py-0.5">
+                      <span className="flex items-center gap-1.5 font-semibold">
+                        <AlertTriangle className="size-3 text-amber-400" />
+                        <span>Hypothèses & Risques de raisonnement ({analysis.technical.assumptions.length})</span>
+                      </span>
+                      <ChevronDown className="size-3 transition-transform group-open/assumptions:rotate-180" />
+                    </summary>
+                    <ul className="mt-2 space-y-1.5 pl-2 text-[11px] text-muted-foreground">
                       {analysis.technical.assumptions.map((ass, i) => (
                         <li key={i} className="flex items-start gap-1.5">
                           <span className="text-amber-400 shrink-0">•</span>
@@ -661,7 +655,7 @@ export function PatternPanel({
                         </li>
                       ))}
                     </ul>
-                  </div>
+                  </details>
                 )}
               </div>
 
