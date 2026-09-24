@@ -15,6 +15,108 @@ function cleanLiteral(str: string): string {
 }
 
 /**
+ * Analyse le contenu de la capture regex pour déterminer précisément sa nature sémantique.
+ */
+function describeCaptureContent(
+  rawCapture: string,
+  fullPattern: string,
+  columnName?: string,
+): { what: string; accord: string; standalone?: string } {
+  // 1. Adresse IP IPv4 : 4 blocs de chiffres séparés par des points
+  const dotParts = rawCapture.split(/\\?\./);
+  if (dotParts.length === 4 && dotParts.every((p) => /\\d|\[0-9\]|\d/.test(p))) {
+    return {
+      what: "l'adresse IP",
+      accord: "située",
+      standalone: "Extrait une adresse IP (4 blocs de chiffres séparés par des points).",
+    };
+  }
+
+  // 2. Date : 3 blocs de chiffres séparés par / ou - ou .
+  const dateParts = rawCapture.split(/[\/\-]|\\?\./);
+  if (dateParts.length === 3 && dateParts.every((p) => /\\d|\[0-9\]|\d/.test(p))) {
+    const isIso = rawCapture.includes("-");
+    const fmt = isIso ? "AAAA-MM-JJ" : "JJ/MM/AAAA";
+    return {
+      what: "la date",
+      accord: "située",
+      standalone: `Extrait une date au format ${fmt}.`,
+    };
+  }
+
+  // 3. Horaire : 2 ou 3 blocs de chiffres séparés par :
+  const timeParts = rawCapture.split(/:/);
+  if ((timeParts.length === 2 || timeParts.length === 3) && timeParts.every((p) => /\\d|\[0-9\]|\d/.test(p))) {
+    return {
+      what: "l'horaire",
+      accord: "situé",
+      standalone: "Extrait l'horaire (heures et minutes).",
+    };
+  }
+
+  // 4. Adresse e-mail
+  if (/@/.test(rawCapture) || (/@/.test(fullPattern) && /email|courriel|mail/i.test(columnName ?? ""))) {
+    return {
+      what: "l'adresse e-mail",
+      accord: "située",
+      standalone: "Extrait l'adresse e-mail correspondant au format standard (utilisateur@domaine).",
+    };
+  }
+
+  // 5. Montant monétaire
+  if (/€|\$|EUR|USD/.test(fullPattern) || /montant|prix|debit|credit|solde/i.test(columnName ?? "")) {
+    return {
+      what: "le montant numérique",
+      accord: "situé",
+      standalone: "Extrait le montant numérique et sa devise.",
+    };
+  }
+
+  // 6. Chiffres uniquement (ex: \d+, [0-9]+, [0-9]{3}, etc.)
+  const noRegexMetas = rawCapture.replace(/\\d|\[0-9\]|\+|-|\*|\?|\{|\}|\d|\\s|\s/g, "");
+  if (noRegexMetas.length === 0 && /(\\d|\[0-9\]|\d)/.test(rawCapture)) {
+    return {
+      what: "les chiffres",
+      accord: "situés",
+      standalone: "Extrait la séquence de chiffres correspondante.",
+    };
+  }
+
+  // 7. Lettres uniquement (ex: [a-zA-Z]+)
+  if (/^\[?[a-zA-Z\s-]+\]?[\+*]?$/.test(rawCapture)) {
+    return {
+      what: "les lettres ou mots",
+      accord: "situés",
+      standalone: "Extrait la séquence alphabétique (lettres et mots).",
+    };
+  }
+
+  // 8. Alphanumérique / Identifiant (ex: [A-Za-z0-9_-]+)
+  if (/0-9.*a-z|a-z.*0-9|\\w/i.test(rawCapture) && /\[.*\]/.test(rawCapture)) {
+    return {
+      what: "l'identifiant alphanumérique",
+      accord: "situé",
+      standalone: "Extrait l'identifiant composé de lettres, chiffres ou tirets.",
+    };
+  }
+
+  // 9. Négation de délimiteur (ex: [^,]+, [^|]+, [^\r\n]+, [^>]+)
+  const negMatch = rawCapture.match(/\[\^([^\]]+)\]/);
+  if (negMatch) {
+    const excluded = negMatch[1]?.replace(/\\r|\\n/g, "").replace(/\\/g, "");
+    if (excluded && excluded.length > 0 && excluded !== "\r\n") {
+      return {
+        what: `le texte jusqu'au délimiteur « ${excluded} »`,
+        accord: "situé",
+        standalone: `Extrait la valeur textuelle jusqu'au prochain « ${excluded} ».`,
+      };
+    }
+  }
+
+  return { what: "le texte", accord: "situé" };
+}
+
+/**
  * Produit une explication humaine concise et fidèle aux tokens réels de la regex.
  */
 export function explainRegexHuman(
@@ -30,7 +132,6 @@ export function explainRegexHuman(
   const transformDesc = describeTransform(rule.transform);
   const appendTransform = (text: string) => {
     if (!transformDesc) return text;
-    // Harmonisation ponctuation
     const clean = text.endsWith(".") ? text.slice(0, -1) : text;
     return `${clean}, puis applique : ${transformDesc}.`;
   };
@@ -42,39 +143,26 @@ export function explainRegexHuman(
     const repl = rule.replacement;
     let base = "";
 
-    // 1.1 Remplacement vide (suppression)
     if (repl === "") {
       base = "Supprime les occurrences correspondant au motif dans le texte.";
-    }
-    // 1.2 Ajout de préfixe constant (ex: "REF-$1")
-    else if (/^(.*?)\$1$/.test(repl) && !repl.slice(0, -2).includes("$")) {
+    } else if (/^(.*?)\$1$/.test(repl) && !repl.slice(0, -2).includes("$")) {
       const prefix = repl.slice(0, -2);
       base = `Ajoute le préfixe « ${prefix} » au début du texte.`;
-    }
-    // 1.3 Ajout de suffixe constant (ex: "$1-SUF")
-    else if (/^\$1(.*?)$/.test(repl) && !repl.slice(2).includes("$")) {
+    } else if (/^\$1(.*?)$/.test(repl) && !repl.slice(2).includes("$")) {
       const suffix = repl.slice(2);
       base = `Ajoute le suffixe « ${suffix} » à la fin du texte.`;
-    }
-    // 1.4 Inversion de 2 éléments (ex: "$2 $1", "$2$1", "$2, $1")
-    else if (/^\$2(\s*[,;/ -]?\s*)\$1$/.test(repl)) {
+    } else if (/^\$2(\s*[,;/ -]?\s*)\$1$/.test(repl)) {
       const sep = repl.match(/^\$2(\s*[,;/ -]?\s*)\$1$/)?.[1] ?? " ";
       const sepLabel = sep === " " ? "une espace" : sep === "" ? "aucun séparateur" : `« ${sep} »`;
       base = `Inverse l'ordre des deux éléments ($2 puis $1) séparés par ${sepLabel} (ex : « Nom, Prénom » devient « Prénom Nom »).`;
-    }
-    // 1.5 Inversion de date / 3 éléments (ex: "$3/$2/$1", "$3-$2-$1")
-    else if (/^\$3([/.-])\$2\1\$1$/.test(repl)) {
+    } else if (/^\$3([/.-])\$2\1\$1$/.test(repl)) {
       const sep = repl[2] ?? "/";
       base = `Reformate la date sous le format JJ${sep}MM${sep}AAAA ($3${sep}$2${sep}$1) en inversant l'année et le jour.`;
-    }
-    // 1.6 Combinaison 1ère et dernière partie (ex: "$1$2", "$1-$2")
-    else if (/^\$1(.*?)\$2$/.test(repl) && !repl.slice(2, -2).includes("$")) {
+    } else if (/^\$1(.*?)\$2$/.test(repl) && !repl.slice(2, -2).includes("$")) {
       const sep = repl.slice(2, -2);
       const sepText = sep ? ` reliés par « ${sep} »` : "";
       base = `Conserve le début ($1) et la fin ($2) du texte${sepText}.`;
-    }
-    // 1.7 Substitution générale avec formule
-    else {
+    } else {
       base = `Remplace les correspondances du motif par la formule de substitution « ${repl} ».`;
     }
 
@@ -111,22 +199,8 @@ export function explainRegexHuman(
     // Contenu capturé : entre '(' et ')'
     const rawCapture = segments.slice(openIdx + 1, closeIdx).map((s) => s.text).join("");
 
-    let what = "le texte";
-    let accord = "situé";
-
-    if (/\\d|\d|0-9/.test(rawCapture) && !/[a-zA-Z]/.test(rawCapture)) {
-      what = "les chiffres";
-      accord = "situés";
-    } else if (/€|\$|EUR|USD/.test(p) || /montant|prix|debit|credit/i.test(columnName ?? "")) {
-      what = "le montant numérique";
-      accord = "situé";
-    } else if (/@/.test(p) || /email|courriel/i.test(columnName ?? "")) {
-      what = "l'adresse e-mail";
-      accord = "située";
-    } else if (/\d{2}[./-]\d{2}[./-]\d{4}/.test(p)) {
-      what = "la date";
-      accord = "située";
-    }
+    // Analyse du contenu capturé
+    const { what, accord, standalone } = describeCaptureContent(rawCapture, p, columnName);
 
     // Suffixe : tous les segments après ')'
     const rawSuffix = segments.slice(closeIdx + 1).map((s) => s.text).join("");
@@ -141,10 +215,13 @@ export function explainRegexHuman(
     if (cleanSuffix) {
       return appendTransform(`Extrait ${what} ${accord} juste avant « ${cleanSuffix} ».`);
     }
+    if (standalone) {
+      return appendTransform(standalone);
+    }
     if (what !== "le texte") {
       return appendTransform(`Extrait ${what} correspondant au motif.`);
     }
   }
 
-  return appendTransform(`Extrait automatiquement le motif correspondant à « ${columnName || "la colonne"} ».`);
+  return appendTransform(`Extrait la séquence de texte correspondant au motif exact.`);
 }

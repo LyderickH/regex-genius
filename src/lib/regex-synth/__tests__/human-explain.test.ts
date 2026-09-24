@@ -138,4 +138,30 @@ describe("explainRegexHuman", () => {
     expect(text).toContain("suppression des espaces de début et de fin");
     expect(text).toContain("mise en MAJUSCULES");
   });
+
+  it("explains IPv4 address pattern without hardcoded column name", () => {
+    const text = explainRegexHuman({
+      source: "(\\d+\\.\\d+\\.\\d+\\.\\d+)",
+      flags: "g",
+      transform: { strip: "none", dec: "none", casing: "none", fmt: "none" },
+    });
+    expect(text).toContain("adresse IP");
+    expect(text).toContain("4 blocs de chiffres séparés par des points");
+  });
+
+  it("explains date and time patterns directly", () => {
+    const dateText = explainRegexHuman({
+      source: "(\\d{2}/\\d{2}/\\d{4})",
+      flags: "g",
+      transform: { strip: "none", dec: "none", casing: "none", fmt: "none" },
+    });
+    expect(dateText).toContain("date au format JJ/MM/AAAA");
+
+    const timeText = explainRegexHuman({
+      source: "(\\d{2}:\\d{2})",
+      flags: "g",
+      transform: { strip: "none", dec: "none", casing: "none", fmt: "none" },
+    });
+    expect(timeText).toContain("horaire (heures et minutes)");
+  });
 });
