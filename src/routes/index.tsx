@@ -81,7 +81,9 @@ function Index() {
   const [sel, setSel] = useState<GridSel | null>(null);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
-  const [headerAsk, setHeaderAsk] = useState<Matrix | null>(null);
+  const [sourceName, setSourceName] = useState<string>("Données source");
+  const [headerAsk, setHeaderAsk] = useState<{ matrix: Matrix; defaultSourceIdx: number } | null>(null);
+  const [selectedSourceColIdx, setSelectedSourceColIdx] = useState<number>(0);
 
   // --- Modes d'échantillonnage de l'affichage
   const [displayMode, setDisplayMode] = useState<DisplayMode>("sample_100_1000");
@@ -112,21 +114,13 @@ function Index() {
   const reqId = useRef(0);
   const focus = useRef<{ colId: string; row: number } | null>(null);
 
-  // Calcul mémoïsé des index de lignes à afficher (garantit la réactivité et inclut toujours les exemples saisis)
+  // Calcul mémoïsé des index de lignes à afficher (garantit la fluidité 60fps et n'explose jamais à 50k lignes)
   const displayedIndices = useMemo(() => {
     if (rows.length === 0) return [];
     if (displayMode === "all" || rows.length <= 1100) {
       return rows.map((_, i) => i);
     }
     const set = new Set<number>();
-    // Toujours inclure impérativement les lignes contenant des exemples saisis par l'utilisateur
-    columns.forEach((c) => {
-      // Optimisation pour tableaux creux : Object.keys visite uniquement les cellules réellement saisies !
-      for (const k of Object.keys(c.user)) {
-        const r = Number(k);
-        if (c.user[r] != null && c.user[r] !== "") set.add(r);
-      }
-    });
 
     if (displayMode === "first_1000") {
       const limit = Math.min(rows.length, 1000 + extraCount);
@@ -149,8 +143,23 @@ function Index() {
         }
       }
     }
+
+    // Inclure les exemples saisis pour la colonne active (limité à 100 max pour ne jamais forcer 50k lignes si une colonne est pré-remplie)
+    const activeCol = columns.find((c) => c.id === activeId);
+    if (activeCol) {
+      let added = 0;
+      for (const k of Object.keys(activeCol.user)) {
+        const r = Number(k);
+        if (activeCol.user[r] != null && activeCol.user[r] !== "" && !set.has(r)) {
+          set.add(r);
+          added++;
+          if (added >= 100) break;
+        }
+      }
+    }
+
     return Array.from(set).sort((a, b) => a - b);
-  }, [rows.length, displayMode, extraCount, columns]);
+  }, [rows.length, displayMode, extraCount, columns, activeId]);
 
   // --- historique (Ctrl+Z / Ctrl+Y) : on ne retient que les saisies, pas les déductions
   type Snap = { rows: string[]; columns: OutputColumn[]; key: string };
@@ -436,7 +445,55 @@ function Index() {
     );
   };
 
-  const loadMatrix = (matrix: Matrix, names?: string[]) => {
+function detectBestSourceCol(matrix: Matrix): number {
+  if (!matrix || matrix.length < 2) return 0;
+  const numCols = matrix[0]?.length ?? 0;
+  if (numCols <= 1) return 0;
+
+  const firstColHeader = String(matrix[0][0] ?? "").toLowerCase().trim();
+  const sampleRows = Math.min(matrix.length, 30);
+
+  let col0AllNumbers = true;
+  for (let r = 1; r < sampleRows; r++) {
+    const val = String(matrix[r]?.[0] ?? "").trim();
+    if (val && !/^\d+$/.test(val)) {
+      col0AllNumbers = false;
+      break;
+    }
+  }
+
+  const isCol0Index =
+    firstColHeader === "#" ||
+    firstColHeader === "id" ||
+    firstColHeader === "n°" ||
+    firstColHeader === "num" ||
+    firstColHeader === "index" ||
+    col0AllNumbers;
+
+  if (isCol0Index && numCols > 1) {
+    let bestCol = 1;
+    let maxAvgLen = 0;
+    for (let c = 1; c < numCols; c++) {
+      let totalLen = 0;
+      let count = 0;
+      for (let r = 1; r < sampleRows; r++) {
+        const v = String(matrix[r]?.[c] ?? "");
+        totalLen += v.length;
+        count++;
+      }
+      const avg = count > 0 ? totalLen / count : 0;
+      if (avg > maxAvgLen) {
+        maxAvgLen = avg;
+        bestCol = c;
+      }
+    }
+    return bestCol;
+  }
+
+  return 0;
+}
+
+  const loadMatrix = (matrix: Matrix, names?: string[], sourceColIndex?: number) => {
     if (!matrix.length) {
       toast.error("Aucune donnée détectée");
       return;
@@ -444,42 +501,104 @@ function Index() {
     const len = matrix.length;
     const firstRowLen = matrix[0]?.length ?? 1;
     let maxCols = firstRowLen;
-    const source: string[] = new Array(len);
-
-    if (firstRowLen <= 1) {
-      for (let i = 0; i < len; i++) source[i] = matrix[i][0] ?? "";
-    } else {
-      const sampleLimit = Math.min(len, 300);
-      for (let i = 0; i < sampleLimit; i++) {
-        if (matrix[i].length > maxCols) maxCols = matrix[i].length;
-      }
-      for (let i = 0; i < len; i++) source[i] = (matrix[i][0] ?? "").toString();
+    const sampleLimit = Math.min(len, 300);
+    for (let i = 0; i < sampleLimit; i++) {
+      if (matrix[i].length > maxCols) maxCols = matrix[i].length;
     }
 
-    const extra = Math.max(0, maxCols - 1);
+    const effectiveSourceIdx =
+      sourceColIndex !== undefined
+        ? Math.min(Math.max(0, sourceColIndex), maxCols - 1)
+        : detectBestSourceCol(matrix);
+
+    const source: string[] = new Array(len);
+    for (let i = 0; i < len; i++) {
+      source[i] = (matrix[i][effectiveSourceIdx] ?? "").toString();
+    }
+
+    const sName = names?.[effectiveSourceIdx]?.trim() || "Données source";
+    setSourceName(sName);
+
     const cols: OutputColumn[] = [];
-    const count = Math.max(1, extra);
-    for (let c = 0; c < count; c++) {
-      const given = names?.[c + 1]?.trim();
-      const col = emptyColumn(given ? given : `Résultat ${c + 1}`, source.length);
-      if (c < extra) {
-        for (let i = 0; i < len; i++) {
-          const v = matrix[i][c + 1];
-          if (v != null && v !== "") col.user[i] = String(v);
-        }
+    for (let c = 0; c < maxCols; c++) {
+      if (c === effectiveSourceIdx) continue;
+      const colName = names?.[c]?.trim() || `Résultat ${cols.length + 1}`;
+      const col = emptyColumn(colName, len);
+      for (let i = 0; i < len; i++) {
+        const v = matrix[i][c];
+        if (v != null && v !== "") col.user[i] = String(v);
       }
       cols.push(col);
     }
+
+    if (cols.length === 0) {
+      cols.push(emptyColumn("Résultat 1", len));
+    }
+
     setRows(source);
     setColumns(cols);
-    setActiveId(cols[0]?.id ?? null);
+
+    // Sélectionne la colonne active avec des exemples si existante
+    const firstWithUserExamples = cols.find((c) =>
+      c.user.some((v) => v != null && String(v).trim() !== ""),
+    );
+    setActiveId(firstWithUserExamples ? firstWithUserExamples.id : cols[0]?.id ?? null);
     setSel(null);
     setDisplayMode(source.length > 1100 ? "sample_100_1000" : "all");
     setExtraCount(0);
+
     cols.forEach((c) => {
-      if (c.user.some((v) => v != null)) runSynth(c.id, source, c.user);
+      if (c.user.some((v) => v != null && String(v).trim() !== "")) {
+        runSynth(c.id, source, c.user);
+      }
     });
-    toast.success(`${source.length.toLocaleString("fr-FR")} lignes chargées`);
+
+    toast.success(
+      `${source.length.toLocaleString("fr-FR")} lignes chargées (Source : « ${sName} »)`,
+    );
+  };
+
+  /** Définit ou échange une colonne comme la colonne de données source. */
+  const setColumnAsSource = (colId: string) => {
+    const colIndex = columns.findIndex((c) => c.id === colId);
+    if (colIndex < 0) return;
+    const targetCol = columns[colIndex];
+
+    const newRows: string[] = new Array(rows.length);
+    for (let i = 0; i < rows.length; i++) {
+      newRows[i] = targetCol.user[i] ?? targetCol.derived[i] ?? "";
+    }
+
+    const formerSourceName = sourceName || "Données source";
+    const newSourceName = targetCol.name || "Données source";
+
+    // L'ancienne source devient une colonne normale de résultat
+    const formerCol = emptyColumn(formerSourceName, rows.length);
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i] != null && rows[i] !== "") formerCol.user[i] = rows[i];
+    }
+
+    const nextCols = columns.map((c, idx) => (idx === colIndex ? formerCol : c));
+
+    setRows(newRows);
+    setSourceName(newSourceName);
+    setColumns(nextCols);
+
+    // Sélectionner une colonne de résultat active
+    const nextActive =
+      nextCols.find((c, idx) => idx !== colIndex && c.user.some((v) => v != null && v !== "")) ??
+      nextCols.find((c, idx) => idx !== colIndex) ??
+      nextCols[0];
+    if (nextActive) setActiveId(nextActive.id);
+
+    // Relancer la synthèse sur toutes les colonnes avec la nouvelle source
+    nextCols.forEach((c) => {
+      if (c.user.some((v) => v != null && v !== "")) {
+        scheduleSynth(c.id, newRows, c.user);
+      }
+    });
+
+    toast.success(`« ${newSourceName} » est désormais la colonne de données source !`);
   };
 
   const handleFile = async (file: File) => {
@@ -501,7 +620,9 @@ function Index() {
 
       // Ne demander la confirmation d'en-tête QUE s'il y a plusieurs colonnes
       if (parsed.matrix.length > 1 && (parsed.matrix[0]?.length ?? 0) > 1) {
-        setHeaderAsk(parsed.matrix);
+        const bestCol = detectBestSourceCol(parsed.matrix);
+        setSelectedSourceColIdx(bestCol);
+        setHeaderAsk({ matrix: parsed.matrix, defaultSourceIdx: bestCol });
       } else {
         loadMatrix(parsed.matrix);
       }
@@ -687,7 +808,7 @@ function Index() {
 
   const copyTable = async () => {
     if (!rows.length) return;
-    const header = ["Source", ...columns.map((c) => c.name)];
+    const header = [sourceName || "Source", ...columns.map((c) => c.name)];
     const matrix = rows.map((src, i) => [src, ...columns.map((c) => cellValue(c, i))]);
     const ok = await copyToClipboard(toTsv(header, matrix));
     if (ok) toast.success("Tableau copié — collez-le dans Excel");
@@ -708,7 +829,7 @@ function Index() {
   };
 
   const executeDirectExport = (kind: "csv" | "xlsx") => {
-    const header = ["Source", ...columns.map((c) => c.name)];
+    const header = [sourceName || "Source", ...columns.map((c) => c.name)];
     const matrix = rows.map((src, i) => [src, ...columns.map((c) => cellValue(c, i))]);
     if (kind === "csv") exportCsv(header, matrix);
     else exportXlsx(header, matrix);
@@ -990,6 +1111,8 @@ function Index() {
                 }
                 onAddColumn={addColumn}
                 onRemoveColumn={removeColumn}
+                sourceName={sourceName}
+                onSetAsSource={setColumnAsSource}
               />
               <PatternPanel
                 combined={combined}
@@ -1035,35 +1158,82 @@ function Index() {
       />
 
       {headerAsk && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6">
-          <div className="w-full max-w-lg rounded-lg border border-border bg-surface p-4 shadow-2xl">
-            <div className="mb-2 text-sm font-semibold">
-              La première ligne contient-elle des en-têtes ?
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6 animate-in fade-in duration-150">
+          <div className="w-full max-w-xl rounded-xl border border-border bg-surface p-5 shadow-2xl space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">
+                Configuration de l'importation
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Vérifiez les en-têtes et sélectionnez la colonne contenant le texte source brut à analyser.
+              </p>
             </div>
-            <div className="mb-3 truncate rounded-md border border-border bg-background p-2 font-mono text-[12px] text-muted-foreground">
-              {(headerAsk[0] ?? []).join("  |  ")}
+
+            {/* Sélecteur de la colonne source */}
+            <div className="rounded-lg border border-border/80 bg-surface-2/40 p-3 space-y-2">
+              <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <span>Colonne source (texte brut à découper) :</span>
+              </label>
+              <select
+                value={selectedSourceColIdx}
+                onChange={(e) => setSelectedSourceColIdx(Number(e.target.value))}
+                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+              >
+                {(headerAsk.matrix[0] ?? []).map((colHeader, idx) => {
+                  const sampleVal = headerAsk.matrix[1]?.[idx] ?? "";
+                  const isRecommended = idx === headerAsk.defaultSourceIdx;
+                  return (
+                    <option key={idx} value={idx}>
+                      Col. {idx + 1} : {colHeader || `Colonne ${idx + 1}`}
+                      {sampleVal ? ` (ex: "${sampleVal.length > 35 ? sampleVal.slice(0, 35) + "..." : sampleVal}")` : ""}
+                      {isRecommended ? " ★ Recommandé" : ""}
+                    </option>
+                  );
+                })}
+              </select>
+              <p className="text-[11px] text-muted-foreground">
+                Les autres colonnes seront traitées comme des résultats ou des exemples à déduire.
+              </p>
             </div>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => {
-                  const m = headerAsk;
-                  setHeaderAsk(null);
-                  loadMatrix(m);
-                }}
-                className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-surface-2"
-              >
-                Non, ce sont des données
-              </button>
-              <button
-                onClick={() => {
-                  const m = headerAsk;
-                  setHeaderAsk(null);
-                  loadMatrix(m.slice(1), m[0]);
-                }}
-                className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90"
-              >
-                Oui, ce sont des en-têtes
-              </button>
+
+            {/* Aperçu de la première ligne */}
+            <div className="space-y-1">
+              <div className="text-[11px] font-medium text-muted-foreground">
+                Aperçu de la première ligne :
+              </div>
+              <div className="truncate rounded-md border border-border bg-background p-2 font-mono text-[11px] text-muted-foreground">
+                {(headerAsk.matrix[0] ?? []).join("  |  ")}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-border">
+              <span className="text-xs text-muted-foreground">
+                La 1re ligne est-elle un en-tête ?
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const m = headerAsk.matrix;
+                    const srcIdx = selectedSourceColIdx;
+                    setHeaderAsk(null);
+                    loadMatrix(m, undefined, srcIdx);
+                  }}
+                  className="rounded-md border border-border px-3.5 py-1.5 text-xs font-medium hover:bg-surface-2 transition cursor-pointer"
+                >
+                  Non (données brutes)
+                </button>
+                <button
+                  onClick={() => {
+                    const m = headerAsk.matrix;
+                    const srcIdx = selectedSourceColIdx;
+                    setHeaderAsk(null);
+                    loadMatrix(m.slice(1), m[0], srcIdx);
+                  }}
+                  className="rounded-md bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 shadow transition cursor-pointer"
+                >
+                  Oui, ce sont des en-têtes
+                </button>
+              </div>
             </div>
           </div>
         </div>

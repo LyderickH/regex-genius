@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Plus, Trash2, AlertTriangle, Sparkles } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, Sparkles, ArrowLeftToLine } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { cellValue, type OutputColumn } from "./types";
 
@@ -43,6 +43,8 @@ interface Props {
   onRemoveColumn: (colId: string) => void;
   selection: GridSel | null;
   onSelectionChange: (s: GridSel | null) => void;
+  sourceName?: string;
+  onSetAsSource?: (colId: string) => void;
 }
 
 export function DataGrid({
@@ -62,6 +64,8 @@ export function DataGrid({
   onRemoveColumn,
   selection,
   onSelectionChange,
+  sourceName,
+  onSetAsSource,
 }: Props) {
   const displayCount = displayIndices ? displayIndices.length : rows.length;
   const getRealRow = useCallback(
@@ -399,8 +403,15 @@ export function DataGrid({
         <div className="grid-cell sticky left-0 z-40 bg-surface-2 px-2 py-2 text-center font-mono text-muted-foreground">
           #
         </div>
-        <div className="grid-cell relative px-3 py-2 font-semibold tracking-wide text-foreground">
-          Données source
+        <div className="grid-cell relative flex items-center justify-between px-3 py-1.5 font-semibold tracking-wide text-foreground">
+          <div className="flex items-center gap-1.5 min-w-0 pr-2">
+            <span className="truncate" title={sourceName || "Données source"}>
+              {sourceName || "Données source"}
+            </span>
+            <span className="shrink-0 rounded bg-primary/20 px-1 py-0.5 text-[9px] font-mono text-primary font-bold uppercase tracking-wider">
+              Source
+            </span>
+          </div>
           <ResizeHandle index={0} />
         </div>
         {columns.map((col) => (
@@ -424,13 +435,28 @@ export function DataGrid({
                 {col.matched}/{rows.length}
               </span>
             ) : null}
+            {onSetAsSource && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSetAsSource(col.id);
+                }}
+                className="shrink-0 rounded p-1 text-muted-foreground opacity-60 transition hover:bg-primary/20 hover:text-primary hover:opacity-100 group-hover:opacity-100"
+                title={`Définir « ${col.name} » comme colonne de données source (pour extraire depuis celle-ci)`}
+                aria-label="Définir comme source"
+              >
+                <ArrowLeftToLine className="size-3.5" />
+              </button>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onRemoveColumn(col.id);
               }}
-              className="shrink-0 text-muted-foreground opacity-0 transition hover:text-destructive group-hover:opacity-100"
+              className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition hover:bg-destructive/20 hover:text-destructive group-hover:opacity-100"
               aria-label="Supprimer la colonne"
+              title="Supprimer la colonne"
             >
               <Trash2 className="size-3.5" />
             </button>

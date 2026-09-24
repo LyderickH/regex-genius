@@ -167,11 +167,18 @@ export function PatternPanel({
           <div className="space-y-4 p-4 text-sm text-muted-foreground">
             <div className="flex items-start gap-2 rounded-md border border-border bg-surface-2 p-3">
               <CircleAlert className="mt-0.5 size-4 shrink-0 text-warn" />
-              <p>
-                {examples === 0
-                  ? "Saisissez le résultat attendu sur 2 ou 3 lignes : le motif se déduit tout seul."
-                  : "Aucune règle algorithmique classique n'explique tous vos exemples."}
-              </p>
+              <div className="space-y-1">
+                <p>
+                  {examples === 0
+                    ? "Saisissez le résultat attendu sur 2 ou 3 lignes : le motif se déduit tout seul."
+                    : "Aucune règle algorithmique classique n'explique tous vos exemples."}
+                </p>
+                {examples > 0 && (
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    💡 <strong>Astuce :</strong> Vérifiez que la colonne à gauche marquée <strong>[Source]</strong> contient bien le texte à découper. Si le texte brut se trouve dans une autre colonne, cliquez sur le bouton <span className="font-mono text-primary">⭰</span> sur son en-tête pour la définir comme source.
+                  </p>
+                )}
+              </div>
             </div>
             <div className="flex items-center justify-between text-xs">
               <span>Exemples fournis : {examples}</span>
