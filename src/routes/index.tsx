@@ -110,6 +110,7 @@ function Index() {
   const [isLLMRunning, setIsLLMRunning] = useState(false);
   const [llmControlOpen, setLlmControlOpen] = useState(false);
   const [externalPromptOpen, setExternalPromptOpen] = useState(false);
+  const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<"csv" | "xlsx">("csv");
   const fullSourceRef = useRef<{ file?: File; rawText?: string; totalLines: number } | null>(null);
