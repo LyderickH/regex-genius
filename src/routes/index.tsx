@@ -42,6 +42,7 @@ import {
   copyToClipboard,
   type Matrix,
 } from "@/lib/data-io";
+import { AUDIT_LOGS_SAMPLE } from "@/lib/datasets/sample-audit-logs";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -675,7 +676,7 @@ function detectBestSourceCol(matrix: Matrix): number {
     toast.success("Première ligne promue en en-tête");
   };
 
-  const loadSample = () => {
+  const loadSample1 = () => {
     const source = SAMPLE.split("\n");
     const fill = (vals: (string | null)[]) =>
       source.map((_, i) => vals[i] ?? null) as (string | null)[];
@@ -684,13 +685,45 @@ function detectBestSourceCol(matrix: Matrix): number {
     const piece = emptyColumn("N° de pièce", source.length);
     piece.user = fill(["FA-2024-0001", "FA/2024/87"]);
     setRows(source);
+    setSourceName("Journal comptable");
     setColumns([debit, piece]);
     setActiveId(debit.id);
     setSel(null);
     setDisplayMode("all");
     setExtraCount(0);
+    fullSourceRef.current = null;
     runSynth(debit.id, source, debit.user);
     runSynth(piece.id, source, piece.user);
+    toast.success("Exemple 1 (Journal comptable) chargé !");
+  };
+  const loadSample = loadSample1;
+
+  const loadSample2 = () => {
+    const source = AUDIT_LOGS_SAMPLE.slice();
+    const fill = (vals: (string | null)[]) =>
+      source.map((_, i) => vals[i] ?? null) as (string | null)[];
+
+    const emailCol = emptyColumn("Email", source.length);
+    emailCol.user = fill(["admin.1@sub.network-2.net", "service.worker_2@cloud-3.io"]);
+
+    const dateCol = emptyColumn("Horodatage ISO", source.length);
+    dateCol.user = fill(["2026-02-02 01:01:01", "2026-03-03T02:02:02+02:00"]);
+
+    const tokenCol = emptyColumn("Token Sécurisé", source.length);
+    tokenCol.user = fill(["TK#4b-1E_1!w&42", "TK#7c-8D_2!z%11"]);
+
+    setRows(source);
+    setSourceName("Logs d'audit");
+    setColumns([emailCol, dateCol, tokenCol]);
+    setActiveId(emailCol.id);
+    setSel(null);
+    setDisplayMode("sample_100_1000");
+    setExtraCount(0);
+    fullSourceRef.current = null;
+    runSynth(emailCol.id, source, emailCol.user);
+    runSynth(dateCol.id, source, dateCol.user);
+    runSynth(tokenCol.id, source, tokenCol.user);
+    toast.success("Exemple 2 (1 138 logs d'audit) chargé avec succès !");
   };
 
   /** Change une ligne de données source. */
@@ -1043,7 +1076,8 @@ function detectBestSourceCol(matrix: Matrix): number {
       <div className="relative flex min-h-0 flex-1">
         {rows.length === 0 ? (
           <WelcomeHero
-            onLoadSample={loadSample}
+            onLoadSample1={loadSample1}
+            onLoadSample2={loadSample2}
             onImportFile={handleFile}
             onOpenPaste={() => setPasteOpen(true)}
             onStartBlank={startBlank}

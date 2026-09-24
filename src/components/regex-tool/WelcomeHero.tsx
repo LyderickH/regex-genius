@@ -10,16 +10,27 @@ import {
   FileSpreadsheet,
   ArrowRight,
   CheckCircle2,
+  Database,
+  HelpCircle,
 } from "lucide-react";
+import {
+  HoverCard,
+  HoverCardTrigger,
+  HoverCardContent,
+} from "@/components/ui/hover-card";
 
 interface WelcomeHeroProps {
-  onLoadSample: () => void;
+  onLoadSample1?: () => void;
+  onLoadSample2?: () => void;
+  onLoadSample?: () => void;
   onImportFile: (file: File) => void;
   onOpenPaste: () => void;
   onStartBlank: () => void;
 }
 
 export function WelcomeHero({
+  onLoadSample1,
+  onLoadSample2,
   onLoadSample,
   onImportFile,
   onOpenPaste,
@@ -46,6 +57,9 @@ export function WelcomeHero({
     }
   };
 
+  const handleSample1 = onLoadSample1 || onLoadSample || (() => {});
+  const handleSample2 = onLoadSample2 || onLoadSample || (() => {});
+
   return (
     <div
       onDragOver={handleDragOver}
@@ -67,11 +81,52 @@ export function WelcomeHero({
           <span>Synthèse d'expressions régulières par l'exemple</span>
         </div>
 
-        {/* Titre principal */}
+        {/* Titre principal avec mini-bloc info au survol du mot Regex */}
         <h1 className="mt-5 text-3xl font-extrabold tracking-tight sm:text-4xl md:text-5xl lg:text-6xl text-foreground max-w-3xl leading-tight">
           Extrayez vos données,{" "}
           <span className="bg-gradient-to-r from-amber-400 via-amber-200 to-cyan-400 bg-clip-text text-transparent">
-            sans écrire de Regex
+            sans écrire de{" "}
+            <HoverCard openDelay={100} closeDelay={150}>
+              <HoverCardTrigger asChild>
+                <span className="inline-flex items-center gap-1 cursor-help underline decoration-primary/60 decoration-wavy decoration-from-font underline-offset-4 hover:decoration-primary text-foreground transition-all">
+                  Regex
+                  <HelpCircle className="size-4 sm:size-5 text-amber-400 inline-block align-middle animate-pulse" />
+                </span>
+              </HoverCardTrigger>
+              <HoverCardContent
+                align="center"
+                side="bottom"
+                sideOffset={8}
+                className="z-50 w-84 sm:w-96 rounded-xl border border-primary/40 bg-surface/95 p-4 text-foreground shadow-2xl backdrop-blur-md text-left"
+              >
+                <div className="flex items-start gap-2.5">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/20 text-primary">
+                    <Sparkles className="size-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-foreground">
+                      C'est quoi une « Regex » ?
+                    </h3>
+                    <p className="text-[11px] text-muted-foreground font-mono">
+                      Expression Régulière / Regular Expression
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-3 space-y-2 text-xs leading-relaxed text-muted-foreground">
+                  <p>
+                    Une <strong>Regex</strong> est une formule de recherche textuelle avancée. Elle décrit un <span className="text-foreground font-medium">motif</span> pour extraire ou valider précisément des données (ex. un email, une date, un montant ou une référence) noyées dans du texte brut.
+                  </p>
+                  <div className="rounded-md border border-border bg-surface-2 p-2 font-mono text-[11px] text-amber-300">
+                    <span className="text-muted-foreground">Syntaxe habituelle (complexe) :</span><br />
+                    <code>[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]&#123;2,&#125;</code>
+                  </div>
+                  <p className="text-[11px] text-foreground font-medium">
+                    ⚡ <strong>Pourquoi Regex Genius ?</strong> Écrire des regex à la main est difficile et source d'erreurs. Ici, donnez simplement <strong>1 ou 2 exemples</strong> de ce que vous voulez, et l'outil déduit la formule exacte instantanément pour Excel, Google Sheets, Power Query ou Python !
+                  </p>
+                </div>
+              </HoverCardContent>
+            </HoverCard>
           </span>
         </h1>
 
@@ -84,32 +139,55 @@ export function WelcomeHero({
 
         {/* Grille des 4 cartes d'action principales */}
         <div className="mt-10 grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 text-left">
-          {/* Carte 1 : Essayer avec un exemple (Mise en avant) */}
+          {/* Carte 1 : Exemple 1 - Journal comptable */}
           <button
             type="button"
-            onClick={onLoadSample}
-            className="group relative flex flex-col justify-between rounded-xl border border-primary/40 bg-surface/90 p-5 shadow-lg shadow-primary/5 transition-all duration-200 hover:-translate-y-1 hover:border-primary hover:bg-surface hover:shadow-primary/20 text-left"
+            onClick={handleSample1}
+            className="group relative flex flex-col justify-between rounded-xl border border-primary/40 bg-surface/90 p-5 shadow-lg shadow-primary/5 transition-all duration-200 hover:-translate-y-1 hover:border-primary hover:bg-surface hover:shadow-primary/20 text-left cursor-pointer"
           >
             <div className="absolute -top-2.5 right-4 rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-bold text-primary-foreground uppercase tracking-wider">
-              Recommandé
+              Démo rapide
             </div>
             <div>
               <div className="flex size-10 items-center justify-center rounded-lg bg-primary/20 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
                 <Sparkles className="size-5" />
               </div>
-              <h2 className="mt-3.5 text-sm font-semibold text-foreground">Tester un exemple</h2>
+              <h2 className="mt-3.5 text-sm font-semibold text-foreground">Exemple 1 : Comptabilité</h2>
               <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                Charge un extrait de journal comptable avec montants décimaux, dates et pièces
-                piégeuses.
+                Extrait FEC (8 lignes) : montants décimaux, devises et numéros de factures complexes.
               </p>
             </div>
             <div className="mt-4 flex items-center text-xs font-semibold text-primary">
-              <span>Lancer la démo</span>
+              <span>Lancer l'exemple 1</span>
               <ArrowRight className="ml-1.5 size-3.5 transition-transform group-hover:translate-x-1" />
             </div>
           </button>
 
-          {/* Carte 2 : Importer un fichier */}
+          {/* Carte 2 : Exemple 2 - Logs d'audit (1 000+ lignes) */}
+          <button
+            type="button"
+            onClick={handleSample2}
+            className="group relative flex flex-col justify-between rounded-xl border border-border bg-surface/80 p-5 transition-all duration-200 hover:-translate-y-1 hover:border-primary/50 hover:bg-surface hover:shadow-md text-left cursor-pointer"
+          >
+            <div className="absolute -top-2.5 right-4 rounded-full bg-cyan-500/20 border border-cyan-500/40 px-2 py-0.5 text-[10px] font-bold text-cyan-400 uppercase tracking-wider">
+              1 000+ lignes
+            </div>
+            <div>
+              <div className="flex size-10 items-center justify-center rounded-lg border border-border bg-surface-2 text-foreground transition-colors group-hover:border-primary/30 group-hover:text-primary">
+                <Database className="size-5 text-cyan-400" />
+              </div>
+              <h2 className="mt-3.5 text-sm font-semibold text-foreground">Exemple 2 : Logs (1 000)</h2>
+              <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
+                Dataset complet de 1 138 logs : déduit automatiquement emails, horodatages ISO et tokens.
+              </p>
+            </div>
+            <div className="mt-4 flex items-center text-xs font-semibold text-cyan-400 group-hover:text-primary">
+              <span>Lancer le dataset 1 000</span>
+              <ArrowRight className="ml-1.5 size-3.5 transition-transform group-hover:translate-x-1" />
+            </div>
+          </button>
+
+          {/* Carte 3 : Importer un fichier */}
           <label className="group relative flex cursor-pointer flex-col justify-between rounded-xl border border-border bg-surface/80 p-5 transition-all duration-200 hover:-translate-y-1 hover:border-primary/50 hover:bg-surface hover:shadow-md">
             <input
               type="file"
@@ -136,49 +214,50 @@ export function WelcomeHero({
             </div>
           </label>
 
-          {/* Carte 3 : Coller du texte */}
-          <button
-            type="button"
-            onClick={onOpenPaste}
-            className="group relative flex flex-col justify-between rounded-xl border border-border bg-surface/80 p-5 transition-all duration-200 hover:-translate-y-1 hover:border-primary/50 hover:bg-surface hover:shadow-md text-left"
-          >
-            <div>
-              <div className="flex size-10 items-center justify-center rounded-lg border border-border bg-surface-2 text-foreground transition-colors group-hover:border-primary/30 group-hover:text-primary">
-                <ClipboardPaste className="size-5" />
-              </div>
-              <h2 className="mt-3.5 text-sm font-semibold text-foreground">Coller du texte</h2>
-              <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                Collez directement des lignes brutes ou un tableau copié depuis Excel ou le Web.
-              </p>
-            </div>
-            <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground group-hover:text-primary">
-              <span className="font-medium">Ouvrir la boîte</span>
-              <kbd className="rounded border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                Ctrl + V
-              </kbd>
-            </div>
-          </button>
-
-          {/* Carte 4 : Tableau vierge */}
-          <button
-            type="button"
+          {/* Carte 4 : Tableau vierge / Coller du texte (Fusionné) */}
+          <div
             onClick={onStartBlank}
-            className="group relative flex flex-col justify-between rounded-xl border border-border bg-surface/80 p-5 transition-all duration-200 hover:-translate-y-1 hover:border-primary/50 hover:bg-surface hover:shadow-md text-left"
+            className="group relative flex flex-col justify-between rounded-xl border border-border bg-surface/80 p-5 transition-all duration-200 hover:-translate-y-1 hover:border-primary/50 hover:bg-surface hover:shadow-md text-left cursor-pointer"
           >
             <div>
-              <div className="flex size-10 items-center justify-center rounded-lg border border-border bg-surface-2 text-foreground transition-colors group-hover:border-primary/30 group-hover:text-primary">
-                <Plus className="size-5" />
+              <div className="flex items-center gap-2">
+                <div className="flex size-10 items-center justify-center rounded-lg border border-border bg-surface-2 text-foreground transition-colors group-hover:border-primary/30 group-hover:text-primary">
+                  <Plus className="size-5" />
+                </div>
+                <div className="flex size-10 items-center justify-center rounded-lg border border-border bg-surface-2 text-foreground transition-colors group-hover:border-primary/30 group-hover:text-primary">
+                  <ClipboardPaste className="size-5" />
+                </div>
               </div>
-              <h2 className="mt-3.5 text-sm font-semibold text-foreground">Tableau vierge</h2>
+              <h2 className="mt-3.5 text-sm font-semibold text-foreground">Tableau vierge / Coller</h2>
               <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                Démarrez sur une grille vide pour saisir manuellement vos données cellule par cellule.
+                Démarrez sur une grille vide ou collez directement des données (Ctrl + V) depuis Excel ou le Web.
               </p>
             </div>
-            <div className="mt-4 flex items-center text-xs font-medium text-muted-foreground group-hover:text-primary">
-              <span>Créer</span>
-              <ArrowRight className="ml-1.5 size-3.5 transition-transform group-hover:translate-x-1" />
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStartBlank();
+                }}
+                className="inline-flex items-center rounded-md bg-surface-2 px-2.5 py-1 text-xs font-medium text-foreground hover:bg-primary/20 hover:text-primary transition"
+              >
+                <span>Grille vide</span>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenPaste();
+                }}
+                className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-muted-foreground hover:border-primary/40 hover:text-primary transition"
+              >
+                <ClipboardPaste className="size-3" />
+                <span>Coller</span>
+                <kbd className="text-[10px] font-mono text-muted-foreground">Ctrl+V</kbd>
+              </button>
             </div>
-          </button>
+          </div>
         </div>
 
         {/* Aperçu interactif explicatif : Comment ça marche */}
