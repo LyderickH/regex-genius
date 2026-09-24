@@ -37,7 +37,7 @@ describe("Synthèse générale sur données délimitées (anti-surajustement)", 
     expect(resPiece.matched).toBe(8);
 
     // Débit
-    const expectedDebit = ["1250,00", "980,50", "0,00", null, null, null, null, null];
+    const expectedDebit = ["1 250,00", "980,50", "0,00", null, null, null, null, null];
     const resDebit = synthesize(inputs, expectedDebit);
     expect(resDebit.rule).not.toBeNull();
     expect(resDebit.matched).toBe(8);

@@ -15,10 +15,10 @@ const inputs = [
 ];
 
 const expected = [
-  "15,420.50",
-  "1,250.00",
-  "8,400.00",
-  "6,300.00",
+  "15420.50",
+  "1250.00",
+  "8400.00",
+  "6300.00",
   null,
   null,
   null,
@@ -27,15 +27,15 @@ const expected = [
   null,
 ];
 
-describe("Synthèse montants avec séparateur de milliers", () => {
-  it("extrait les nombres décimaux et applique le formatage de milliers US", () => {
+describe("Synthèse montants décimaux", () => {
+  it("extrait les montants décimaux en pure regex", () => {
     const res = synthesize(inputs, expected);
     expect(res.rule).not.toBeNull();
     expect(res.matched).toBe(10);
-    expect(res.values[0]).toBe("15,420.50");
-    expect(res.values[1]).toBe("1,250.00");
-    expect(res.values[2]).toBe("8,400.00");
-    expect(res.values[3]).toBe("6,300.00");
-    expect(res.values[4]).toBe("45,890.12");
+    expect(res.values[0]).toBe("15420.50");
+    expect(res.values[1]).toBe("1250.00");
+    expect(res.values[2]).toBe("8400.00");
+    expect(res.values[3]).toBe("6300.00");
+    expect(res.values[4]).toBe("45890.12");
   });
 });

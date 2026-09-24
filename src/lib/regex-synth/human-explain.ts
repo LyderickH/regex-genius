@@ -402,11 +402,11 @@ export function explainRegexTechnical(
     const cleanP = cleanLiteral(rawPrefix);
     steps.push({
       token: rawPrefix,
-      label: "Repérage contextuel gauche (Préfixe)",
-      detail: `Recherche la séquence « ${cleanP || rawPrefix} » servant de borne de départ avant la valeur à extraire.`,
+      label: "Texte repère avant la valeur (préfixe)",
+      detail: `Repère « ${cleanP || rawPrefix} » situé juste avant la valeur à extraire.`,
     });
     if (cleanP) {
-      assumptions.push(`Dépendance au préfixe : Suppose que la valeur est systématiquement précédée de « ${cleanP} ». Si le texte varie (majuscule, espace, préfixe alternatif), la ligne sera ignorée.`);
+      assumptions.push(`Dépendance au préfixe : Suppose que la valeur est précédée de « ${cleanP} » sur chaque ligne.`);
     }
   }
 
@@ -414,22 +414,22 @@ export function explainRegexTechnical(
     const rawCapture = segments.slice(openIdx + 1, closeIdx).map((s) => s.text).join("");
     const { what } = describeCaptureContent(rawCapture, p, columnName);
 
-    let captureDetail = `Isole ${what} formant le résultat final de la colonne.`;
+    let captureDetail = `Extrait ${what}.`;
     if (/\\d\+/.test(rawCapture)) {
-      captureDetail = "Capture une suite continue d'un ou plusieurs chiffres numériques.";
-      assumptions.push("Hypothèse numérique : Suppose que la valeur cible est exclusivement composée de chiffres.");
+      captureDetail = "Extrait une suite continue de chiffres (nombre, identifiant ou code).";
+      assumptions.push("Hypothèse numérique : Suppose que la valeur cible est composée uniquement de chiffres.");
     } else if (rawCapture.includes("[^")) {
       const excluded = rawCapture.match(/\[\^([^\]]+)\]/)?.[1] ?? "";
-      captureDetail = `Capture tous les caractères en s'interrompant dès la rencontre du délimiteur « ${excluded} ».`;
-      assumptions.push(`Arrêt strict au délimiteur : La capture s'arrête dès le premier « ${excluded} ».`);
+      captureDetail = `Extrait tous les caractères jusqu'au délimiteur « ${excluded} ».`;
+      assumptions.push(`Arrêt au délimiteur : La capture s'arrête au premier caractère « ${excluded} ».`);
     } else if (rawCapture === ".*" || rawCapture === ".+") {
-      captureDetail = "Capture n'importe quels caractères (attention : quantificateur glouton).";
-      assumptions.push("Quantificateur gourmand : Le motif '.*' avale le maximum de caractères possibles jusqu'au suffixe.");
+      captureDetail = "Extrait le texte jusqu'au repère suivant.";
+      assumptions.push("Quantificateur gourmand : Le motif '.*' prend tout le texte possible jusqu'au suffixe.");
     }
 
     steps.push({
       token: `(${rawCapture})`,
-      label: "Groupe de capture principal ($1)",
+      label: "Valeur extraite (Groupe 1)",
       detail: captureDetail,
     });
   }
@@ -440,11 +440,11 @@ export function explainRegexTechnical(
     if (rawSuffix.trim()) {
       steps.push({
         token: rawSuffix,
-        label: "Repérage contextuel droit (Suffixe)",
-        detail: `Exige la présence immédiate de « ${cleanS || rawSuffix} » pour marquer la fin de la capture.`,
+        label: "Texte repère après la valeur (suffixe)",
+        detail: `S'arrête dès qu'il rencontre « ${cleanS || rawSuffix} » juste après la valeur.`,
       });
       if (cleanS) {
-        assumptions.push(`Dépendance au suffixe : Suppose la présence obligatoire de « ${cleanS} » après la valeur.`);
+        assumptions.push(`Dépendance au suffixe : Suppose la présence de « ${cleanS} » immédiatement après la valeur.`);
       }
     }
   }
@@ -452,8 +452,8 @@ export function explainRegexTechnical(
   if (p.endsWith("$")) {
     steps.push({
       token: "$",
-      label: "Ancrage de fin de ligne",
-      detail: "La correspondance doit s'étendre obligatoirement jusqu'à la fin de la ligne.",
+      label: "Fin de ligne ($)",
+      detail: "La correspondance doit aller jusqu'au bout de la ligne.",
     });
   }
 
@@ -466,13 +466,13 @@ export function explainRegexTechnical(
   }
 
   if (!p.startsWith("^") && !p.endsWith("$") && steps.length <= 2) {
-    assumptions.push("Recherche flottante : Extrait la première occurrence correspondant au motif n'importe où dans la ligne.");
+    assumptions.push("Recherche flottante : Extrait la première occurrence correspondant au motif dans la ligne.");
   }
 
   return {
-    mechanism: "Extraction contextuelle par motif délimité (bornes gauche/droite)",
+    mechanism: "Extraction contextuelle (repères de texte)",
     steps,
-    assumptions: assumptions.length > 0 ? assumptions : ["Suppose que la structure observée sur les exemples est rigoureusement identique sur toutes les lignes."],
+    assumptions: assumptions.length > 0 ? assumptions : ["Suppose que la structure observée sur les exemples est identique sur toutes les lignes."],
     summary: `Isole la valeur cible via son contexte immédiat dans la ligne textuelle.`,
   };
 }

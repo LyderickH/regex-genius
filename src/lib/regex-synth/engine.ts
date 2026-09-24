@@ -73,21 +73,9 @@ const FMTS: { id: Fmt; cost: number }[] = [
   { id: "num-fr", cost: 3 },
 ];
 
-const TRANSFORMS: Transform[] = (() => {
-  const out: Transform[] = [];
-  for (const strip of ["none", "trim", "spaces", "digits"] as const)
-    for (const dec of ["none", "dot", "comma"] as const)
-      for (const casing of ["none", "upper", "lower"] as const)
-        for (const { id, cost: fc } of FMTS)
-          out.push({ strip, dec, casing, fmt: id });
-  // les nettoyages les plus simples d'abord
-  const cost = (t: Transform) =>
-    (t.strip === "none" ? 0 : t.strip === "trim" ? 1 : t.strip === "spaces" ? 2 : 4) +
-    (t.dec === "none" ? 0 : 2) +
-    (t.casing === "none" ? 0 : 1) +
-    FMTS.find((f) => f.id === t.fmt)!.cost;
-  return out.sort((a, b) => cost(a) - cost(b));
-})();
+// Mode 100% Regex pure : aucune transformation post-traitement artificielle en JS.
+// Ce qui est synthétisé est strictement ce que la Regex capture et extrait.
+const TRANSFORMS: Transform[] = [NO_TRANSFORM];
 
 
 export interface Rule {
