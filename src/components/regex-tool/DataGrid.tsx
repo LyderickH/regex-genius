@@ -12,7 +12,7 @@ const NUM_W = 56;
 const ADD_W = 52;
 const MIN_W = 100;
 const DEFAULT_SOURCE_W = 460;
-const DEFAULT_OUT_W = 240;
+const DEFAULT_OUT_W = 280;
 /** Identifiant fictif de la colonne « Données source ». */
 export const SOURCE_COL = "__source__";
 
@@ -25,9 +25,9 @@ export interface GridSel {
   cr: number;
 }
 
-/** Largeur approximative d'une chaîne en police mono 13px. */
+/** Largeur approximative d'une chaîne en police mono/sans 13px (avec marge pour en-têtes bold). */
 function measure(text: string): number {
-  return Math.max(MIN_W, text.length * 8.2 + 32);
+  return Math.max(MIN_W, text.length * 9.5 + 40);
 }
 
 interface Props {
@@ -124,7 +124,7 @@ export function DataGrid({
         const col = columns[c];
         if (!col) continue;
         if (manuallyResized.current.has(col.id)) continue;
-        let required = Math.max(220, measure(col.name) + 110);
+        let required = Math.max(260, measure(col.name) + 120);
         for (let r = 0; r < sampleLimit; r++) {
           const realR = getRealRow(r);
           const v = cellValue(col, realR);
@@ -199,9 +199,9 @@ export function DataGrid({
         } else {
           const col = columns[index - 1];
           if (!col) return next;
-          let max = measure(col.name);
+          let max = Math.max(260, measure(col.name) + 120);
           for (let i = 0; i < sampleLimit; i++) max = Math.max(max, measure(cellValue(col, i)));
-          next[index] = Math.min(600, max);
+          next[index] = Math.min(700, max);
         }
         return next;
       });
@@ -439,23 +439,27 @@ export function DataGrid({
             {col.pending ? (
               <Sparkles className="size-3.5 shrink-0 animate-pulse text-primary" />
             ) : col.rule ? (
-              <div className="flex items-center gap-1 shrink-0">
-                {col.matched === rows.length ? (
-                  <span
-                    className="inline-flex items-center gap-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 font-mono text-[10px] text-emerald-400 font-medium"
-                    title={`100% de complétude : les ${rows.length} lignes sont reconnues`}
-                  >
-                    <CheckCircle2 className="size-2.5" />
-                    100%
-                  </span>
-                ) : (
-                  <span
-                    className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 font-mono text-[10px] text-amber-400 font-medium"
-                    title={`${col.matched}/${rows.length} lignes reconnues (${rows.length - col.matched} non reconnues)`}
-                  >
-                    {Math.round((col.matched / rows.length) * 100)}%
-                  </span>
-                )}
+              col.matched === rows.length ? (
+                <span
+                  className="shrink-0 inline-flex items-center gap-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 font-mono text-[10px] text-emerald-400 font-medium"
+                  title={`100% de complétude : les ${rows.length} lignes sont reconnues`}
+                >
+                  <CheckCircle2 className="size-2.5" />
+                  100%
+                </span>
+              ) : (
+                <span
+                  className="shrink-0 inline-flex items-center gap-0.5 rounded bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 font-mono text-[10px] text-amber-400 font-medium"
+                  title={`${col.matched}/${rows.length} lignes reconnues (${rows.length - col.matched} non reconnues)`}
+                >
+                  {Math.round((col.matched / rows.length) * 100)}%
+                </span>
+              )
+            ) : null}
+
+            {/* Actions regroupées : apparaissent proprement au survol */}
+            <div className="hidden group-hover:flex items-center gap-0.5 shrink-0 animate-in fade-in duration-100">
+              {col.rule && (
                 <button
                   type="button"
                   onClick={async (e) => {
@@ -467,71 +471,72 @@ export function DataGrid({
                       toast.success("Formule Excel 365 copiée !");
                     }
                   }}
-                  className="shrink-0 rounded p-1 text-muted-foreground opacity-60 transition hover:bg-primary/20 hover:text-primary hover:opacity-100 group-hover:opacity-100 cursor-pointer"
+                  className="rounded p-1 text-muted-foreground transition hover:bg-primary/20 hover:text-primary cursor-pointer"
                   title="Copier directement la formule Excel (=REGEX.EXTRAIRE...)"
                   aria-label="Copier la formule Excel"
                 >
                   <ClipboardCopy className="size-3.5" />
                 </button>
-              </div>
-            ) : null}
-            {onSetAsSource && (
+              )}
+              {onSetAsSource && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSetAsSource(col.id);
+                  }}
+                  className="rounded p-1 text-muted-foreground transition hover:bg-primary/20 hover:text-primary cursor-pointer"
+                  title={`Définir « ${col.name} » comme colonne de données source (pour extraire depuis celle-ci)`}
+                  aria-label="Définir comme source"
+                >
+                  <ArrowLeftToLine className="size-3.5" />
+                </button>
+              )}
+              {onMoveColumn && columns.length > 1 && (
+                <div className="flex items-center">
+                  {columns.indexOf(col) > 0 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onMoveColumn(col.id, "left");
+                      }}
+                      className="rounded p-0.5 text-muted-foreground hover:bg-primary/20 hover:text-primary transition cursor-pointer"
+                      title="Déplacer la colonne vers la gauche"
+                      aria-label="Déplacer vers la gauche"
+                    >
+                      <ChevronLeft className="size-3.5" />
+                    </button>
+                  )}
+                  {columns.indexOf(col) < columns.length - 1 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onMoveColumn(col.id, "right");
+                      }}
+                      className="rounded p-0.5 text-muted-foreground hover:bg-primary/20 hover:text-primary transition cursor-pointer"
+                      title="Déplacer la colonne vers la droite"
+                      aria-label="Déplacer vers la droite"
+                    >
+                      <ChevronRight className="size-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onSetAsSource(col.id);
+                  onRemoveColumn(col.id);
                 }}
-                className="shrink-0 rounded p-1 text-muted-foreground opacity-60 transition hover:bg-primary/20 hover:text-primary hover:opacity-100 group-hover:opacity-100"
-                title={`Définir « ${col.name} » comme colonne de données source (pour extraire depuis celle-ci)`}
-                aria-label="Définir comme source"
+                className="rounded p-1 text-muted-foreground transition hover:bg-destructive/20 hover:text-destructive cursor-pointer"
+                aria-label="Supprimer la colonne"
+                title="Supprimer la colonne"
               >
-                <ArrowLeftToLine className="size-3.5" />
+                <Trash2 className="size-3.5" />
               </button>
-            )}
-            {onMoveColumn && columns.length > 1 && (
-              <div className="flex items-center opacity-0 group-hover:opacity-100 transition shrink-0">
-                {columns.indexOf(col) > 0 && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onMoveColumn(col.id, "left");
-                    }}
-                    className="rounded p-0.5 text-muted-foreground hover:bg-primary/20 hover:text-primary transition cursor-pointer"
-                    title="Déplacer la colonne vers la gauche"
-                    aria-label="Déplacer vers la gauche"
-                  >
-                    <ChevronLeft className="size-3.5" />
-                  </button>
-                )}
-                {columns.indexOf(col) < columns.length - 1 && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onMoveColumn(col.id, "right");
-                    }}
-                    className="rounded p-0.5 text-muted-foreground hover:bg-primary/20 hover:text-primary transition cursor-pointer"
-                    title="Déplacer la colonne vers la droite"
-                    aria-label="Déplacer vers la droite"
-                  >
-                    <ChevronRight className="size-3.5" />
-                  </button>
-                )}
-              </div>
-            )}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onRemoveColumn(col.id);
-              }}
-              className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition hover:bg-destructive/20 hover:text-destructive group-hover:opacity-100"
-              aria-label="Supprimer la colonne"
-              title="Supprimer la colonne"
-            >
-              <Trash2 className="size-3.5" />
-            </button>
+            </div>
             <ResizeHandle index={columns.indexOf(col) + 1} />
           </div>
         ))}
