@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { generateExternalAIPrompt } from "../prompt-generator";
 
 describe("generateExternalAIPrompt", () => {
-  it("formats user examples and context rows correctly for an external AI", () => {
+  it("formats user examples and context rows correctly for an external AI with markdown table and JSON", () => {
     const rows = [
       "user_123: john.doe@example.com (active)",
       "user_456: alice.smith@corp.org (pending)",
@@ -21,21 +21,20 @@ describe("generateExternalAIPrompt", () => {
       colName: "Email",
       rows,
       userExamples,
-      sampleCount: 2,
+      sampleCount: 10,
       targetDialect: "Python (re)",
     });
 
-    expect(prompt).toContain("Tu es un expert d'élite en Expressions Régulières");
+    expect(prompt).toContain("DÉDUCTION D'EXPRESSION RÉGULIÈRE OPTIMISÉE");
     expect(prompt).toContain('colonne « Email »');
-    expect(prompt).toContain('Exemple 1 (ligne 1) :');
-    expect(prompt).toContain('- Ligne source : "user_123: john.doe@example.com (active)"');
-    expect(prompt).toContain('- Valeur attendue : "john.doe@example.com"');
-    expect(prompt).toContain('Exemple 2 (ligne 2) :');
-    expect(prompt).toContain('- Valeur attendue : "alice.smith@corp.org"');
-    expect(prompt).toContain('compatible Python (re)');
-    expect(prompt).toContain('Autres lignes types issues du fichier');
-    expect(prompt).toContain('user_789: bob.brown@univ.edu (inactive)');
-    expect(prompt).toContain('exempt de ReDoS');
+    expect(prompt).toContain('| 1 (l.1) | `user_123: john.doe@example.com (active)` | `john.doe@example.com` |');
+    expect(prompt).toContain('| 2 (l.2) | `user_456: alice.smith@corp.org (pending)` | `alice.smith@corp.org` |');
+    expect(prompt).toContain('```json');
+    expect(prompt).toContain('"expected_output": "john.doe@example.com"');
+    expect(prompt).toContain('ÉCHANTILLONS DE VALIDATION DU FICHIER');
+    expect(prompt).toContain('[Ligne 3] user_789: bob.brown@univ.edu (inactive)');
+    expect(prompt).toContain('Python (re)');
+    expect(prompt).toContain('ReDoS');
   });
 
   it("handles case where no examples were provided yet", () => {
@@ -48,24 +47,25 @@ describe("generateExternalAIPrompt", () => {
     });
 
     expect(prompt).toContain("(Aucun exemple spécifique fourni pour le moment)");
-    expect(prompt).toContain("compatible JavaScript / TypeScript (RegExp)");
-    expect(prompt).toContain("2026-09-24 [ERROR] failed connection");
+    expect(prompt).toContain("JavaScript / TypeScript (RegExp)");
+    expect(prompt).toContain("[Ligne 1] 2026-09-24 [ERROR] failed connection");
   });
 
-  it("avoids duplicate context rows when rows are already part of examples", () => {
-    const rows = ["sample1", "sample2"];
-    const userExamples = ["out1", "out2"];
+  it("ensures all user examples are included without truncation", () => {
+    // 5 examples
+    const rows = ["r1", "r2", "r3", "r4", "r5", "r6"];
+    const userExamples = ["v1", "v2", "v3", "v4", "v5", null];
 
     const prompt = generateExternalAIPrompt({
-      colName: "Test",
+      colName: "AllExamples",
       rows,
       userExamples,
-      sampleCount: 5,
+      sampleCount: 10,
     });
 
-    expect(prompt).toContain("Exemple 1 (ligne 1) :");
-    expect(prompt).toContain("Exemple 2 (ligne 2) :");
-    // No context rows left that aren't examples
-    expect(prompt).not.toContain("Autres lignes types issues du fichier");
+    expect(prompt).toContain("CHACUN de ces 5 exemple(s)");
+    expect(prompt).toContain("| 1 (l.1) | `r1` | `v1` |");
+    expect(prompt).toContain("| 5 (l.5) | `r5` | `v5` |");
+    expect(prompt).toContain("[Ligne 6] r6");
   });
 });

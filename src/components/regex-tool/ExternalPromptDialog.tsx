@@ -3,11 +3,12 @@ import {
   X,
   Copy,
   Check,
-  Sparkles,
   ExternalLink,
   Bot,
   Layers,
   FileText,
+  Sliders,
+  CheckCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { copyToClipboard } from "@/lib/data-io";
@@ -29,7 +30,14 @@ export function ExternalPromptDialog({
 }: ExternalPromptDialogProps) {
   const [copied, setCopied] = useState(false);
   const [includeSamples, setIncludeSamples] = useState(true);
+  const [sampleCount, setSampleCount] = useState(10);
   const [dialect, setDialect] = useState("JavaScript / PCRE / Python");
+
+  // Calcule tous les exemples utilisateur réels
+  const userExamplesCount = useMemo(() => {
+    if (!column) return 0;
+    return column.user.filter((v) => v != null && String(v).trim() !== "").length;
+  }, [column]);
 
   const promptText = useMemo(() => {
     if (!column) return "";
@@ -38,33 +46,68 @@ export function ExternalPromptDialog({
       rows,
       userExamples: column.user,
       includeSamples,
-      sampleCount: 5,
+      sampleCount,
       targetDialect: dialect,
     });
-  }, [column, rows, includeSamples, dialect]);
+  }, [column, rows, includeSamples, sampleCount, dialect]);
 
   if (!open || !column) return null;
-
-  const exampleCount = column.user.filter((v) => v != null && v !== "").length;
 
   const handleCopy = async () => {
     const ok = await copyToClipboard(promptText);
     if (ok) {
       setCopied(true);
-      toast.success("Prompt copié dans le presse-papier !");
+      toast.success("Prompt copié dans le presse-papiers !");
       setTimeout(() => setCopied(false), 2000);
     } else {
       toast.error("Impossible de copier automatiquement");
     }
   };
 
+  const handleOpenAI = async (provider: "chatgpt" | "claude" | "gemini" | "perplexity") => {
+    // 1. Toujours copier automatiquement dans le presse-papier pour sécurité maximale
+    await copyToClipboard(promptText);
+
+    // 2. Ouvrir avec l'URL adaptée
+    if (provider === "chatgpt") {
+      // ChatGPT accepte ?q= pour pré-remplir le prompt directement
+      const encoded = encodeURIComponent(promptText);
+      if (encoded.length < 4500) {
+        window.open(`https://chatgpt.com/?q=${encoded}`, "_blank");
+        toast.success("ChatGPT ouvert avec le prompt pré-rempli !");
+      } else {
+        window.open("https://chatgpt.com/", "_blank");
+        toast.info("Prompt copié dans le presse-papiers ! Collez-le dans ChatGPT avec Ctrl+V (longueur > 4 Ko).");
+      }
+    } else if (provider === "claude") {
+      window.open("https://claude.ai/new", "_blank");
+      toast.success("Prompt copié dans le presse-papiers ! Faites simplement Ctrl+V dans Claude.");
+    } else if (provider === "gemini") {
+      const encoded = encodeURIComponent(promptText);
+      if (encoded.length < 4000) {
+        window.open(`https://gemini.google.com/app?prompt=${encoded}`, "_blank");
+      } else {
+        window.open("https://gemini.google.com/app", "_blank");
+      }
+      toast.success("Prompt copié dans le presse-papiers ! Faites simplement Ctrl+V dans Gemini.");
+    } else if (provider === "perplexity") {
+      const encoded = encodeURIComponent(promptText);
+      if (encoded.length < 4000) {
+        window.open(`https://www.perplexity.ai/search?q=${encoded}`, "_blank");
+      } else {
+        window.open("https://www.perplexity.ai/", "_blank");
+      }
+      toast.success("Perplexity ouvert avec votre prompt !");
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-      <div className="relative flex max-h-[90vh] w-full max-w-2xl flex-col rounded-xl border border-border bg-surface shadow-2xl overflow-hidden">
+      <div className="relative flex max-h-[92vh] w-full max-w-3xl flex-col rounded-xl border border-border bg-surface shadow-2xl overflow-hidden">
         {/* En-tête */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4 bg-surface-2/40">
-          <div className="flex items-center gap-2.5">
-            <div className="flex size-9 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-lg border border-purple-500/30 bg-purple-500/10 text-purple-400">
               <Bot className="size-5" />
             </div>
             <div>
@@ -72,12 +115,12 @@ export function ExternalPromptDialog({
                 <h3 className="text-sm font-semibold text-foreground">
                   Prompt pour votre propre IA
                 </h3>
-                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                  Claude · ChatGPT · Gemini
+                <span className="rounded-full bg-purple-500/15 border border-purple-500/30 px-2 py-0.5 text-[10px] font-medium text-purple-300">
+                  ChatGPT · Claude · Gemini · Perplexity
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">
-                Quand l'algorithme ne suffit pas, donnez ce prompt pré-rempli à votre IA préférée.
+                Génère un prompt d'ingénierie contenant tous vos exemples et ouvre directement votre IA avec le prompt pré-rempli.
               </p>
             </div>
           </div>
@@ -92,6 +135,73 @@ export function ExternalPromptDialog({
 
         {/* Corps */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {/* BOUTONS D'OUVERTURE DIRECTE */}
+          <div className="rounded-xl border border-purple-500/30 bg-purple-500/5 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
+                <ExternalLink className="size-3.5" />
+                Ouvrir directement votre IA :
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                Le prompt est injecté ou copié automatiquement
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+              <button
+                onClick={() => handleOpenAI("chatgpt")}
+                className="group flex flex-col items-start gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 p-2.5 text-left transition cursor-pointer active:scale-98"
+              >
+                <div className="flex w-full items-center justify-between">
+                  <span className="text-xs font-semibold text-emerald-400">ChatGPT</span>
+                  <ExternalLink className="size-3 text-emerald-400 opacity-70 group-hover:opacity-100" />
+                </div>
+                <span className="text-[10px] text-emerald-300/80">
+                  Pré-rempli directement ✨
+                </span>
+              </button>
+
+              <button
+                onClick={() => handleOpenAI("claude")}
+                className="group flex flex-col items-start gap-1 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 p-2.5 text-left transition cursor-pointer active:scale-98"
+              >
+                <div className="flex w-full items-center justify-between">
+                  <span className="text-xs font-semibold text-amber-400">Claude</span>
+                  <ExternalLink className="size-3 text-amber-400 opacity-70 group-hover:opacity-100" />
+                </div>
+                <span className="text-[10px] text-amber-300/80">
+                  Copié · Prêt à coller (Ctrl+V)
+                </span>
+              </button>
+
+              <button
+                onClick={() => handleOpenAI("gemini")}
+                className="group flex flex-col items-start gap-1 rounded-lg border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 p-2.5 text-left transition cursor-pointer active:scale-98"
+              >
+                <div className="flex w-full items-center justify-between">
+                  <span className="text-xs font-semibold text-blue-400">Gemini</span>
+                  <ExternalLink className="size-3 text-blue-400 opacity-70 group-hover:opacity-100" />
+                </div>
+                <span className="text-[10px] text-blue-300/80">
+                  Copié · Prêt à coller (Ctrl+V)
+                </span>
+              </button>
+
+              <button
+                onClick={() => handleOpenAI("perplexity")}
+                className="group flex flex-col items-start gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 p-2.5 text-left transition cursor-pointer active:scale-98"
+              >
+                <div className="flex w-full items-center justify-between">
+                  <span className="text-xs font-semibold text-cyan-400">Perplexity</span>
+                  <ExternalLink className="size-3 text-cyan-400 opacity-70 group-hover:opacity-100" />
+                </div>
+                <span className="text-[10px] text-cyan-300/80">
+                  Recherche avec prompt
+                </span>
+              </button>
+            </div>
+          </div>
+
           {/* Statistiques et options */}
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/70 bg-background/60 p-3 text-xs">
             <div className="flex items-center gap-3">
@@ -99,31 +209,49 @@ export function ExternalPromptDialog({
                 <FileText className="size-3.5 text-primary" />
                 <span>Colonne : <strong>{column.name}</strong></span>
               </div>
-              <div className="flex items-center gap-1.5 text-muted-foreground">
-                <Layers className="size-3.5" />
+              <div className="flex items-center gap-1.5 text-purple-400 font-medium">
+                <CheckCheck className="size-3.5" />
                 <span>
-                  <strong>{exampleCount}</strong> exemple{exampleCount > 1 ? "s" : ""} renseigné{exampleCount > 1 ? "s" : ""}
+                  <strong>{userExamplesCount}</strong> exemple{userExamplesCount > 1 ? "s" : ""} utilisateur (tous inclus)
                 </span>
               </div>
             </div>
 
             <div className="flex items-center gap-3">
-              <label className="flex items-center gap-1.5 text-muted-foreground cursor-pointer hover:text-foreground">
-                <input
-                  type="checkbox"
-                  checked={includeSamples}
-                  onChange={(e) => setIncludeSamples(e.target.checked)}
-                  className="rounded border-border text-primary focus:ring-primary size-3.5"
-                />
-                <span>Ajouter 5 lignes de contexte</span>
-              </label>
+              <div className="flex items-center gap-1.5">
+                <Sliders className="size-3 text-muted-foreground" />
+                <span className="text-muted-foreground">Contexte :</span>
+                <select
+                  value={sampleCount}
+                  onChange={(e) => setSampleCount(Number(e.target.value))}
+                  className="rounded border border-border bg-background px-2 py-0.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                >
+                  <option value={10}>10 lignes min.</option>
+                  <option value={20}>20 lignes</option>
+                  <option value={50}>50 lignes</option>
+                  <option value={100}>100 lignes</option>
+                </select>
+              </div>
+
+              <select
+                value={dialect}
+                onChange={(e) => setDialect(e.target.value)}
+                className="rounded border border-border bg-background px-2 py-0.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+              >
+                <option value="JavaScript / PCRE / Python">JavaScript / PCRE / Python</option>
+                <option value="Python (re)">Python (re)</option>
+                <option value="JavaScript / TypeScript (RegExp)">JavaScript / TS</option>
+                <option value="Go (regexp)">Go (regexp)</option>
+                <option value="PostgreSQL / SQL">PostgreSQL</option>
+                <option value="Google Sheets (REGEXEXTRACT)">Google Sheets</option>
+              </select>
             </div>
           </div>
 
           {/* Zone de texte du Prompt */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Prompt prêt à être copié :</span>
+              <span>Aperçu du prompt optimisé pour LLM (Tableau Markdown + Schéma JSON) :</span>
               <span>{promptText.length} caractères</span>
             </div>
             <textarea
@@ -132,42 +260,6 @@ export function ExternalPromptDialog({
               rows={11}
               className="w-full resize-none rounded-lg border border-border bg-background p-3.5 font-mono text-[12px] leading-relaxed text-foreground outline-none focus:ring-1 focus:ring-primary shadow-inner selection:bg-primary/20"
             />
-          </div>
-
-          {/* Liens rapides vers les IA externes */}
-          <div className="rounded-lg border border-border/50 bg-surface-2/30 p-3 space-y-2">
-            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-              Ouvrir directement votre IA :
-            </span>
-            <div className="flex flex-wrap gap-2">
-              <a
-                href="https://chatgpt.com"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:border-emerald-500 hover:text-emerald-400 transition"
-              >
-                <span>ChatGPT</span>
-                <ExternalLink className="size-3 text-muted-foreground" />
-              </a>
-              <a
-                href="https://claude.ai"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:border-amber-500 hover:text-amber-400 transition"
-              >
-                <span>Claude</span>
-                <ExternalLink className="size-3 text-muted-foreground" />
-              </a>
-              <a
-                href="https://gemini.google.com"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:border-blue-500 hover:text-blue-400 transition"
-              >
-                <span>Google Gemini</span>
-                <ExternalLink className="size-3 text-muted-foreground" />
-              </a>
-            </div>
           </div>
         </div>
 
@@ -179,13 +271,22 @@ export function ExternalPromptDialog({
           >
             Fermer
           </button>
-          <button
-            onClick={handleCopy}
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground shadow hover:opacity-90 transition cursor-pointer active:scale-95"
-          >
-            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-            <span>{copied ? "Prompt copié !" : "Copier le prompt"}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleOpenAI("chatgpt")}
+              className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 hover:bg-emerald-500 px-3.5 py-1.5 text-xs font-semibold text-white shadow transition cursor-pointer active:scale-95"
+            >
+              <ExternalLink className="size-3.5" />
+              <span>Ouvrir dans ChatGPT</span>
+            </button>
+            <button
+              onClick={handleCopy}
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground shadow hover:opacity-90 transition cursor-pointer active:scale-95"
+            >
+              {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+              <span>{copied ? "Prompt copié !" : "Copier le prompt"}</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
