@@ -62,58 +62,40 @@ describe("Vérification approfondie du moteur de synthèse et de la logique de c
     expect(combined?.covered).toBe(4);
   });
 
-  it("garantit que l'algorithme d'échantillonnage préserve toujours les indices saisis", () => {
+  it("garantit que l'algorithme d'affichage préserve toujours les indices saisis", () => {
     const totalRows = 5000;
     const userIndices = [12, 1050, 4820];
     const userRows = new Set(userIndices);
 
-    // Simulation de la logique d'échantillonnage de index.tsx
-    const computeDisplayed = (mode: "sample_100_1000" | "first_1000" | "all", extraCount = 0) => {
-      const set = new Set<number>();
-      userRows.forEach((r) => set.add(r));
-
+    // Simulation de la logique d'affichage de index.tsx
+    const computeDisplayed = (mode: "first_1000" | "all", extraCount = 0) => {
       if (mode === "first_1000") {
+        const set = new Set<number>();
         const limit = Math.min(totalRows, 1000 + extraCount);
         for (let i = 0; i < limit; i++) set.add(i);
-      } else if (mode === "sample_100_1000") {
-        const headLimit = Math.min(totalRows, 100);
-        for (let i = 0; i < headLimit; i++) set.add(i);
-        const remaining = totalRows - headLimit;
-        if (remaining > 0) {
-          const targetSample = Math.min(remaining, 1000 + extraCount);
-          const step = remaining / targetSample;
-          for (let s = 0; s < targetSample; s++) {
-            const idx = headLimit + Math.min(remaining - 1, Math.floor(s * step + ((s * 37) % step)));
-            set.add(idx);
-          }
-        }
-      } else {
-        for (let i = 0; i < totalRows; i++) set.add(i);
+        userRows.forEach((r) => set.add(r));
+        return Array.from(set).sort((a, b) => a - b);
       }
-      return Array.from(set).sort((a, b) => a - b);
+      return Array.from({ length: totalRows }, (_, i) => i);
     };
 
-    const sample = computeDisplayed("sample_100_1000");
+    const all = computeDisplayed("all");
     const first1000 = computeDisplayed("first_1000");
-    const plus1000 = computeDisplayed("sample_100_1000", 1000);
+    const plus1000 = computeDisplayed("first_1000", 1000);
+
+    // En mode "all", TOUTES les lignes sont présentes de 0 à N-1
+    expect(all.length).toBe(totalRows);
+    expect(all[0]).toBe(0);
+    expect(all[totalRows - 1]).toBe(totalRows - 1);
 
     // Les indices utilisateur doivent être TOUJOURS présents
     userIndices.forEach((idx) => {
-      expect(sample).toContain(idx);
+      expect(all).toContain(idx);
       expect(first1000).toContain(idx);
       expect(plus1000).toContain(idx);
     });
 
-    // Les 100 premières lignes doivent être présentes dans sample_100_1000
-    for (let i = 0; i < 100; i++) {
-      expect(sample).toContain(i);
-    }
-
-    // Le nombre de lignes dans sample doit être proche de 1100 + userIndices non présents
-    expect(sample.length).toBeGreaterThanOrEqual(1100);
-    expect(sample.length).toBeLessThanOrEqual(1110);
-
     // "+ 1000 lignes" doit augmenter le nombre de lignes affichées
-    expect(plus1000.length).toBeGreaterThan(sample.length);
+    expect(plus1000.length).toBeGreaterThan(first1000.length);
   });
 });
