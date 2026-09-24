@@ -120,13 +120,47 @@ export function generateExternalAIPrompt({
   promptParts.push(`## 3. DIRECTIVES STRICTES & LIVRABLES ATTENDUS`);
   promptParts.push(
     `1. **Groupe capturant principal** : La Regex doit contenir un groupe capturant principal \`(...)\` isolant exactement la valeur attendue.`,
-    `2. **Dialecte ciblé** : La syntaxe doit être pleinement valide pour : **${targetDialect}**.`,
+    `2. **Dialecte / Outil ciblé** : **${targetDialect}**.`,
     `3. **Anti-surapprentissage (Généralisation)** : Ne code JAMAIS en dur les valeurs des exemples dans la regex (ex: n'écris pas \`(alice|bob)\` si la colonne extrait un prénom ou un email). La regex doit s'appuyer sur la structure (délimiteurs, formats, ancres, classes de caractères).`,
     `4. **Sécurité ReDoS** : La regex doit être exempte de tout backtracking catastrophique (pas de quantificateurs imbriqués ambigus).`,
-    `5. **Validation étape par étape** :`,
-    `   - Démontre que ton motif matche et extrait avec succès 100% des exemples de la section 1.`,
-    `   - Indique ce que ton motif extrairait sur les premières lignes de la section 2.`,
-    `6. **Réponse finale** : Fournis la Regex prête à l'emploi dans un bloc de code dédié \`\`\`regex ... \`\`\`.`,
+  );
+
+  // Instructions spécifiques selon l'outil ou le dialecte
+  const dLower = targetDialect.toLowerCase();
+  if (dLower.includes("excel")) {
+    promptParts.push(
+      `5. **Spécificités Excel 365 / Tableur** :`,
+      `   - Fournis la formule Excel 365 prête à l'emploi avec \`=REGEXEXTRACT(A2; "motif"; 1)\`.`,
+      `   - Échappe correctement les guillemets dans la formule Excel en les doublant (\`""\`).`,
+      `   - Si une formule native simple sans regex convient mieux (ex: \`=TEXTE.AVANT(...)\`, \`=TEXTE.APRES(...)\`), mentionne-la également.`,
+    );
+  } else if (dLower.includes("alteryx")) {
+    promptParts.push(
+      `5. **Spécificités Alteryx** :`,
+      `   - Fournis la configuration pour l'outil **RegEx Tool** en mode **Parse** (avec le motif et le groupe capturant).`,
+      `   - Fournis aussi la formule pour l'outil **Formula** : \`REGEX_Replace([Champ], ".*?(motif).*", "$1")\` ou \`REGEX_Match([Champ], ...)\`.`,
+    );
+  } else if (dLower.includes("knime")) {
+    promptParts.push(
+      `5. **Spécificités KNIME Analytics Platform** :`,
+      `   - Fournis l'expression pour le nœud **String Manipulation** : \`regexReplace($colonne$, ".*?(motif).*", "$1")\`.`,
+      `   - Indique la configuration pour le nœud **Regex Split** (expression avec groupes capturants).`,
+    );
+  } else if (dLower.includes("power query")) {
+    promptParts.push(
+      `5. **Spécificités Power Query (M)** :`,
+      `   - Fournis le code M adapté (ex: \`Text.BetweenDelimiters\`, \`Text.Select\` ou script personnalisé).`,
+    );
+  } else {
+    promptParts.push(
+      `5. **Validation étape par étape** :`,
+      `   - Démontre que ton motif matche et extrait avec succès 100% des exemples de la section 1.`,
+      `   - Indique ce que ton motif extrairait sur les premières lignes de la section 2.`,
+    );
+  }
+
+  promptParts.push(
+    `6. **Réponse finale** : Fournis la Regex et la formule/code prêt(e) à l'emploi dans un bloc de code dédié \`\`\`regex ... \`\`\`.`,
   );
 
   return promptParts.join("\n");

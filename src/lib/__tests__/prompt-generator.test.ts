@@ -68,4 +68,33 @@ describe("generateExternalAIPrompt", () => {
     expect(prompt).toContain("| 5 (l.5) | `r5` | `v5` |");
     expect(prompt).toContain("[Ligne 6] r6");
   });
+
+  it("customizes directives specifically for Excel 365, Alteryx, and KNIME", () => {
+    const excelPrompt = generateExternalAIPrompt({
+      colName: "ExcelCol",
+      rows: ["A-100", "B-200"],
+      userExamples: ["100", "200"],
+      targetDialect: "Excel 365 (=REGEXEXTRACT)",
+    });
+    expect(excelPrompt).toContain("Spécificités Excel 365 / Tableur");
+    expect(excelPrompt).toContain("REGEXEXTRACT");
+
+    const alteryxPrompt = generateExternalAIPrompt({
+      colName: "AlteryxCol",
+      rows: ["A-100", "B-200"],
+      userExamples: ["100", "200"],
+      targetDialect: "Alteryx (Outil RegEx / Formula)",
+    });
+    expect(alteryxPrompt).toContain("Spécificités Alteryx");
+    expect(alteryxPrompt).toContain("REGEX_Replace");
+
+    const knimePrompt = generateExternalAIPrompt({
+      colName: "KnimeCol",
+      rows: ["A-100", "B-200"],
+      userExamples: ["100", "200"],
+      targetDialect: "KNIME (regexReplace / Regex Split)",
+    });
+    expect(knimePrompt).toContain("Spécificités KNIME Analytics Platform");
+    expect(knimePrompt).toContain("regexReplace");
+  });
 });

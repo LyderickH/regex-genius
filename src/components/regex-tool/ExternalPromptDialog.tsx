@@ -64,40 +64,23 @@ export function ExternalPromptDialog({
     }
   };
 
-  const handleOpenAI = async (provider: "chatgpt" | "claude" | "gemini" | "perplexity") => {
+  const handleOpenAI = async (provider: "chatgpt" | "claude" | "gemini") => {
     // 1. Toujours copier automatiquement dans le presse-papier pour sécurité maximale
     await copyToClipboard(promptText);
 
     // 2. Ouvrir avec l'URL adaptée
+    // Note technique : Les navigateurs et pare-feu (Cloudflare / OpenAI) tronquent ou ignorent les paramètres ?q=
+    // dès que le prompt dépasse 1.5 - 2 Ko (notre prompt fait 4+ Ko avec les exemples structurés).
+    // La copie immédiate dans le presse-papier + Ctrl+V assure 100% de fiabilité sans perte de données.
     if (provider === "chatgpt") {
-      // ChatGPT accepte ?q= pour pré-remplir le prompt directement
-      const encoded = encodeURIComponent(promptText);
-      if (encoded.length < 4500) {
-        window.open(`https://chatgpt.com/?q=${encoded}`, "_blank");
-        toast.success("ChatGPT ouvert avec le prompt pré-rempli !");
-      } else {
-        window.open("https://chatgpt.com/", "_blank");
-        toast.info("Prompt copié dans le presse-papiers ! Collez-le dans ChatGPT avec Ctrl+V (longueur > 4 Ko).");
-      }
+      window.open("https://chatgpt.com/", "_blank");
+      toast.success("Prompt copié dans le presse-papiers ! Faites simplement Ctrl+V dans ChatGPT.");
     } else if (provider === "claude") {
       window.open("https://claude.ai/new", "_blank");
       toast.success("Prompt copié dans le presse-papiers ! Faites simplement Ctrl+V dans Claude.");
     } else if (provider === "gemini") {
-      const encoded = encodeURIComponent(promptText);
-      if (encoded.length < 4000) {
-        window.open(`https://gemini.google.com/app?prompt=${encoded}`, "_blank");
-      } else {
-        window.open("https://gemini.google.com/app", "_blank");
-      }
+      window.open("https://gemini.google.com/app", "_blank");
       toast.success("Prompt copié dans le presse-papiers ! Faites simplement Ctrl+V dans Gemini.");
-    } else if (provider === "perplexity") {
-      const encoded = encodeURIComponent(promptText);
-      if (encoded.length < 4000) {
-        window.open(`https://www.perplexity.ai/search?q=${encoded}`, "_blank");
-      } else {
-        window.open("https://www.perplexity.ai/", "_blank");
-      }
-      toast.success("Perplexity ouvert avec votre prompt !");
     }
   };
 
@@ -116,7 +99,7 @@ export function ExternalPromptDialog({
                   Prompt pour votre propre IA
                 </h3>
                 <span className="rounded-full bg-purple-500/15 border border-purple-500/30 px-2 py-0.5 text-[10px] font-medium text-purple-300">
-                  ChatGPT · Claude · Gemini · Perplexity
+                  ChatGPT · Claude · Gemini
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">
@@ -143,11 +126,11 @@ export function ExternalPromptDialog({
                 Ouvrir directement votre IA :
               </span>
               <span className="text-[11px] text-muted-foreground">
-                Le prompt est injecté ou copié automatiquement
+                Le prompt est copié automatiquement · Faites Ctrl+V
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <button
                 onClick={() => handleOpenAI("chatgpt")}
                 className="group flex flex-col items-start gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 p-2.5 text-left transition cursor-pointer active:scale-98"
@@ -157,7 +140,7 @@ export function ExternalPromptDialog({
                   <ExternalLink className="size-3 text-emerald-400 opacity-70 group-hover:opacity-100" />
                 </div>
                 <span className="text-[10px] text-emerald-300/80">
-                  Pré-rempli directement ✨
+                  Copié · Prêt à coller (Ctrl+V)
                 </span>
               </button>
 
@@ -184,19 +167,6 @@ export function ExternalPromptDialog({
                 </div>
                 <span className="text-[10px] text-blue-300/80">
                   Copié · Prêt à coller (Ctrl+V)
-                </span>
-              </button>
-
-              <button
-                onClick={() => handleOpenAI("perplexity")}
-                className="group flex flex-col items-start gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 p-2.5 text-left transition cursor-pointer active:scale-98"
-              >
-                <div className="flex w-full items-center justify-between">
-                  <span className="text-xs font-semibold text-cyan-400">Perplexity</span>
-                  <ExternalLink className="size-3 text-cyan-400 opacity-70 group-hover:opacity-100" />
-                </div>
-                <span className="text-[10px] text-cyan-300/80">
-                  Recherche avec prompt
                 </span>
               </button>
             </div>
@@ -238,12 +208,15 @@ export function ExternalPromptDialog({
                 onChange={(e) => setDialect(e.target.value)}
                 className="rounded border border-border bg-background px-2 py-0.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary cursor-pointer"
               >
+                <option value="Excel 365 (=REGEXEXTRACT)">Excel 365 (=REGEXEXTRACT)</option>
+                <option value="Alteryx (Outil RegEx / Formula)">Alteryx (Outil RegEx / Formula)</option>
+                <option value="KNIME (regexReplace / Regex Split)">KNIME (regexReplace / Split)</option>
+                <option value="Power Query (M) / Excel">Power Query (M) / Excel</option>
                 <option value="JavaScript / PCRE / Python">JavaScript / PCRE / Python</option>
                 <option value="Python (re)">Python (re)</option>
                 <option value="JavaScript / TypeScript (RegExp)">JavaScript / TS</option>
-                <option value="Go (regexp)">Go (regexp)</option>
-                <option value="PostgreSQL / SQL">PostgreSQL</option>
                 <option value="Google Sheets (REGEXEXTRACT)">Google Sheets</option>
+                <option value="PostgreSQL / SQL">PostgreSQL / SQL</option>
               </select>
             </div>
           </div>
@@ -277,7 +250,7 @@ export function ExternalPromptDialog({
               className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 hover:bg-emerald-500 px-3.5 py-1.5 text-xs font-semibold text-white shadow transition cursor-pointer active:scale-95"
             >
               <ExternalLink className="size-3.5" />
-              <span>Ouvrir dans ChatGPT</span>
+              <span>Ouvrir ChatGPT (Ctrl+V)</span>
             </button>
             <button
               onClick={handleCopy}
