@@ -219,12 +219,6 @@ export function PatternPanel({
               </div>
             )}
           </div>
-        ) : hasMultipleRules ? (
-          <div className="border-b border-grid-line p-2 bg-surface-2/20 text-center">
-            <span className="text-[10px] text-muted-foreground">
-              Regex combinée non disponible (colonnes incompatibles sur les mêmes lignes)
-            </span>
-          </div>
         ) : null}
 
         {!rule ? (
@@ -347,51 +341,45 @@ export function PatternPanel({
                   </p>
                 )}
               </div>
-            ) : (
-              <div className="flex items-center justify-between rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1.5 font-medium text-foreground">
-                  <Settings2 className="size-3.5 text-primary" />
-                  <span>⚙ Déduit automatiquement</span>
-                </span>
-                <span className="text-[11px] text-muted-foreground">Moteur algorithmique</span>
-              </div>
-            )}
+            ) : null}
 
-            {/* RISQUE DE SÉCURITÉ REDOS */}
-            {rule.llmMetadata?.securityRisk && (
-              <div
-                className={cn(
-                  "flex items-center gap-2 rounded-lg border px-3 py-2 text-xs",
-                  rule.llmMetadata.securityRisk === "high"
-                    ? "border-rose-500/30 bg-rose-500/10 text-rose-300"
-                    : rule.llmMetadata.securityRisk === "medium"
-                    ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
-                    : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-                )}
-              >
-                {rule.llmMetadata.securityRisk === "high" ? (
+            {/* RISQUE DE SÉCURITÉ REDOS (affiché uniquement en cas de risque réel) */}
+            {rule.llmMetadata?.securityRisk &&
+              rule.llmMetadata.securityRisk !== "low" &&
+              rule.llmMetadata.securityRisk !== "none" && (
+                <div
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg border px-3 py-2 text-xs",
+                    rule.llmMetadata.securityRisk === "high"
+                      ? "border-rose-500/30 bg-rose-500/10 text-rose-300"
+                      : "border-amber-500/30 bg-amber-500/10 text-amber-300",
+                  )}
+                >
                   <ShieldAlert className="size-4 shrink-0 text-rose-400" />
-                ) : (
-                  <ShieldCheck className="size-4 shrink-0 text-emerald-400" />
-                )}
-                <div className="text-[11px]">
-                  <span>Sécurité ReDoS : </span>
-                  <strong className="uppercase">{rule.llmMetadata.securityRisk}</strong>
-                  {rule.llmMetadata.securityRisk === "high"
-                    ? " — Risque de backtracking catastrophique"
-                    : " — Aucun risque détecté"}
+                  <div className="text-[11px]">
+                    <span>Sécurité ReDoS : </span>
+                    <strong className="uppercase">{rule.llmMetadata.securityRisk}</strong>
+                    <span> — Risque de backtracking catastrophique</span>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             <div>
               <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
-                  Expression
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground font-semibold">
+                    Expression
+                  </span>
+                  {!isLLMRule && (
+                    <span className="text-[10px] text-muted-foreground bg-surface-2 px-1.5 py-0.5 rounded border border-border/80 flex items-center gap-1">
+                      <Settings2 className="size-2.5 text-primary" />
+                      <span>Déduit automatiquement</span>
+                    </span>
+                  )}
+                </div>
                 <button
                   onClick={() => copy(rule.source, "raw")}
-                  className="flex items-center gap-1 text-xs text-muted-foreground transition hover:text-primary"
+                  className="flex items-center gap-1 text-xs text-muted-foreground transition hover:text-primary cursor-pointer"
                 >
                   {copied === "raw" ? <Check className="size-3" /> : <Copy className="size-3" />}{" "}
                   copier
@@ -558,23 +546,17 @@ export function PatternPanel({
               </div>
             )}
 
-            {column.failures.length > 0 && onTriggerLLM && (
-              <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-3.5 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-amber-400">
-                    <Sparkles className="size-4" />
-                    <span>Compléter avec l'IA locale (Fallback)</span>
+            {column.failures.length > 0 && (
+              <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-3 space-y-2.5">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5 font-semibold text-amber-300">
+                    <Sparkles className="size-3.5 text-amber-400" />
+                    <span>Résoudre les {column.failures.length} échec{column.failures.length > 1 ? "s" : ""}</span>
                   </div>
-                  <button
-                    onClick={() => setLlmDialogOpen(true)}
-                    className="text-[10px] text-muted-foreground hover:text-foreground underline underline-offset-2"
-                  >
-                    Gérer l'IA
-                  </button>
+                  <span className="text-[10px] text-muted-foreground">Assistance IA</span>
                 </div>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Le motif classique n'extrait rien sur {column.failures.length} ligne{column.failures.length > 1 ? "s" : ""}.
-                  Vous pouvez solliciter le LLM local (WebGPU) pour analyser l'ensemble des lignes et déduire une regex plus générale.
+                  L'algorithme classique ne couvre pas ces lignes. Sollicitez l'IA locale (privée) ou générez un prompt pour votre IA externe :
                 </p>
 
                 {isLLMRunning ? (
@@ -593,36 +575,29 @@ export function PatternPanel({
                     )}
                   </div>
                 ) : (
-                  <button
-                    onClick={onTriggerLLM}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 px-3 py-2 text-xs font-semibold transition"
-                  >
-                    <Sparkles className="size-3.5" />
-                    ✦ Résoudre les échecs avec le LLM local (privé)
-                  </button>
-                )}
-              </div>
-            )}
-
-            {column.failures.length > 0 && (
-              <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-400">
-                    <Bot className="size-3.5" />
-                    <span>Besoin d'aide externe ?</span>
+                  <div className="flex gap-2 pt-0.5">
+                    {onTriggerLLM && (
+                      <button
+                        type="button"
+                        onClick={onTriggerLLM}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 px-2 py-1.5 text-xs font-semibold transition cursor-pointer"
+                        title="Demander à l'IA locale (WebGPU) de chercher une regex couvrant toutes les lignes"
+                      >
+                        <Sparkles className="size-3.5" />
+                        <span>IA locale (WebGPU)</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setExternalPromptOpen(true)}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-md bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 px-2.5 py-1.5 text-xs font-semibold transition cursor-pointer"
+                      title="Générer un prompt complet prêt à coller pour ChatGPT, Claude ou Gemini"
+                    >
+                      <Bot className="size-3.5 text-purple-400" />
+                      <span>Prompt externe</span>
+                    </button>
                   </div>
-                  <span className="text-[10px] text-purple-300/80">Claude / ChatGPT / Gemini</span>
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  Générez un prompt complet incluant vos exemples et les lignes en échec pour votre IA.
-                </p>
-                <button
-                  onClick={() => setExternalPromptOpen(true)}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 px-2.5 py-1.5 text-xs font-medium transition cursor-pointer"
-                >
-                  <Bot className="size-3.5" />
-                  Prompt ChatGPT / Claude
-                </button>
+                )}
               </div>
             )}
 
