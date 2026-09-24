@@ -281,24 +281,22 @@ class LocalLLMService {
       .join("\n");
 
     const prompt = `Voici une expression régulière JavaScript : \`${pattern}\`
-${sampleText ? `Exemples concrets de données traitées :\n${sampleText}\n` : ""}
+${sampleText ? `Exemples de données concrètes :\n${sampleText}\n` : ""}
 
-Décompose cette expression régulière en ses tokens ou composants logiques essentiels (ex: préfixe repère, groupe(s) de capture, quantificateurs, suffixe, ancres).
-Pour CHAQUE composant / token, explique obligatoirement :
-1. "technical" : Ce que ça veut dire d'un point de vue technique (la règle regex, la syntaxe, classes de caractères autorisées, échappements, quantificateurs, groupes).
-2. "human" : Ce que ça veut dire concrètement d'un point de vue humain (ce que cette partie représente dans les données réelles de l'utilisateur).
+Donne une explication TRÈS SIMPLE, COURTE et point par point de chaque morceau logique du motif (repère de départ, valeur extraite, repère de fin).
+Pour chaque morceau :
+1. "technical" : 1 seule phrase courte et simple (règle regex).
+2. "human" : 1 seule phrase courte et concrète (ce que ça représente dans les données de l'exemple).
 
-Ne découpe pas en caractères isolés sans contexte (ne sépare pas inutilement '1' puis '.' puis '1'), regroupe par token logique signifiant.
-
-Réponds EXCLUSIVEMENT par un objet JSON valide de la forme :
+Réponds EXCLUSIVEMENT par un objet JSON valide :
 {
-  "summary": "Résumé limpide en français en une phrase",
+  "summary": "1 phrase très simple résumant l'extraction",
   "steps": [
     {
-      "token": "morceau_du_motif",
-      "label": "Rôle du composant (ex: Préfixe textuel repère, Valeur extraite (Groupe 1)...)",
-      "technical": "Explication technique détaillée de la syntaxe regex",
-      "human": "Explication concrète dans le contexte des données réelles"
+      "token": "morceau",
+      "label": "Rôle simple (ex: Délimiteur début, Valeur extraite, Délimiteur fin)",
+      "technical": "Explication technique courte et simple",
+      "human": "Ce que ça représente concrètement dans l'exemple"
     }
   ]
 }`;
