@@ -281,12 +281,33 @@ function capturePatterns(raw: string, rightChar: string | null): string[] {
   if (rightChar && !raw.includes(rightChar) && !/[\s\w]/.test(rightChar)) {
     set.add(`[^${escapeRegex(rightChar)}]+`);
   }
-  // nombres formatés, éventuellement signés : "1 250,00", "-45,90", "3 410.90", "12 000"
+  // nombres formatés, éventuellement signés ou avec devise : "1 250,00 €", "320,00 €", "-45,90", "$1,250.00"
   const trimmed = raw.trim();
+  const currMatch = trimmed.match(/^([€$£¥]|CHF|USD|EUR)\s*(.+)$/i) || trimmed.match(/^(.+?)\s*([€$£¥]|CHF|USD|EUR)$/i);
+  const currSymbol = currMatch ? (currMatch[1] && /[€$£¥]|CHF|USD|EUR/i.test(currMatch[1]) ? currMatch[1] : currMatch[2]) : null;
+  const numRaw = currMatch ? (currMatch[1] === currSymbol ? currMatch[2]!.trim() : currMatch[1]!.trim()) : trimmed;
+
   const isNumber =
     /^[+-]?\s*[\d][\d\s\u00a0\u202f.,]*\d$/.test(trimmed) ||
-    /^[+-]?\s*\d+$/.test(trimmed);
+    /^[+-]?\s*\d+$/.test(trimmed) ||
+    (currSymbol !== null && (/^[+-]?\s*[\d][\d\s\u00a0\u202f.,]*\d$/.test(numRaw) || /^[+-]?\s*\d+$/.test(numRaw)));
+
   if (isNumber) {
+    if (currSymbol) {
+      const escCurr = escapeRegex(currSymbol);
+      const isSuffix = trimmed.endsWith(currSymbol);
+      if (isSuffix) {
+        set.add(`\\d[\\d\\s\\u00a0]*[.,]\\d+\\s*${escCurr}`);
+        set.add(`[\\d\\s\\u00a0]+[.,]\\d+\\s*${escCurr}`);
+        set.add(`[\\d\\s\\u00a0.,]+\\s*${escCurr}`);
+        set.add(`\\d+(?:[.,]\\d+)?\\s*${escCurr}`);
+      } else {
+        set.add(`${escCurr}\\s*\\d[\\d\\s\\u00a0]*[.,]\\d+`);
+        set.add(`${escCurr}\\s*[\\d\\s\\u00a0]+[.,]\\d+`);
+        set.add(`${escCurr}\\s*[\\d\\s\\u00a0.,]+`);
+        set.add(`${escCurr}\\s*\\d+(?:[.,]\\d+)?`);
+      }
+    }
     set.add("[-+\\d\\s\\u00a0.,]+");
     set.add("\\s*[-+\\d\\s\\u00a0.,]+");
     set.add("[-+]?\\s*[\\d\\s\\u00a0.,]+");
