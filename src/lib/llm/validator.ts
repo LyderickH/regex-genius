@@ -11,7 +11,11 @@ import type { ExamplePair, NegativeExample, RegexCandidate, RegexValidation } fr
  * - Si le groupe 1 existe (capture), on utilise match[1].
  * - Sinon on utilise match[0] (correspondance totale).
  */
-export function extractMatch(re: RegExp, input: string): string | null {
+export function extractMatch(re: RegExp, input: string, replacement?: string): string | null {
+  if (replacement !== undefined) {
+    if (!re.test(input)) return null;
+    return input.replace(re, replacement);
+  }
   const m = re.exec(input);
   if (!m) return null;
   return m[1] !== undefined ? m[1] : m[0];
@@ -60,7 +64,7 @@ export function validateCandidate(
   // Étape 2 : Exemples positifs
   let positivePassed = 0;
   for (const ex of positiveExamples) {
-    const extracted = extractMatch(re, ex.input);
+    const extracted = extractMatch(re, ex.input, candidate.replacement);
     if (extracted === ex.expected) {
       positivePassed++;
     } else {
@@ -88,7 +92,7 @@ export function validateCandidate(
       failedExamples.push({
         type: "negative",
         input: neg.input,
-        got: extractMatch(re, neg.input),
+        got: extractMatch(re, neg.input, candidate.replacement),
       });
       errors.push(`Échec sur exemple négatif : l'entrée interdite "${neg.input}" a été reconnue à tort.`);
     }
@@ -100,7 +104,7 @@ export function validateCandidate(
 
   // Cas limite A : Chaîne vide (ne doit pas extraire de fausse valeur sauf si attendu vide)
   edgeCasesTotal++;
-  const emptyMatch = extractMatch(re, "");
+  const emptyMatch = extractMatch(re, "", candidate.replacement);
   if (emptyMatch === null || positiveExamples.some((p) => p.input === "" && p.expected === emptyMatch)) {
     edgeCasesPassed++;
   } else {

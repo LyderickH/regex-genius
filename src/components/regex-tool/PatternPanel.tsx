@@ -341,6 +341,19 @@ export function PatternPanel({
                   </span>
                 ))}
               </div>
+              {rule.replacement !== undefined && (
+                <div className="mt-2 flex items-center justify-between rounded-md border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-300">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium text-muted-foreground">Formule de remplacement :</span>
+                    <code className="font-mono font-bold bg-background/80 px-1.5 py-0.5 rounded border border-cyan-500/20 text-cyan-300">
+                      {rule.replacement}
+                    </code>
+                  </div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-cyan-400/90 bg-cyan-500/20 px-1.5 py-0.5 rounded">
+                    Substitution
+                  </span>
+                </div>
+              )}
               {describeTransform(rule.transform) && (
                 <p className="mt-1.5 text-xs text-muted-foreground">
                   Puis, sur la valeur extraite : {describeTransform(rule.transform)}. Cette étape
@@ -561,8 +574,16 @@ export function PatternPanel({
               </select>
 
               {(() => {
-                const snippet = dialect.snippet(rule.source, codeLocale === "fr" ? "texte" : "text", codeLocale);
-                const note = typeof dialect.note === "function" ? dialect.note(codeLocale) : dialect.note;
+                const snippet = dialect.snippet(
+                  rule.source,
+                  codeLocale === "fr" ? "texte" : "text",
+                  codeLocale,
+                  rule.replacement,
+                );
+                const note =
+                  typeof dialect.note === "function"
+                    ? dialect.note(codeLocale, rule.replacement)
+                    : dialect.note;
                 return (
                   <>
                     <div className="rounded-md border border-border bg-background p-3 shadow-inner">

@@ -73,6 +73,7 @@ export interface ModelProgressReport {
 export interface RegexCandidate {
   pattern: string;
   flags: string;
+  replacement?: string;
   explanation: string;
   confidence: number;
 }

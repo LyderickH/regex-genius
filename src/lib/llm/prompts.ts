@@ -6,17 +6,22 @@
 import type { ExamplePair, NegativeExample, RegexCandidate, RegexValidation } from "./types";
 
 export const SYSTEM_PROMPT = `Tu es un moteur de synthèse d'expressions régulières JavaScript de haute précision.
-Ta tâche est de déduire une expression régulière (compatible JavaScript RegExp) capable d'extraire la valeur attendue pour chaque exemple positif, tout en rejetant les exemples négatifs.
+Ta tâche est de déduire une expression régulière (compatible JavaScript RegExp) capable d'extraire ou de générer par remplacement la valeur attendue pour chaque exemple positif, tout en rejetant les exemples négatifs.
 
 RÈGLES FONDAMENTALES :
 1. Cherche une règle générale qui explique la structure des exemples plutôt que de mémoriser individuellement les valeurs.
-2. Si une extraction précise est demandée, utilise des parenthèses de capture () autour de la sous-chaîne cible (Groupe 1).
-3. Utilise une syntaxe purement compatible JavaScript RegExp (par exemple \\d, \\w, [A-Z], etc.).
+2. EXTRACTION CONTINUE : Si la valeur attendue est une sous-chaîne continue de l'entrée, utilise des parenthèses de capture () autour de la sous-chaîne cible (Groupe 1).
+3. EXTRACTION DISCONTINUE / REMPLACEMENT / RÉARRANGEMENT :
+   Si la valeur attendue combine plusieurs morceaux discontinus (ex: première et dernière lettre comme 'cacar' -> 'cr', 'ezfdfg' -> 'eg', ou inversion 'Nom, Prénom' -> 'Prénom Nom', ou date '2024-10-25' -> '25/10/2024') :
+   - Capture chaque partie avec des parenthèses séparées (ex: ^([a-z]).*([a-z])$ ou ^([^,]+),\\s*(.+)$).
+   - Fournis le champ "replacement" indiquant la formule de substitution (ex: "$1$2", "$2 $1", "$3/$2/$1").
+   Le moteur exécutera alors : input.replace(new RegExp(pattern, flags), replacement).
+4. Utilise une syntaxe purement compatible JavaScript RegExp (par exemple \\d, \\w, [a-z], etc.).
    Dans la chaîne JSON "pattern", double les barres obliques inverses si nécessaire (ex: "\\\\d+" ou classes comme "[0-9]+").
-4. N'entoure JAMAIS le champ "pattern" de délimiteurs /.../. Fournis uniquement l'intérieur de la regex.
-5. Respecte TOUS les exemples positifs sans exception.
-6. Rejette TOUS les exemples négatifs.
-7. Évite les quantificateurs imbriqués dangereux (ex: (a+)+, (.*)*) pour prévenir le backtracking catastrophique (ReDoS).
+5. N'entoure JAMAIS le champ "pattern" de délimiteurs /.../. Fournis uniquement l'intérieur de la regex.
+6. Respecte TOUS les exemples positifs sans exception.
+7. Rejette TOUS les exemples négatifs.
+8. Évite les quantificateurs imbriqués dangereux (ex: (a+)+, (.*)*) pour prévenir le backtracking catastrophique (ReDoS).
 
 FORMAT STRICT DE SORTIE :
 Tu dois répondre UNIQUEMENT par un objet JSON valide, sans aucune balise Markdown (pas de \`\`\`json), sans texte avant ni après.
@@ -25,9 +30,11 @@ Structure JSON obligatoire :
 {
   "pattern": "votre_regex_ici",
   "flags": "",
+  "replacement": "$1$2",
   "explanation": "explication concise de la règle en français",
   "confidence": 0.95
-}`;
+}
+(Note: le champ "replacement" est optionnel, à inclure uniquement en cas de remplacement/combinaison multi-groupes)`;
 
 /**
  * Construit le message utilisateur initial à partir des exemples
@@ -50,6 +57,13 @@ export function buildInitialPrompt(
     prompt += `  ${idx + 1}. Entrée: "${ex.input}"  -->  Valeur attendue: "${ex.expected}"\n`;
   });
 
+  const isDiscontinuous = sampledPositives.some((ex) => !ex.input.includes(ex.expected));
+  if (isDiscontinuous) {
+    prompt += `\n⚠️ REMARQUE CRUCIALE (Extraction discontinue / Remplacement) :
+La valeur attendue n'est PAS une sous-chaîne continue de l'entrée (ex: première et dernière lettre, suppression au milieu, inversion de tokens).
+Tu DOIS utiliser plusieurs groupes de capture () et fournir la clé "replacement" dans ton JSON (ex: "pattern": "^([a-z]).*([a-z])$", "replacement": "$1$2") !\n`;
+  }
+
   if (sampledNegatives.length > 0) {
     prompt += `\nEXEMPLES NÉGATIFS (l'expression ne doit PAS correspondre à ces lignes) :\n`;
     sampledNegatives.forEach((neg, idx) => {
@@ -65,7 +79,7 @@ export function buildInitialPrompt(
   }
 
   prompt += `\nOBJECTIF :
-Trouve l'expression régulière JavaScript la plus propre et générale possible qui extrait exactement la valeur attendue pour chaque exemple positif (idéalement via le groupe de capture 1).
+Trouve l'expression régulière JavaScript la plus propre et générale possible qui extrait exactement la valeur attendue pour chaque exemple positif (via le groupe 1 ou via pattern + "replacement").
 Réponds UNIQUEMENT par l'objet JSON requis.`;
 
   return prompt;
@@ -87,7 +101,7 @@ export function buildCorrectionPrompt(
   if (candidate) {
     prompt += `HYPOTHÈSE PRÉCÉDENTE :
   pattern: "${candidate.pattern}"
-  flags: "${candidate.flags}"\n\n`;
+  flags: "${candidate.flags}"${candidate.replacement ? `\n  replacement: "${candidate.replacement}"` : ""}\n\n`;
   }
 
   // 1. Isoler le contre-exemple minimal clé
@@ -105,6 +119,11 @@ export function buildCorrectionPrompt(
       prompt += `  - Entrée interdite qui a matché à tort : "${firstFail.input}"\n`;
       prompt += `  -> DIAGNOSTIC : Ton motif est trop laxiste et déborde sur des données indésirables.\n\n`;
     }
+  }
+
+  if (validation.failedExamples && validation.failedExamples.some((f) => f.expected && !f.input.includes(f.expected))) {
+    prompt += `CONSEIL STRATÉGIQUE (Multi-fragments) :
+La valeur attendue combine des fragments discontinus de l'entrée. Utilise des groupes () multiples et spécifie le champ "replacement" (ex: "replacement": "$1$2") !\n\n`;
   }
 
   if (validation.security?.hasCatastrophicBacktracking) {
@@ -130,7 +149,8 @@ export function buildCorrectionPrompt(
   prompt += `DIRECTIVE DE REFORMULATION :
 1. Généralise ou ré-ancre la regex pour englober ce contre-exemple tout en maintenant la validité sur les autres exemples.
 2. N'énumère pas de disjonctions de valeurs littérales (ex: ne pas faire (VALEUR1|VALEUR2)). Trouve la règle structurelle (séparateurs, classes de caractères).
-3. Réponds UNIQUEMENT avec l'objet JSON requis.`;
+3. Si plusieurs morceaux sont extraits, utilise "replacement": "$1$2".
+4. Réponds UNIQUEMENT avec l'objet JSON requis.`;
 
   return prompt;
 }
@@ -155,6 +175,7 @@ export function parseCandidateJSON(raw: string): RegexCandidate | null {
     flags = "",
     explanation = "Motif synthétisé",
     confidence = 0.8,
+    replacement?: string,
   ): RegexCandidate | null => {
     let pat = pattern.trim();
     if (!pat) return null;
@@ -170,6 +191,7 @@ export function parseCandidateJSON(raw: string): RegexCandidate | null {
     return {
       pattern: pat,
       flags: cleanFlags,
+      replacement: typeof replacement === "string" ? replacement.trim() : undefined,
       explanation,
       confidence: Math.max(0, Math.min(1, confidence)),
     };
@@ -185,7 +207,13 @@ export function parseCandidateJSON(raw: string): RegexCandidate | null {
     try {
       const parsed = JSON.parse(jsonBlock);
       if (parsed && typeof parsed.pattern === "string") {
-        const res = sanitizeCandidate(parsed.pattern, parsed.flags, parsed.explanation, parsed.confidence);
+        const res = sanitizeCandidate(
+          parsed.pattern,
+          parsed.flags,
+          parsed.explanation,
+          parsed.confidence,
+          parsed.replacement,
+        );
         if (res) return res;
       }
     } catch {}
@@ -195,7 +223,13 @@ export function parseCandidateJSON(raw: string): RegexCandidate | null {
       const sanitized = jsonBlock.replace(/(?<!\\)\\(?!["\\/bfnrtu])/g, "\\\\");
       const parsed = JSON.parse(sanitized);
       if (parsed && typeof parsed.pattern === "string") {
-        const res = sanitizeCandidate(parsed.pattern, parsed.flags, parsed.explanation, parsed.confidence);
+        const res = sanitizeCandidate(
+          parsed.pattern,
+          parsed.flags,
+          parsed.explanation,
+          parsed.confidence,
+          parsed.replacement,
+        );
         if (res) return res;
       }
     } catch {}
@@ -206,10 +240,13 @@ export function parseCandidateJSON(raw: string): RegexCandidate | null {
   if (patMatch && patMatch[1]) {
     const flagsMatch = text.match(/["']?flags["']?\s*:\s*["']([gimsuy]*)["']/i);
     const explMatch = text.match(/["']?explanation["']?\s*:\s*["']([^"'\r\n]+)["']/i);
+    const replMatch = text.match(/["']?replacement["']?\s*:\s*["']([^"'\r\n]+)["']/i);
     const res = sanitizeCandidate(
       patMatch[1],
       flagsMatch ? flagsMatch[1] : "",
       explMatch ? explMatch[1] : "Motif synthétisé",
+      0.8,
+      replMatch ? replMatch[1] : undefined,
     );
     if (res) return res;
   }

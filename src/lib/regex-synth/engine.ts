@@ -92,6 +92,8 @@ export interface Rule {
   /** source de l'expression régulière, le groupe 1 contient la valeur extraite */
   source: string;
   flags: string;
+  /** motif de remplacement / substitution (ex: "$1$2", "$2 $1") lorsque l'opération combine plusieurs groupes */
+  replacement?: string;
   transform: Transform;
   /** règles alternatives, essayées dans l'ordre quand la principale ne s'applique pas */
   extra?: Rule[];
@@ -1019,18 +1021,29 @@ export function ruleChain(rule: Rule): Rule[] {
 }
 
 export function applyRule(rule: Rule, inputs: string[]): SynthResult {
-  const chain = ruleChain(rule).map((r) => ({ re: new RegExp(r.source, r.flags), transform: r.transform }));
+  const chain = ruleChain(rule).map((r) => ({
+    re: new RegExp(r.source, r.flags),
+    transform: r.transform,
+    replacement: r.replacement,
+  }));
   const values: (string | null)[] = [];
   const failures: number[] = [];
   let matched = 0;
   for (let i = 0; i < inputs.length; i++) {
     const input = inputs[i] ?? "";
     let value: string | null = null;
-    for (const { re, transform } of chain) {
-      const g = firstGroup(re.exec(input));
-      if (g !== undefined) {
-        value = applyTransform(g, transform);
-        break;
+    for (const { re, transform, replacement } of chain) {
+      if (replacement !== undefined) {
+        if (re.test(input)) {
+          value = applyTransform(input.replace(re, replacement), transform);
+          break;
+        }
+      } else {
+        const g = firstGroup(re.exec(input));
+        if (g !== undefined) {
+          value = applyTransform(g, transform);
+          break;
+        }
       }
     }
     if (value !== null) {
@@ -1048,14 +1061,25 @@ export function applyRule(rule: Rule, inputs: string[]): SynthResult {
 
 /** Nombre d'exemples réellement reproduits par la chaîne de règles. */
 function explains(rule: Rule, examples: Example[]): number {
-  const chain = ruleChain(rule).map((r) => ({ re: new RegExp(r.source, r.flags), transform: r.transform }));
+  const chain = ruleChain(rule).map((r) => ({
+    re: new RegExp(r.source, r.flags),
+    transform: r.transform,
+    replacement: r.replacement,
+  }));
   let n = 0;
   for (const ex of examples) {
-    for (const { re, transform } of chain) {
-      const g = firstGroup(re.exec(ex.input));
-      if (g !== undefined) {
-        if (applyTransform(g, transform) === ex.output) n++;
-        break;
+    for (const { re, transform, replacement } of chain) {
+      if (replacement !== undefined) {
+        if (re.test(ex.input)) {
+          if (applyTransform(ex.input.replace(re, replacement), transform) === ex.output) n++;
+          break;
+        }
+      } else {
+        const g = firstGroup(re.exec(ex.input));
+        if (g !== undefined) {
+          if (applyTransform(g, transform) === ex.output) n++;
+          break;
+        }
       }
     }
   }
@@ -1564,6 +1588,200 @@ function preferAlternation(res: SynthResult, inputs: string[], examples: Example
   return out;
 }
 
+function inferCharClassWithContext(samples: string[], len: number, allInputs: string[]): string {
+  const allChars = samples.join("");
+  const inputsHaveUpper = allInputs.some((inp) => /[A-Z]/.test(inp));
+  const inputsHaveAccents = allInputs.some((inp) => /[À-ÿ]/.test(inp));
+
+  let baseClass = ".";
+  if (/^[a-z]+$/.test(allChars)) {
+    if (inputsHaveUpper && inputsHaveAccents) baseClass = "[a-zA-ZÀ-ÿ]";
+    else if (inputsHaveUpper) baseClass = "[a-zA-Z]";
+    else baseClass = "[a-z]";
+  } else if (/^[A-Z]+$/.test(allChars)) {
+    baseClass = "[A-Z]";
+  } else if (/^[a-zA-Z]+$/.test(allChars)) {
+    baseClass = inputsHaveAccents ? "[a-zA-ZÀ-ÿ]" : "[a-zA-Z]";
+  } else if (/^[a-zA-ZÀ-ÿ]+$/.test(allChars)) {
+    baseClass = "[a-zA-ZÀ-ÿ]";
+  } else if (/^\d+$/.test(allChars)) {
+    baseClass = "\\d";
+  } else if (/^[\wÀ-ÿ]+$/.test(allChars)) {
+    baseClass = "[\\wÀ-ÿ]";
+  } else if (/^\S+$/.test(allChars)) {
+    baseClass = "\\S";
+  }
+
+  if (len === 1) return baseClass;
+  if (baseClass === ".") return `.{${len}}`;
+  return `${baseClass}{${len}}`;
+}
+
+/**
+ * Synthèse de règles par transformation, multi-capture et remplacement (regex with replacement).
+ * Permet de résoudre :
+ * 1. Extraction discontinue de plusieurs fragments (ex: première et dernière lettre cacar -> cr)
+ * 2. Combinaison avec séparateur constant (ex: cacar -> c-r)
+ * 3. Réarrangement de colonnes ou tokens délimités (ex: "Doe, John" -> "John Doe")
+ * 4. Inversion / réordonnancement de dates (ex: "2024-12-31" -> "31/12/2024")
+ * 5. Ajout de préfixe ou suffixe constant (ex: "12345" -> "REF-12345")
+ */
+export function synthesizeReplacementRule(
+  examples: Example[],
+  allInputs: string[],
+): Rule | null {
+  const valid = examples.filter((e) => e.input != null && e.output != null && e.output !== "");
+  if (valid.length === 0) return null;
+
+  // 1. Décomposition Préfixe + Suffixe (ex: première lettre + dernière lettre, cacar -> cr)
+  // On teste l1 (longueur préfixe) et l2 (longueur suffixe)
+  for (let l1 = 1; l1 <= 6; l1++) {
+    for (let l2 = 1; l2 <= 6; l2++) {
+      let sep: string | null = null;
+      let ok = true;
+      for (const ex of valid) {
+        if (ex.input.length < l1 + l2 || ex.output.length < l1 + l2) {
+          ok = false;
+          break;
+        }
+        const p1 = ex.input.slice(0, l1);
+        const p2 = ex.input.slice(-l2);
+        if (!ex.output.startsWith(p1) || !ex.output.endsWith(p2)) {
+          ok = false;
+          break;
+        }
+        const curSep = ex.output.slice(l1, ex.output.length - l2);
+        if (sep === null) {
+          sep = curSep;
+        } else if (sep !== curSep) {
+          ok = false;
+          break;
+        }
+      }
+
+      if (ok && sep !== null) {
+        const p1Samples = valid.map((ex) => ex.input.slice(0, l1));
+        const p2Samples = valid.map((ex) => ex.input.slice(-l2));
+        const c1 = inferCharClassWithContext(p1Samples, l1, allInputs);
+        const c2 = inferCharClassWithContext(p2Samples, l2, allInputs);
+
+        const pat = `^(${c1}).*(${c2})$`;
+        const replacement = `$1${sep}$2`;
+        const candidateRule: Rule = {
+          source: pat,
+          flags: "",
+          replacement,
+          transform: NO_TRANSFORM,
+        };
+
+        if (explains(candidateRule, valid) === valid.length) {
+          return candidateRule;
+        }
+      }
+    }
+  }
+
+  // 2. Réarrangement / Permutation de tokens délimités (ex: "Doe, John" -> "John Doe", "2024-10-25" -> "25/10/2024")
+  const DELIM_CANDIDATES = [
+    { delim: ",", patDelim: ",\\s*" },
+    { delim: ";", patDelim: ";\\s*" },
+    { delim: "-", patDelim: "\\s*-\\s*" },
+    { delim: "/", patDelim: "\\s*/\\s*" },
+    { delim: "|", patDelim: "\\s*\\|\\s*" },
+    { delim: " ", patDelim: "\\s+" },
+  ];
+
+  for (const { delim, patDelim } of DELIM_CANDIDATES) {
+    const dRegex = new RegExp(patDelim);
+    const tokenCounts = valid.map((ex) => ex.input.split(dRegex).filter(Boolean));
+    const tokenLen = tokenCounts[0]?.length ?? 0;
+    if (tokenLen >= 2 && tokenLen <= 4 && tokenCounts.every((t) => t.length === tokenLen)) {
+      // Cas de 2 tokens : ex "Nom, Prenom" -> "Prenom Nom"
+      if (tokenLen === 2) {
+        const canInvertWithSpace = valid.every(
+          (ex, idx) => ex.output === `${tokenCounts[idx]![1]} ${tokenCounts[idx]![0]}`,
+        );
+        if (canInvertWithSpace) {
+          const rule: Rule = {
+            source: `^([^${delim}]+)${patDelim}(.+)$`,
+            flags: "",
+            replacement: "$2 $1",
+            transform: NO_TRANSFORM,
+          };
+          if (explains(rule, valid) === valid.length) return rule;
+        }
+
+        const canInvertRaw = valid.every(
+          (ex, idx) => ex.output === `${tokenCounts[idx]![1]}${tokenCounts[idx]![0]}`,
+        );
+        if (canInvertRaw) {
+          const rule: Rule = {
+            source: `^([^${delim}]+)${patDelim}(.+)$`,
+            flags: "",
+            replacement: "$2$1",
+            transform: NO_TRANSFORM,
+          };
+          if (explains(rule, valid) === valid.length) return rule;
+        }
+      }
+
+      // Cas de 3 tokens (ex dates : 2024-12-31 -> 31/12/2024)
+      if (tokenLen === 3) {
+        const isDateSwap = valid.every((ex, idx) => {
+          const t = tokenCounts[idx]!;
+          return (
+            ex.output === `${t[2]}/${t[1]}/${t[0]}` ||
+            ex.output === `${t[2]}-${t[1]}-${t[0]}`
+          );
+        });
+        if (isDateSwap) {
+          const targetSep = valid[0]!.output.includes("/") ? "/" : "-";
+          const rule: Rule = {
+            source: `^(\\d{2,4})${patDelim}(\\d{1,2})${patDelim}(\\d{2,4})$`,
+            flags: "",
+            replacement: `$3${targetSep}$2${targetSep}$1`,
+            transform: NO_TRANSFORM,
+          };
+          if (explains(rule, valid) === valid.length) return rule;
+        }
+      }
+    }
+  }
+
+  // 3. Ajout de constante Prefix / Suffix (ex: 12345 -> REF-12345)
+  const isPrefixConst = valid.every((ex) => ex.output.endsWith(ex.input));
+  if (isPrefixConst) {
+    const prefixes = valid.map((ex) => ex.output.slice(0, ex.output.length - ex.input.length));
+    if (new Set(prefixes).size === 1 && prefixes[0]!.length > 0) {
+      const p = prefixes[0]!;
+      const rule: Rule = {
+        source: `^(.*)$`,
+        flags: "",
+        replacement: `${p}$1`,
+        transform: NO_TRANSFORM,
+      };
+      if (explains(rule, valid) === valid.length) return rule;
+    }
+  }
+
+  const isSuffixConst = valid.every((ex) => ex.output.startsWith(ex.input));
+  if (isSuffixConst) {
+    const suffixes = valid.map((ex) => ex.output.slice(ex.input.length));
+    if (new Set(suffixes).size === 1 && suffixes[0]!.length > 0) {
+      const s = suffixes[0]!;
+      const rule: Rule = {
+        source: `^(.*)$`,
+        flags: "",
+        replacement: `$1${s}`,
+        transform: NO_TRANSFORM,
+      };
+      if (explains(rule, valid) === valid.length) return rule;
+    }
+  }
+
+  return null;
+}
+
 export function synthesize(inputs: string[], expected: (string | null)[]): SynthResult {
   const examples: Example[] = [];
   for (let i = 0; i < inputs.length; i++) {
@@ -1605,6 +1823,16 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
     }
     return res;
   };
+
+  // 0. Si les exemples contiennent des transformations avec réarrangement ou multi-fragments
+  // (ex: cacar -> cr où la sortie n'est pas une sous-chaîne continue de l'entrée)
+  const isDiscontinuous = examples.some((e) => !e.input.includes(e.output));
+  if (isDiscontinuous) {
+    const replRule = synthesizeReplacementRule(examples, synthInputs);
+    if (replRule && explains(replRule, examples) === examples.length) {
+      return finalize(applyRule(replRule, synthInputs));
+    }
+  }
 
   // 1. Étape d'alignement structurel & DSL d'ancrage VSA (LCS / Needleman-Wunsch / FlashFill)
   // Détecte instantanément les motifs délimités (ex: | dans FEC, CSV, séparateurs invariants, balises <...>)
@@ -1659,6 +1887,11 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
       return finalize(res);
     }
   }
+  const replFallback = synthesizeReplacementRule(examples, synthInputs);
+  if (replFallback && explains(replFallback, examples) === examples.length) {
+    return finalize(applyRule(replFallback, synthInputs));
+  }
+
   if (singleRes) return finalize(singleRes);
   if (parts[0]) return finalize(applyRule(parts[0].rule, inputs));
   return empty;

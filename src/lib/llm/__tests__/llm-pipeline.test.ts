@@ -177,4 +177,26 @@ describe("Parsing JSON strict et boucle de retroaction", () => {
     expect(prompt).toContain("FORBIDDEN 456");
     expect(prompt).toContain("CONTRE-EXEMPLE MINIMAL");
   });
+
+  it("parse et valide une regex candidate avec formule de remplacement (ex: cacar -> cr)", () => {
+    const raw = JSON.stringify({
+      pattern: "^([a-z]).*([a-z])$",
+      flags: "",
+      replacement: "$1$2",
+      explanation: "Capture première et dernière lettre et les assemble",
+      confidence: 0.98,
+    });
+    const parsed = parseCandidateJSON(raw);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.replacement).toBe("$1$2");
+
+    const positives: ExamplePair[] = [
+      { input: "cacar", expected: "cr" },
+      { input: "ezfdfg", expected: "eg" },
+      { input: "gdfgre", expected: "ge" },
+    ];
+    const validation = validateCandidate(parsed!, positives);
+    expect(validation.isValid).toBe(true);
+    expect(validation.positivePassed).toBe(3);
+  });
 });

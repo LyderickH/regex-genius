@@ -118,8 +118,20 @@ export function generateExternalAIPrompt({
   // Section 3 : Directives et contraintes
   promptParts.push(`---`);
   promptParts.push(`## 3. DIRECTIVES STRICTES & LIVRABLES ATTENDUS`);
+
+  const isDiscontinuous = examples.some((ex) => !ex.input.includes(ex.output));
+  if (isDiscontinuous) {
+    promptParts.push(
+      `⚠️ **ATTENTION PARTICULIÈRE (Extraction discontinue / Remplacement / Composition)** :`,
+      `La valeur attendue n'est PAS une sous-chaîne continue de l'entrée (ex: première et dernière lettre, morceaux assemblés, réarrangement ou substitution).`,
+      `Tu DOIS concevoir une Regex avec plusieurs groupes de capture \`(...)\` et fournir la formule de substitution correspondante (ex: \`$1$2\`, \`$2 $1\`, etc.).`,
+      `Pour Excel : formule \`=REGEX.REMPLACER(A2; "motif"; "$1$2")\` en FR et \`=REGEXREPLACE(A2, "motif", "$1$2")\` en EN.`,
+      ``,
+    );
+  }
+
   promptParts.push(
-    `1. **Groupe capturant principal** : La Regex doit contenir un groupe capturant principal \`(...)\` isolant exactement la valeur attendue.`,
+    `1. **Groupe capturant principal** : La Regex doit contenir un groupe capturant principal \`(...)\` isolant la valeur attendue, ou plusieurs groupes si la valeur combine plusieurs fragments discontinus.`,
     `2. **Dialecte / Outil ciblé** : **${targetDialect}**.`,
     `3. **Anti-surapprentissage (Généralisation)** : Ne code JAMAIS en dur les valeurs des exemples dans la regex (ex: n'écris pas \`(alice|bob)\` si la colonne extrait un prénom ou un email). La regex doit s'appuyer sur la structure (délimiteurs, formats, ancres, classes de caractères).`,
     `4. **Sécurité ReDoS** : La regex doit être exempte de tout backtracking catastrophique (pas de quantificateurs imbriqués ambigus).`,

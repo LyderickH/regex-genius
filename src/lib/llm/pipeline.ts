@@ -190,6 +190,7 @@ export async function runSynthesisPipeline(
       const validatedRule: Rule = {
         source: candidate.pattern,
         flags: candidate.flags,
+        replacement: candidate.replacement,
         transform: NO_TRANSFORM,
         origin: "llm",
         llmMetadata: {

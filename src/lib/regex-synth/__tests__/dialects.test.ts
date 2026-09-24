@@ -57,4 +57,26 @@ describe("DIALECTS - French & English modes", () => {
     expect(snip).toContain("[MaCol]");
     expect(snip).not.toContain("; each"); // M syntax uses commas
   });
+
+  it("génère les formules de remplacement (REGEX.REMPLACER, REGEXREPLACE, re.sub, replace) quand replacement est fourni", () => {
+    const excel = DIALECTS.find((d) => d.id === "excel")!;
+    const frExcelRepl = excel.snippet("^([a-z]).*([a-z])$", "texte", "fr", "$1$2");
+    expect(frExcelRepl).toBe('=REGEX.REMPLACER(A2; "^([a-z]).*([a-z])$"; "$1$2")');
+
+    const enExcelRepl = excel.snippet("^([a-z]).*([a-z])$", "text", "en", "$1$2");
+    expect(enExcelRepl).toBe('=REGEXREPLACE(A2, "^([a-z]).*([a-z])$", "$1$2")');
+
+    const gsheets = DIALECTS.find((d) => d.id === "gsheets")!;
+    const gsheetsRepl = gsheets.snippet("^([a-z]).*([a-z])$", "texte", "fr", "$1$2");
+    expect(gsheetsRepl).toBe('=REGEXREPLACE(A2; "^([a-z]).*([a-z])$"; "$1$2")');
+
+    const py = DIALECTS.find((d) => d.id === "python")!;
+    const pyRepl = py.snippet("^([a-z]).*([a-z])$", "texte", "fr", "$1$2");
+    expect(pyRepl).toContain("re.sub(");
+    expect(pyRepl).toContain("\\\\1\\\\2");
+
+    const js = DIALECTS.find((d) => d.id === "javascript")!;
+    const jsRepl = js.snippet("^([a-z]).*([a-z])$", "texte", "fr", "$1$2");
+    expect(jsRepl).toContain('.replace(/^([a-z]).*([a-z])$/g, "$1$2")');
+  });
 });

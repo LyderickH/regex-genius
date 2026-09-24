@@ -5,9 +5,9 @@ export interface Dialect {
   label: string;
   /** rendu de l'expression seule */
   pattern: (source: string) => string;
-  /** formule prête à coller (supporte français / anglais) */
-  snippet: (source: string, field?: string, locale?: CodeLocale) => string;
-  note?: string | ((locale?: CodeLocale) => string);
+  /** formule prête à coller (supporte français / anglais et remplacement) */
+  snippet: (source: string, field?: string, locale?: CodeLocale, replacement?: string) => string;
+  note?: string | ((locale?: CodeLocale, replacement?: string) => string);
 }
 
 const dq = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
@@ -21,47 +21,77 @@ export const DIALECTS: Dialect[] = [
     id: "excel",
     label: "Excel 365",
     pattern: (s) => `"${excelQ(s)}"`,
-    snippet: (s, _f, loc = "fr") =>
-      loc === "fr"
+    snippet: (s, _f, loc = "fr", replacement) => {
+      if (replacement !== undefined) {
+        return loc === "fr"
+          ? `=REGEX.REMPLACER(A2; "${excelQ(s)}"; "${excelQ(replacement)}")`
+          : `=REGEXREPLACE(A2, "${excelQ(s)}", "${excelQ(replacement)}")`;
+      }
+      return loc === "fr"
         ? `=REGEX.EXTRAIRE(A2; "${excelQ(s)}"; 1)`
-        : `=REGEXEXTRACT(A2, "${excelQ(s)}", 1)`,
-    note: (loc = "fr") =>
-      loc === "fr"
+        : `=REGEXEXTRACT(A2, "${excelQ(s)}", 1)`;
+    },
+    note: (loc = "fr", replacement) => {
+      if (replacement !== undefined) {
+        return loc === "fr"
+          ? "REGEX.REMPLACER est la formule officielle pour Excel 365 en français (séparateur point-virgule « ; ») pour la substitution/composition. Si votre Excel utilise les noms anglais, basculez sur l'onglet EN pour =REGEXREPLACE."
+          : "REGEXREPLACE requires Excel 365 (comma delimiter ',') for replacement patterns.";
+      }
+      return loc === "fr"
         ? "REGEX.EXTRAIRE est la formule officielle pour Excel 365 en français (séparateur point-virgule « ; »). Si votre Excel utilise les noms anglais, basculez sur l'onglet EN pour =REGEXEXTRACT."
-        : "REGEXEXTRACT requires Excel 365 (comma delimiter ','). The 3rd argument '1' returns the 1st capture group.",
+        : "REGEXEXTRACT requires Excel 365 (comma delimiter ','). The 3rd argument '1' returns the 1st capture group.";
+    },
   },
   {
     id: "gsheets",
     label: "Google Sheets",
     pattern: (s) => `"${excelQ(s)}"`,
-    snippet: (s, _f, loc = "fr") =>
-      loc === "fr"
+    snippet: (s, _f, loc = "fr", replacement) => {
+      if (replacement !== undefined) {
+        return loc === "fr"
+          ? `=REGEXREPLACE(A2; "${excelQ(s)}"; "${excelQ(replacement)}")`
+          : `=REGEXREPLACE(A2, "${excelQ(s)}", "${excelQ(replacement)}")`;
+      }
+      return loc === "fr"
         ? `=REGEXEXTRACT(A2; "${excelQ(s)}")`
-        : `=REGEXEXTRACT(A2, "${excelQ(s)}")`,
-    note: (loc = "fr") =>
-      loc === "fr"
+        : `=REGEXEXTRACT(A2, "${excelQ(s)}")`;
+    },
+    note: (loc = "fr", replacement) => {
+      if (replacement !== undefined) {
+        return loc === "fr"
+          ? "REGEXREPLACE dans Google Sheets remplace les correspondances selon le modèle (ex: $1$2)."
+          : "REGEXREPLACE in Google Sheets performs regex substitutions with capture group backreferences.";
+      }
+      return loc === "fr"
         ? "Google Sheets avec paramètres régionaux français (séparateur point-virgule « ; »)."
-        : "Google Sheets with US/UK regional settings (comma delimiter ',').",
+        : "Google Sheets with US/UK regional settings (comma delimiter ',').";
+    },
   },
   {
     id: "alteryx",
     label: "Alteryx",
     pattern: (s) => `"${dq(s)}"`,
-    snippet: (s, f, loc = "fr") => {
+    snippet: (s, f, loc = "fr", replacement) => {
       const fieldName = f || (loc === "fr" ? "Champ" : "Field");
+      if (replacement !== undefined) {
+        return `REGEX_Replace([${fieldName}], "${dq(s)}", "${dq(replacement)}")`;
+      }
       return `REGEX_Replace([${fieldName}], ".*?${dq(s)}.*", "$1")`;
     },
     note: (loc = "fr") =>
       loc === "fr"
-        ? "Formule pour l'outil Formula dans Alteryx, ou outil RegEx en mode Parse."
-        : "Expression for Alteryx Formula tool, or RegEx tool in Parse mode.",
+        ? "Formule pour l'outil Formula dans Alteryx, ou outil RegEx en mode Parse / Replace."
+        : "Expression for Alteryx Formula tool, or RegEx tool in Parse / Replace mode.",
   },
   {
     id: "knime",
     label: "KNIME",
     pattern: (s) => `"${dq(s)}"`,
-    snippet: (s, f, loc = "fr") => {
+    snippet: (s, f, loc = "fr", replacement) => {
       const colName = f || (loc === "fr" ? "colonne" : "column");
+      if (replacement !== undefined) {
+        return `regexReplace($${colName}$, "${dq(s)}", "${dq(replacement)}")`;
+      }
       return `regexReplace($${colName}$, ".*?${dq(s)}.*", "$1")`;
     },
     note: (loc = "fr") =>
@@ -73,9 +103,12 @@ export const DIALECTS: Dialect[] = [
     id: "powerquery",
     label: "Power Query (M)",
     pattern: (s) => `"${dq(s)}"`,
-    snippet: (s, f, loc = "fr") => {
+    snippet: (s, f, loc = "fr", replacement) => {
       const col = f || (loc === "fr" ? "Colonne1" : "Column1");
       const outCol = loc === "fr" ? "Resultat" : "Result";
+      if (replacement !== undefined) {
+        return `= Table.AddColumn(Source, "${outCol}", each Web.Page("<script>var s = Text.From([${col}]).replace(new RegExp('" & "${dq(s)}" & "', 'g'), '" & "${dq(replacement)}" & "'); document.write(s);</script>")[Data]{0}[Children]{0}[Children]{1}[Text]{0})`;
+      }
       return `= Table.AddColumn(Source, "${outCol}", each Web.Page("<script>var m = new RegExp('" & "${dq(s)}" & "').exec('" & Text.From([${col}]) & "'); document.write(m ? m[1] || m[0] : '');</script>")[Data]{0}[Children]{0}[Children]{1}[Text]{0})`;
     },
     note: (loc = "fr") =>
@@ -87,9 +120,13 @@ export const DIALECTS: Dialect[] = [
     id: "python",
     label: "Python",
     pattern: (s) => `r"${rawQ(s)}"`,
-    snippet: (s, f, loc = "fr") => {
+    snippet: (s, f, loc = "fr", replacement) => {
       const varName = f || (loc === "fr" ? "texte" : "text");
       const outVar = loc === "fr" ? "valeur" : "value";
+      if (replacement !== undefined) {
+        const pyRepl = replacement.replace(/\$(\d+)/g, "\\\\$1");
+        return `import re\n${outVar} = re.sub(r"${rawQ(s)}", r"${rawQ(pyRepl)}", ${varName})`;
+      }
       return `import re\nm = re.search(r"${rawQ(s)}", ${varName})\n${outVar} = m.group(1) if m else None`;
     },
   },
@@ -97,9 +134,12 @@ export const DIALECTS: Dialect[] = [
     id: "javascript",
     label: "JavaScript / TypeScript",
     pattern: (s) => `/${s}/`,
-    snippet: (s, f, loc = "fr") => {
+    snippet: (s, f, loc = "fr", replacement) => {
       const varName = f || (loc === "fr" ? "texte" : "text");
       const outVar = loc === "fr" ? "valeur" : "value";
+      if (replacement !== undefined) {
+        return `const ${outVar} = ${varName}.replace(/${s}/g, "${dq(replacement)}");`;
+      }
       return `const m = ${varName}.match(/${s}/);\nconst ${outVar} = m ? m[1] : null;`;
     },
   },
@@ -107,10 +147,14 @@ export const DIALECTS: Dialect[] = [
     id: "postgres",
     label: "SQL — PostgreSQL",
     pattern: (s) => `'${sq(s)}'`,
-    snippet: (s, f, loc = "fr") => {
+    snippet: (s, f, loc = "fr", replacement) => {
       const col = f || (loc === "fr" ? "ma_colonne" : "my_column");
       const alias = loc === "fr" ? "valeur" : "value";
       const table = loc === "fr" ? "ma_table" : "my_table";
+      if (replacement !== undefined) {
+        const pgRepl = replacement.replace(/\$(\d+)/g, "\\$1");
+        return `SELECT regexp_replace(${col}, '${sq(s)}', '${sq(pgRepl)}', 'g') AS ${alias} FROM ${table};`;
+      }
       return `SELECT (regexp_match(${col}, '${sq(s)}'))[1] AS ${alias} FROM ${table};`;
     },
   },
@@ -118,22 +162,29 @@ export const DIALECTS: Dialect[] = [
     id: "tsql",
     label: "SQL — T-SQL / Oracle",
     pattern: (s) => `'${sq(s)}'`,
-    snippet: (s, f, loc = "fr") => {
+    snippet: (s, f, loc = "fr", replacement) => {
       const col = f || (loc === "fr" ? "ma_colonne" : "my_column");
       const alias = loc === "fr" ? "valeur" : "value";
       const table = loc === "fr" ? "ma_table" : "my_table";
+      if (replacement !== undefined) {
+        const oraRepl = replacement.replace(/\$(\d+)/g, "\\$1");
+        return `SELECT REGEXP_REPLACE(${col}, '${sq(s)}', '${sq(oraRepl)}') AS ${alias} FROM ${table};`;
+      }
       return `SELECT REGEXP_SUBSTR(${col}, '${sq(s)}', 1, 1, 'c', 1) AS ${alias} FROM ${table};`;
     },
     note: (loc = "fr") =>
-      loc === "fr" ? "REGEXP_SUBSTR : Oracle ou SQL Server 2025+." : "REGEXP_SUBSTR: Oracle, or SQL Server 2025+.",
+      loc === "fr" ? "REGEXP_SUBSTR / REGEXP_REPLACE : Oracle ou SQL Server 2025+." : "REGEXP_SUBSTR / REGEXP_REPLACE: Oracle, or SQL Server 2025+.",
   },
   {
     id: "dotnet",
     label: ".NET / C#",
     pattern: (s) => `@"${s.replace(/"/g, '""')}"`,
-    snippet: (s, f, loc = "fr") => {
+    snippet: (s, f, loc = "fr", replacement) => {
       const varName = f || (loc === "fr" ? "texte" : "text");
       const outVar = loc === "fr" ? "valeur" : "value";
+      if (replacement !== undefined) {
+        return `var ${outVar} = Regex.Replace(${varName}, @"${s.replace(/"/g, '""')}", "${replacement.replace(/"/g, '""')}");`;
+      }
       return `var m = Regex.Match(${varName}, @"${s.replace(/"/g, '""')}");\nvar ${outVar} = m.Success ? m.Groups[1].Value : null;`;
     },
   },
@@ -141,7 +192,12 @@ export const DIALECTS: Dialect[] = [
     id: "pcre",
     label: "grep / PCRE",
     pattern: (s) => s,
-    snippet: (s, _f, loc = "fr") =>
-      loc === "fr" ? `grep -oP '${sq(s)}' fichier.txt` : `grep -oP '${sq(s)}' file.txt`,
+    snippet: (s, _f, loc = "fr", replacement) => {
+      if (replacement !== undefined) {
+        const file = loc === "fr" ? "fichier.txt" : "file.txt";
+        return `sed -E 's/${sq(s)}/${sq(replacement.replace(/\$(\d+)/g, "\\$1"))}/g' ${file}`;
+      }
+      return loc === "fr" ? `grep -oP '${sq(s)}' fichier.txt` : `grep -oP '${sq(s)}' file.txt`;
+    },
   },
 ];
