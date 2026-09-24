@@ -98,4 +98,23 @@ describe("generateExternalAIPrompt", () => {
     expect(knimePrompt).toContain("Spécificités KNIME Analytics Platform");
     expect(knimePrompt).toContain("regexReplace");
   });
+
+  it("includes technical breakdown, reasoning risks, and human explanation when currentRule is provided", () => {
+    const prompt = generateExternalAIPrompt({
+      colName: "Facture",
+      rows: ["FA-2024-001 - OK", "FA-2024-002 - OK"],
+      userExamples: ["2024-001", "2024-002"],
+      currentRule: {
+        source: "FA-(\\d{4}-\\d{3}) - ",
+        flags: "g",
+        transform: { strip: "none", dec: "none", casing: "none", fmt: "none" },
+      },
+    });
+
+    expect(prompt).toContain("MOTIF ACTUELLEMENT DÉDUIT PAR L'ALGORITHME");
+    expect(prompt).toContain("Ce que fait le motif techniquement");
+    expect(prompt).toContain("Hypothèses techniques & Risques de raisonnement");
+    expect(prompt).toContain("En langage humain");
+    expect(prompt).toContain("MISSION POUR TOI");
+  });
 });

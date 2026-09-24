@@ -225,3 +225,267 @@ export function explainRegexHuman(
 
   return appendTransform(`Extrait la séquence de texte correspondant au motif exact.`);
 }
+
+export interface TechnicalStep {
+  label: string;
+  detail: string;
+  token?: string;
+}
+
+export interface TechnicalExplanation {
+  mechanism: string;
+  steps: TechnicalStep[];
+  assumptions: string[];
+  summary: string;
+}
+
+export interface RegexFullAnalysis {
+  technical: TechnicalExplanation;
+  human: string;
+}
+
+/**
+ * Analyse technique approfondie du motif : détaille le mécanisme,
+ * les étapes pas-à-pas et les hypothèses de raisonnement pour identifier
+ * où l'algorithme a pu se tromper et permettre une correction ciblée (par une autre IA ou un humain).
+ */
+export function explainRegexTechnical(
+  rule: Rule | null,
+  columnName?: string,
+): TechnicalExplanation {
+  if (!rule) {
+    return {
+      mechanism: "Aucun motif",
+      steps: [],
+      assumptions: [],
+      summary: "Aucune expression régulière active.",
+    };
+  }
+
+  const p = rule.source;
+  const transformDesc = describeTransform(rule.transform);
+  const steps: TechnicalStep[] = [];
+  const assumptions: string[] = [];
+
+  // 1. Cas Substitution / Remplacement multi-groupes
+  if (rule.replacement !== undefined) {
+    const repl = rule.replacement;
+    const segments = explain(p, repl);
+
+    let groupIdx = 0;
+    for (let i = 0; i < segments.length; i++) {
+      if (segments[i].text === "(") {
+        groupIdx++;
+        let end = i + 1;
+        let depth = 1;
+        while (end < segments.length && depth > 0) {
+          if (segments[end].text === "(") depth++;
+          else if (segments[end].text === ")") depth--;
+          end++;
+        }
+        const inner = segments.slice(i + 1, end - 1).map((s) => s.text).join("");
+        steps.push({
+          token: `(${inner})`,
+          label: `Groupe capturant $${groupIdx}`,
+          detail: `Capture la sous-chaîne pour la réinjecter dans la formule de substitution via $${groupIdx}.`,
+        });
+      }
+    }
+
+    steps.push({
+      token: repl,
+      label: "Formule de substitution",
+      detail: `Réassemble les groupes capturés selon le schéma : « ${repl} ».`,
+    });
+
+    if (transformDesc) {
+      steps.push({
+        token: "Post-traitement",
+        label: "Normalisation finale",
+        detail: `Applique la transformation : ${transformDesc}.`,
+      });
+    }
+
+    assumptions.push("Structure ordonnée stricte : suppose que chaque ligne respecte la disposition exacte de tous les groupes.");
+    if (p.includes(",") || p.includes(";") || p.includes("-") || p.includes("/")) {
+      assumptions.push("Dépendance aux séparateurs : suppose que les délimiteurs de substitution sont rigoureusement présents sur chaque ligne.");
+    }
+
+    return {
+      mechanism: "Substitution et recomposition multi-groupes (input.replace)",
+      steps,
+      assumptions,
+      summary: `Découpe la chaîne en ${groupIdx} fragments via des groupes de capture () et les réassemble selon « ${repl} ».`,
+    };
+  }
+
+  // 2. Cas Délimité par colonnes répétitives (FEC, TSV, CSV)
+  const delimitedMatch = p.match(/\{\s*(\d+)\s*\}/);
+  if (delimitedMatch && (p.includes("|") || p.includes(";") || p.includes("\t") || p.includes(","))) {
+    const n = Number(delimitedMatch[1]);
+    const sep = p.includes("|") ? "|" : p.includes(";") ? ";" : p.includes("\t") ? "\t" : ",";
+    const sepName = sep === "|" ? "barre verticale « | »" : sep === ";" ? "point-virgule « ; »" : sep === "\t" ? "tabulation" : "virgule « , »";
+
+    steps.push({
+      token: "^",
+      label: "Ancrage initial",
+      detail: "La recherche commence impérativement au tout premier caractère de la ligne.",
+    });
+
+    steps.push({
+      token: `(?:[^\\${sep}]*\\${sep}){${n}}`,
+      label: "Saut des colonnes initiales",
+      detail: `Consomme et ignore les ${n} premières colonnes délimitées par une ${sepName}.`,
+    });
+
+    if (p.includes("\\s*")) {
+      steps.push({
+        token: "\\s*",
+        label: "Espaces ignorés",
+        detail: "Ignore les espaces ou blancs facultatifs au début de la colonne ciblée.",
+      });
+    }
+
+    steps.push({
+      token: `([^\\${sep}]+?)`,
+      label: "Capture de la colonne (Groupe 1)",
+      detail: `Capture de façon non-gourmande (+?) tout le texte de la ${n + 1}ᵉ colonne jusqu'au délimiteur suivant.`,
+    });
+
+    steps.push({
+      token: `(?:\\${sep}|$)`,
+      label: "Clôture de la cellule",
+      detail: `Vérifie que la valeur est immédiatement suivie d'une ${sepName} ou de la fin de ligne.`,
+    });
+
+    if (transformDesc) {
+      steps.push({
+        token: "Post-traitement",
+        label: "Normalisation finale",
+        detail: `Applique la transformation : ${transformDesc}.`,
+      });
+    }
+
+    assumptions.push(`Position fixe de colonne : Suppose que l'information recherchée est TOUJOURS située dans la ${n + 1}ᵉ colonne.`);
+    assumptions.push(`Sensibilité au délimiteur : Échouera immédiatement si une ligne contient moins de ${n + 1} colonnes ou un séparateur différent.`);
+    assumptions.push(`Absence de délimiteur interne : Si une colonne précédente contient une ${sepName} à l'intérieur d'un texte entre guillemets, le comptage des colonnes sera faussé.`);
+
+    return {
+      mechanism: `Indexation de colonne par délimiteur répétitif (${n + 1}ᵉ champ)`,
+      steps,
+      assumptions,
+      summary: `Compte ${n} occurrences du délimiteur ${sepName} depuis le début de ligne, puis extrait le contenu de la colonne suivante.`,
+    };
+  }
+
+  // 3. Cas Contextuel classique (Préfixe -> Capture Groupe 1 -> Suffixe)
+  const segments = explain(p);
+  const openIdx = segments.findIndex((s) => s.text === "(");
+  let closeIdx = -1;
+  for (let idx = segments.length - 1; idx >= 0; idx--) {
+    if (segments[idx]?.text === ")") {
+      closeIdx = idx;
+      break;
+    }
+  }
+
+  if (p.startsWith("^")) {
+    steps.push({
+      token: "^",
+      label: "Ancrage de début de ligne",
+      detail: "La correspondance doit démarrer obligatoirement au début de la ligne.",
+    });
+  }
+
+  if (openIdx > (p.startsWith("^") ? 1 : 0)) {
+    const rawPrefix = segments.slice(p.startsWith("^") ? 1 : 0, openIdx).map((s) => s.text).join("");
+    const cleanP = cleanLiteral(rawPrefix);
+    steps.push({
+      token: rawPrefix,
+      label: "Repérage contextuel gauche (Préfixe)",
+      detail: `Recherche la séquence « ${cleanP || rawPrefix} » servant de borne de départ avant la valeur à extraire.`,
+    });
+    if (cleanP) {
+      assumptions.push(`Dépendance au préfixe : Suppose que la valeur est systématiquement précédée de « ${cleanP} ». Si le texte varie (majuscule, espace, préfixe alternatif), la ligne sera ignorée.`);
+    }
+  }
+
+  if (openIdx !== -1 && closeIdx > openIdx) {
+    const rawCapture = segments.slice(openIdx + 1, closeIdx).map((s) => s.text).join("");
+    const { what } = describeCaptureContent(rawCapture, p, columnName);
+
+    let captureDetail = `Isole ${what} formant le résultat final de la colonne.`;
+    if (/\\d\+/.test(rawCapture)) {
+      captureDetail = "Capture une suite continue d'un ou plusieurs chiffres numériques.";
+      assumptions.push("Hypothèse numérique : Suppose que la valeur cible est exclusivement composée de chiffres.");
+    } else if (rawCapture.includes("[^")) {
+      const excluded = rawCapture.match(/\[\^([^\]]+)\]/)?.[1] ?? "";
+      captureDetail = `Capture tous les caractères en s'interrompant dès la rencontre du délimiteur « ${excluded} ».`;
+      assumptions.push(`Arrêt strict au délimiteur : La capture s'arrête dès le premier « ${excluded} ».`);
+    } else if (rawCapture === ".*" || rawCapture === ".+") {
+      captureDetail = "Capture n'importe quels caractères (attention : quantificateur glouton).";
+      assumptions.push("Quantificateur gourmand : Le motif '.*' avale le maximum de caractères possibles jusqu'au suffixe.");
+    }
+
+    steps.push({
+      token: `(${rawCapture})`,
+      label: "Groupe de capture principal ($1)",
+      detail: captureDetail,
+    });
+  }
+
+  if (closeIdx !== -1 && closeIdx < segments.length - 1) {
+    const rawSuffix = segments.slice(closeIdx + 1, p.endsWith("$") ? segments.length - 1 : segments.length).map((s) => s.text).join("");
+    const cleanS = cleanLiteral(rawSuffix);
+    if (rawSuffix.trim()) {
+      steps.push({
+        token: rawSuffix,
+        label: "Repérage contextuel droit (Suffixe)",
+        detail: `Exige la présence immédiate de « ${cleanS || rawSuffix} » pour marquer la fin de la capture.`,
+      });
+      if (cleanS) {
+        assumptions.push(`Dépendance au suffixe : Suppose la présence obligatoire de « ${cleanS} » après la valeur.`);
+      }
+    }
+  }
+
+  if (p.endsWith("$")) {
+    steps.push({
+      token: "$",
+      label: "Ancrage de fin de ligne",
+      detail: "La correspondance doit s'étendre obligatoirement jusqu'à la fin de la ligne.",
+    });
+  }
+
+  if (transformDesc) {
+    steps.push({
+      token: "Post-traitement",
+      label: "Normalisation finale",
+      detail: `Applique la transformation : ${transformDesc}.`,
+    });
+  }
+
+  if (!p.startsWith("^") && !p.endsWith("$") && steps.length <= 2) {
+    assumptions.push("Recherche flottante : Extrait la première occurrence correspondant au motif n'importe où dans la ligne.");
+  }
+
+  return {
+    mechanism: "Extraction contextuelle par motif délimité (bornes gauche/droite)",
+    steps,
+    assumptions: assumptions.length > 0 ? assumptions : ["Suppose que la structure observée sur les exemples est rigoureusement identique sur toutes les lignes."],
+    summary: `Isole la valeur cible via son contexte immédiat dans la ligne textuelle.`,
+  };
+}
+
+/**
+ * Analyse complète d'une règle regex : technique détaillée + résumé humain.
+ */
+export function analyzeRegexFull(
+  rule: Rule | null,
+  columnName?: string,
+): RegexFullAnalysis {
+  return {
+    technical: explainRegexTechnical(rule, columnName),
+    human: explainRegexHuman(rule, columnName),
+  };
+}

@@ -48,6 +48,8 @@ export function ExternalPromptDialog({
       includeSamples,
       sampleCount,
       targetDialect: dialect,
+      currentRule: column.rule,
+      failures: column.failures,
     });
   }, [column, rows, includeSamples, sampleCount, dialect]);
 

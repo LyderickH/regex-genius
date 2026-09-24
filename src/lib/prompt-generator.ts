@@ -1,3 +1,6 @@
+import type { Rule } from "./regex-synth/engine";
+import { analyzeRegexFull } from "./regex-synth/human-explain";
+
 export interface PromptOptions {
   colName: string;
   rows: string[];
@@ -5,6 +8,8 @@ export interface PromptOptions {
   includeSamples?: boolean;
   sampleCount?: number;
   targetDialect?: string;
+  currentRule?: Rule | null;
+  failures?: number[];
 }
 
 export function generateExternalAIPrompt({
@@ -14,6 +19,8 @@ export function generateExternalAIPrompt({
   includeSamples = true,
   sampleCount = 10,
   targetDialect = "JavaScript / PCRE / Python",
+  currentRule,
+  failures,
 }: PromptOptions): string {
   // 1. Extraire TOUS les exemples saisis par l'utilisateur (sans omission)
   const maxLen = Math.max(rows.length, userExamples.length);
@@ -97,11 +104,58 @@ export function generateExternalAIPrompt({
     promptParts.push(``);
   }
 
-  // Section 2 : Échantillons de validation (minimum 10 lignes si disponibles)
+  // Section 2 : Motif actuellement déduit et analyse technique / raisonnement (si disponible)
+  if (currentRule) {
+    const analysis = analyzeRegexFull(currentRule, colName);
+    promptParts.push(
+      `---`,
+      `## 2. MOTIF ACTUELLEMENT DÉDUIT PAR L'ALGORITHME & ANALYSE DU RAISONNEMENT`,
+      ``,
+      `L'algorithme automatique de Regex Genius a actuellement proposé le motif suivant :`,
+      `\`\`\`regex`,
+      currentRule.source,
+      `\`\`\``,
+    );
+
+    if (currentRule.replacement !== undefined) {
+      promptParts.push(`Formule de remplacement / substitution : \`${currentRule.replacement}\``, ``);
+    }
+
+    promptParts.push(
+      `### A. Ce que fait le motif techniquement :`,
+      `- **Mécanisme sous le capot** : ${analysis.technical.mechanism}`,
+      `- **Résumé technique** : ${analysis.technical.summary}`,
+      `- **Décomposition étape par étape** :`,
+    );
+    analysis.technical.steps.forEach((s) => {
+      promptParts.push(`  - \`${s.token || ""}\` [${s.label}] : ${s.detail}`);
+    });
+    promptParts.push(``);
+
+    if (analysis.technical.assumptions.length > 0) {
+      promptParts.push(`### B. Hypothèses techniques & Risques de raisonnement identifiés :`);
+      analysis.technical.assumptions.forEach((a) => {
+        promptParts.push(`  - ⚠️ ${a}`);
+      });
+      promptParts.push(``);
+    }
+
+    promptParts.push(
+      `### C. En langage humain (ce que l'utilisateur cherche à faire) :`,
+      `> ${analysis.human}`,
+      ``,
+      `### D. Problème constaté & Mission :`,
+      `Ce motif actuel est imparfait ou comporte une erreur de raisonnement sur les données réelles (surajustement, mauvais séparateur, ou échec sur certaines variations de lignes).`,
+      `**MISSION POUR TOI** : Analyse où se situe l'erreur de raisonnement technique de ce motif, puis propose la Regex corrigée et optimale respectant 100% des exemples !`,
+      ``,
+    );
+  }
+
+  // Section 3 : Échantillons de validation (minimum 10 lignes si disponibles)
   if (samples.length > 0) {
     promptParts.push(`---`);
     promptParts.push(
-      `## 2. ÉCHANTILLONS DE VALIDATION DU FICHIER (${samples.length} lignes sans résultat défini)`,
+      `## ${currentRule ? "3" : "2"}. ÉCHANTILLONS DE VALIDATION DU FICHIER (${samples.length} lignes sans résultat défini)`,
     );
     promptParts.push(
       `Voici d'autres lignes réelles issues du même fichier pour que tu puisses observer la structure globale, les délimiteurs et éviter tout surapprentissage :`,

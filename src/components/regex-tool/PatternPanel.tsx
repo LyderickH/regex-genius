@@ -17,11 +17,12 @@ import {
   ChevronDown,
   HelpCircle,
   RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { explain } from "@/lib/regex-synth/explain";
-import { explainRegexHuman } from "@/lib/regex-synth/human-explain";
+import { analyzeRegexFull } from "@/lib/regex-synth/human-explain";
 import { DIALECTS, type CodeLocale } from "@/lib/regex-synth/dialects";
 import { describeTransform } from "@/lib/regex-synth/engine";
 import type { OutputColumn } from "./types";
@@ -72,7 +73,11 @@ export function PatternPanel({
     [column?.rule],
   );
   const rule = column?.rule;
-  const humanExplanation = useMemo(() => explainRegexHuman(rule ?? null, column?.name), [rule, column?.name]);
+  const analysis = useMemo(
+    () => analyzeRegexFull(rule ?? null, column?.name),
+    [rule, column?.name],
+  );
+  const humanExplanation = analysis.human;
 
   const copy = async (text: string, what: string) => {
     await navigator.clipboard.writeText(text);
@@ -581,55 +586,108 @@ export function PatternPanel({
               </div>
             )}
 
-            <div>
-              <div className="mb-2 flex items-center justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
                 <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground font-semibold">
-                  Lecture du motif
+                  Lecture & Raisonnement du motif
                 </span>
-
-                {/* Bulle d'explication au survol (? / + info) */}
-                <div className="relative group/info">
-                  <div
-                    tabIndex={0}
-                    role="button"
-                    className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/20 transition cursor-help shadow-xs active:scale-95"
-                    title={`En clair : ${humanExplanation}`}
-                  >
-                    <HelpCircle className="size-3" />
-                    <span>+ info</span>
-                  </div>
-
-                  {/* Popover / Tooltip au survol */}
-                  <div className="pointer-events-none absolute right-0 top-full mt-1.5 z-50 w-72 rounded-lg border border-border bg-surface-2 p-3 shadow-xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible group-focus-within/info:opacity-100 group-focus-within/info:visible transition-all duration-150">
-                    <div className="flex items-center gap-1.5 font-semibold text-primary text-xs mb-1">
-                      <Lightbulb className="size-3.5" />
-                      <span>En clair :</span>
-                    </div>
-                    <p className="text-xs text-foreground leading-relaxed font-normal">
-                      {humanExplanation}
-                    </p>
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setExternalPromptOpen(true)}
+                  className="flex items-center gap-1 text-[11px] text-purple-400 hover:text-purple-300 font-medium transition cursor-pointer"
+                  title="Générer un prompt d'analyse pour ChatGPT ou Claude afin d'inspecter ou corriger ce motif"
+                >
+                  <Bot className="size-3" />
+                  <span>Corriger avec ChatGPT / Claude</span>
+                </button>
               </div>
 
-              <ul className="space-y-1">
-                {segments.map((s, i) => (
-                  <li key={i} className="flex gap-2 text-xs">
-                    <code className={cn("shrink-0 font-mono", TOK_COLOR[s.kind])}>{s.text}</code>
-                    <span className="text-muted-foreground">{s.label}</span>
-                  </li>
-                ))}
-                {rule.replacement !== undefined && (
-                  <li className="flex items-center gap-2 text-xs pt-1.5 mt-1 border-t border-border/50 text-cyan-400">
-                    <code className="shrink-0 font-mono font-bold bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20 text-cyan-300">
-                      ➜ {rule.replacement}
-                    </code>
-                    <span className="text-muted-foreground">
-                      formule de remplacement appliquée aux groupes
-                    </span>
-                  </li>
+              {/* 1. En langage humain (clair et immédiat) */}
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-1">
+                <div className="flex items-center gap-1.5 font-semibold text-primary text-xs">
+                  <Lightbulb className="size-3.5 text-primary" />
+                  <span>En langage humain :</span>
+                </div>
+                <p className="text-xs text-foreground leading-relaxed font-normal">
+                  {analysis.human}
+                </p>
+              </div>
+
+              {/* 2. Ce que fait le motif techniquement (analyse du mécanisme & hypothèses de raisonnement) */}
+              <div className="rounded-lg border border-border bg-surface-2/60 p-3 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <Cpu className="size-3.5 text-amber-400" />
+                    <span>Ce que fait le motif techniquement :</span>
+                  </span>
+                  <span className="text-[10px] font-mono rounded bg-surface px-1.5 py-0.5 border border-border text-muted-foreground">
+                    {analysis.technical.mechanism}
+                  </span>
+                </div>
+
+                <div className="space-y-1.5">
+                  {analysis.technical.steps.map((st, i) => (
+                    <div
+                      key={i}
+                      className="flex items-start gap-2 bg-background/60 p-1.5 rounded border border-border/60 text-xs"
+                    >
+                      {st.token && (
+                        <code className="shrink-0 font-mono text-[11px] font-bold text-amber-300 bg-amber-500/10 px-1 py-0.5 rounded border border-amber-500/20">
+                          {st.token}
+                        </code>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-foreground text-[11px]">{st.label}</div>
+                        <div className="text-muted-foreground text-[11px] leading-tight">{st.detail}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Hypothèses & Risques de raisonnement (permet de repérer les erreurs de déduction) */}
+                {analysis.technical.assumptions.length > 0 && (
+                  <div className="pt-2 border-t border-border/70 space-y-1">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-400">
+                      <AlertTriangle className="size-3" />
+                      <span>Hypothèses & Risques de raisonnement :</span>
+                    </div>
+                    <ul className="space-y-1 text-[11px] text-muted-foreground">
+                      {analysis.technical.assumptions.map((ass, i) => (
+                        <li key={i} className="flex items-start gap-1.5">
+                          <span className="text-amber-400 shrink-0">•</span>
+                          <span>{ass}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
-              </ul>
+              </div>
+
+              {/* 3. Détail des tokens syntaxiques (dépliable) */}
+              <details className="group/tokens text-xs">
+                <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground hover:text-foreground transition list-none flex items-center gap-1.5 select-none py-0.5">
+                  <ChevronDown className="size-3 transition-transform group-open/tokens:rotate-180" />
+                  <span>Détail syntaxique des tokens ({segments.length})</span>
+                </summary>
+                <ul className="mt-2 space-y-1 pl-4 border-l border-border/60">
+                  {segments.map((s, i) => (
+                    <li key={i} className="flex gap-2 text-xs">
+                      <code className={cn("shrink-0 font-mono", TOK_COLOR[s.kind])}>{s.text}</code>
+                      <span className="text-muted-foreground">{s.label}</span>
+                    </li>
+                  ))}
+                  {rule.replacement !== undefined && (
+                    <li className="flex items-center gap-2 text-xs pt-1.5 mt-1 border-t border-border/50 text-cyan-400">
+                      <code className="shrink-0 font-mono font-bold bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20 text-cyan-300">
+                        ➜ {rule.replacement}
+                      </code>
+                      <span className="text-muted-foreground">
+                        formule de remplacement appliquée aux groupes
+                      </span>
+                    </li>
+                  )}
+                </ul>
+              </details>
             </div>
 
             <div>

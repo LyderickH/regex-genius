@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { explainRegexHuman } from "../human-explain";
+import { explainRegexHuman, explainRegexTechnical, analyzeRegexFull } from "../human-explain";
 
 describe("explainRegexHuman", () => {
   it("explains contextual prefix and suffix around brackets (audit log case)", () => {
@@ -163,5 +163,50 @@ describe("explainRegexHuman", () => {
       transform: { strip: "none", dec: "none", casing: "none", fmt: "none" },
     });
     expect(timeText).toContain("horaire (heures et minutes)");
+  });
+});
+
+describe("explainRegexTechnical & analyzeRegexFull", () => {
+  it("details technical steps and reasoning assumptions for delimited column patterns", () => {
+    const tech = explainRegexTechnical(
+      {
+        source: "^(?:[^\\|]*\\|){8}\\s*([^\\|]+?)\\s*(?:\\||$)",
+        flags: "m",
+        transform: { strip: "trim", dec: "none", casing: "none", fmt: "none" },
+      },
+      "N° de pièce",
+    );
+
+    expect(tech.mechanism).toContain("Indexation de colonne");
+    expect(tech.steps.length).toBeGreaterThanOrEqual(4);
+    expect(tech.assumptions.length).toBeGreaterThanOrEqual(2);
+    expect(tech.assumptions.some((a) => a.includes("9ᵉ colonne"))).toBe(true);
+    expect(tech.assumptions.some((a) => a.includes("délimiteur"))).toBe(true);
+  });
+
+  it("details technical steps and prefix dependencies for contextual patterns", () => {
+    const tech = explainRegexTechnical({
+      source: "event_id=([^&]+)&status=",
+      flags: "g",
+      transform: { strip: "none", dec: "none", casing: "none", fmt: "none" },
+    });
+
+    expect(tech.mechanism).toContain("Extraction contextuelle");
+    expect(tech.steps.some((s) => s.token?.includes("event_id="))).toBe(true);
+    expect(tech.steps.some((s) => s.token?.includes("([^&]+)"))).toBe(true);
+    expect(tech.assumptions.some((a) => a.includes("event_id="))).toBe(true);
+  });
+
+  it("produces both technical breakdown and human explanation in analyzeRegexFull", () => {
+    const full = analyzeRegexFull({
+      source: "^([^,]+),\\s*(.+)$",
+      flags: "",
+      replacement: "$2 $1",
+      transform: { strip: "none", dec: "none", casing: "none", fmt: "none" },
+    });
+
+    expect(full.technical.mechanism).toContain("Substitution");
+    expect(full.technical.steps.some((s) => s.label.includes("substitution"))).toBe(true);
+    expect(full.human).toContain("Inverse l'ordre");
   });
 });
