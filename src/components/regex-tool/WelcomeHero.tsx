@@ -21,6 +21,7 @@ import {
   Globe,
   Landmark,
   Github,
+  BookOpen,
 } from "lucide-react";
 import {
   HoverCard,
@@ -37,6 +38,7 @@ interface WelcomeHeroProps {
   onImportFile: (file: File) => void;
   onOpenPaste: () => void;
   onStartBlank: () => void;
+  onOpenCheatSheet?: () => void;
   isOffline?: boolean;
   canInstall?: boolean;
   isInstalled?: boolean;
@@ -51,6 +53,7 @@ export function WelcomeHero({
   onImportFile,
   onOpenPaste,
   onStartBlank,
+  onOpenCheatSheet,
   isOffline = false,
   canInstall = false,
   isInstalled = false,
@@ -109,8 +112,8 @@ export function WelcomeHero({
           </span>
         </h1>
 
-        {/* Mini-badge d'explication interactif C'est quoi une Regex ? */}
-        <div className="mt-3.5 flex items-center justify-center">
+        {/* Mini-badges interactifs : C'est quoi une Regex + Pense-bête (Cheat Sheet) */}
+        <div className="mt-3.5 flex flex-wrap items-center justify-center gap-2.5">
           <HoverCard openDelay={80} closeDelay={150}>
             <HoverCardTrigger asChild>
               <button
@@ -173,6 +176,22 @@ export function WelcomeHero({
               </div>
             </HoverCardContent>
           </HoverCard>
+
+          {/* Bouton Pense-bête Cheat Sheet */}
+          {onOpenCheatSheet && (
+            <button
+              type="button"
+              onClick={onOpenCheatSheet}
+              className="group inline-flex items-center gap-2 rounded-full border border-amber-500/35 bg-gradient-to-r from-amber-500/15 to-amber-500/5 px-3.5 py-1 text-xs font-semibold text-amber-300 shadow-xs backdrop-blur-sm transition-all hover:border-amber-400 hover:bg-amber-500/25 cursor-pointer"
+              title="Ouvrir le pense-bête condensé pour comprendre et débugger 95% des regex"
+            >
+              <BookOpen className="size-3.5 text-amber-400 transition-transform group-hover:scale-110" />
+              <span>Pense-bête (Cheat Sheet)</span>
+              <span className="rounded-full bg-amber-500/20 px-2 py-0.5 font-mono text-[10px] text-amber-200">
+                95 % des cas
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Sous-titre */}

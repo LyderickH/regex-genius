@@ -22,13 +22,19 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { explain } from "@/lib/regex-synth/explain";
+import { explain, type Segment } from "@/lib/regex-synth/explain";
 import { analyzeRegexFull } from "@/lib/regex-synth/human-explain";
 import { DIALECTS, type CodeLocale } from "@/lib/regex-synth/dialects";
 import { describeTransform } from "@/lib/regex-synth/engine";
 import type { OutputColumn } from "./types";
 import { LLMControlDialog } from "./LLMControlDialog";
 import { ExternalPromptDialog } from "./ExternalPromptDialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { ModelProgressReport } from "@/lib/llm/types";
 import {
   localLLM,
@@ -90,6 +96,7 @@ export function PatternPanel({
   const [llmDecrypted, setLlmDecrypted] = useState<DecryptedPatternResult | null>(null);
   const [isDecrypting, setIsDecrypting] = useState(false);
   const [showUnexpectedOptions, setShowUnexpectedOptions] = useState(false);
+  const [hoveredSegment, setHoveredSegment] = useState<Segment | null>(null);
   const isDecryptingRef = useRef(false);
   const lastAnalyzedPatternRef = useRef<string | null>(null);
 
@@ -422,12 +429,76 @@ export function PatternPanel({
                   copier
                 </button>
               </div>
-              <div className="break-all rounded-md border border-border bg-background p-3 font-mono text-[13px] leading-relaxed">
-                {segments.map((s, i) => (
-                  <span key={i} className={TOK_COLOR[s.kind]} title={s.label}>
-                    {s.text}
-                  </span>
-                ))}
+              <TooltipProvider delayDuration={80}>
+                <div className="break-all rounded-md border border-border bg-background p-3 font-mono text-[13px] leading-relaxed">
+                  {segments.map((s, i) => (
+                    <Tooltip key={i}>
+                      <TooltipTrigger asChild>
+                        <span
+                          onMouseEnter={() => setHoveredSegment(s)}
+                          onMouseLeave={() => setHoveredSegment((curr) => (curr === s ? null : curr))}
+                          onClick={() => setHoveredSegment(s)}
+                          className={cn(
+                            TOK_COLOR[s.kind],
+                            "cursor-help transition-all duration-150 rounded px-0.5 inline-block select-none",
+                            hoveredSegment === s
+                              ? "bg-amber-400/25 ring-1 ring-amber-400/60 shadow-xs font-bold scale-105"
+                              : "hover:bg-surface-2 hover:ring-1 hover:ring-border",
+                          )}
+                        >
+                          {s.text}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="top"
+                        sideOffset={6}
+                        className="max-w-xs p-2.5 text-xs bg-surface border border-border text-foreground shadow-xl rounded-lg space-y-1"
+                      >
+                        <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-1">
+                          <code className="font-mono text-xs font-bold text-amber-300 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/25">
+                            {s.text}
+                          </code>
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                            {s.categoryLabel || s.kind}
+                          </span>
+                        </div>
+                        <div className="font-semibold text-foreground text-xs">{s.label}</div>
+                        {s.detail && (
+                          <div className="text-[11px] text-muted-foreground leading-snug">{s.detail}</div>
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  ))}
+                </div>
+              </TooltipProvider>
+
+              {/* Barre dynamique d'explication interactive du token survolé */}
+              <div className="mt-2 rounded-lg border border-border/80 bg-surface-2/40 p-2.5 transition-all text-xs min-h-[56px] flex items-center">
+                {hoveredSegment ? (
+                  <div className="w-full space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <code className="font-mono text-xs font-bold text-amber-300 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30">
+                          {hoveredSegment.text}
+                        </code>
+                        <span className="text-[11px] font-semibold text-foreground">
+                          {hoveredSegment.label}
+                        </span>
+                      </div>
+                      <span className="shrink-0 text-[10px] uppercase tracking-wider font-semibold text-primary bg-primary/10 border border-primary/25 px-1.5 py-0.5 rounded">
+                        {hoveredSegment.categoryLabel || hoveredSegment.kind}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-snug">
+                      {hoveredSegment.detail || hoveredSegment.label}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground/75 italic flex items-center gap-1.5">
+                    <Info className="size-3.5 text-primary/70 shrink-0" />
+                    <span>Survolez un élément de l'expression ci-dessus pour comprendre son rôle dans la regex.</span>
+                  </p>
+                )}
               </div>
               {rule.replacement !== undefined && (
                 <div className="mt-2 flex items-center justify-between rounded-md border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-300">
@@ -641,7 +712,7 @@ export function PatternPanel({
             <div className="space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground font-semibold">
-                  Lecture & Raisonnement du motif
+                  Lecture du motif
                 </span>
                 {!llmDecrypted && (
                   <button
@@ -649,7 +720,7 @@ export function PatternPanel({
                     onClick={handleDecryptWithLocalLLM}
                     disabled={isDecrypting}
                     className="flex items-center gap-1.5 rounded-md border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 px-2 py-0.5 text-[10px] text-purple-300 font-semibold transition cursor-pointer disabled:opacity-50 shadow-xs"
-                    title="Demander à l'IA locale (WebLLM / WebGPU) d'expliquer chaque token sous un angle technique et humain"
+                    title="Demander à l'IA locale (WebLLM / WebGPU) d'analyser le motif"
                   >
                     <Sparkles className={cn("size-2.5 text-purple-400", isDecrypting && "animate-spin text-purple-300")} />
                     <span>{isDecrypting ? (llmReport?.text || "Analyse IA...") : "Expliquer avec l'IA"}</span>
@@ -672,12 +743,12 @@ export function PatternPanel({
                 </div>
               )}
 
-              {/* 1. En langage humain (clair et immédiat) */}
-              <div className="rounded-lg border border-primary/30 bg-primary/5 p-2.5 space-y-0.5">
+              {/* En langage humain (clair et immédiat en une seule phrase percutante) */}
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-1">
                 <div className="flex items-center justify-between font-semibold text-primary text-xs">
                   <div className="flex items-center gap-1.5">
-                    <Lightbulb className="size-3.5 text-primary" />
-                    <span>En langage humain :</span>
+                    <Lightbulb className="size-4 text-primary" />
+                    <span className="font-bold text-xs">En langage humain :</span>
                   </div>
                   {(llmDecrypted || rule.llmMetadata?.explanation) && (
                     <span className="text-[10px] text-purple-300 bg-purple-500/15 border border-purple-500/30 px-1.5 py-0.2 rounded font-medium flex items-center gap-1">
@@ -686,123 +757,31 @@ export function PatternPanel({
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-foreground leading-snug font-normal">
-                  {llmDecrypted?.summary || analysis.human}
+                <p className="text-xs text-foreground leading-relaxed font-normal">
+                  {llmDecrypted?.summary || humanExplanation}
                 </p>
               </div>
 
-              {/* 2. Décryptage détaillé des tokens (angles technique & humain) - Ultra compact */}
-              <div className="rounded-lg border border-border bg-surface-2/60 p-2.5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    <Cpu className="size-3.5 text-amber-400" />
-                    <span>Explication détaillée des tokens :</span>
-                  </span>
-                  <div className="flex items-center gap-1">
-                    {llmDecrypted ? (
-                      <span className="text-[10px] text-purple-300 bg-purple-500/15 border border-purple-500/30 px-1.5 py-0.2 rounded font-medium flex items-center gap-1">
-                        <Sparkles className="size-2" />
-                        Analysé par IA locale
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleDecryptWithLocalLLM}
-                        disabled={isDecrypting}
-                        className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-300 hover:text-purple-200 bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 px-2 py-0.5 rounded transition cursor-pointer disabled:opacity-50"
-                        title="Analyser ce motif avec le LLM local (WebGPU)"
-                      >
-                        <Sparkles className={cn("size-2.5 text-purple-400", isDecrypting && "animate-spin text-purple-300")} />
-                        <span>{isDecrypting ? "Analyse..." : "✨ Analyser avec l'IA"}</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="rounded-lg border border-border/70 bg-background/80 overflow-hidden divide-y divide-border/40 text-[11px]">
-                  {(llmDecrypted?.steps && llmDecrypted.steps.length > 0 ? llmDecrypted.steps : analysis.technical.steps).map((st, i) => {
-                    const fallbackStep = analysis.technical.steps[i];
-                    const tokenDisplay =
-                      st.token && st.token.toLowerCase() !== "morceau"
-                        ? st.token
-                        : fallbackStep?.token || "Token";
-                    const labelDisplay = st.label || fallbackStep?.label || `Étape ${i + 1}`;
-                    const techDisplay =
-                      st.technical || (st as { detail?: string }).detail || fallbackStep?.technical || fallbackStep?.detail;
-                    const humanDisplay = st.human || fallbackStep?.human;
-
-                    return (
-                      <div key={i} className="p-2 space-y-0.5 hover:bg-surface-2/30 transition-colors">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          {tokenDisplay && (
-                            <code className="shrink-0 font-mono text-[10px] font-bold text-amber-300 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">
-                              {tokenDisplay}
-                            </code>
-                          )}
-                          <span className="font-semibold text-foreground text-[11px] truncate">{labelDisplay}</span>
-                        </div>
-
-                        <div className="space-y-0.5 pl-0.5 text-[10px] leading-tight">
-                          {techDisplay && (
-                            <div className="text-muted-foreground flex items-start gap-1">
-                              <span className="font-bold text-foreground/80 shrink-0">⚙️ Tech :</span>
-                              <span>{techDisplay}</span>
-                            </div>
-                          )}
-                          {humanDisplay && (
-                            <div className="text-emerald-400/90 flex items-start gap-1">
-                              <span className="font-bold text-emerald-400 shrink-0">💡 Humain :</span>
-                              <span>{humanDisplay}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {rule.replacement !== undefined && (
-                    <div className="p-2 space-y-0.5 bg-cyan-500/5 hover:bg-cyan-500/10 transition-colors">
-                      <div className="flex items-center gap-1.5">
-                        <code className="shrink-0 font-mono text-[10px] font-bold text-cyan-300 bg-cyan-500/10 px-1.5 py-0.2 rounded border border-cyan-500/25">
-                          ➜ {rule.replacement}
-                        </code>
-                        <span className="text-[11px] font-semibold text-cyan-300">Formule de substitution</span>
-                      </div>
-                      <div className="space-y-0.5 pl-0.5 text-[10px] leading-tight">
-                        <div className="text-muted-foreground flex items-start gap-1">
-                          <span className="font-bold text-foreground/80 shrink-0">⚙️ Tech :</span>
-                          <span>Substitue le texte par les groupes selon le gabarit « {rule.replacement} ».</span>
-                        </div>
-                        <div className="text-cyan-400/90 flex items-start gap-1">
-                          <span className="font-bold text-cyan-400 shrink-0">💡 Humain :</span>
-                          <span>Réordonne les données dans le format demandé.</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* À vérifier si problème regex (masqué par défaut, dépliable) */}
-                {analysis.technical.assumptions.length > 0 && (
-                  <details className="group/assumptions pt-1.5 border-t border-border/70 text-xs">
-                    <summary className="cursor-pointer text-[11px] font-medium text-amber-400 hover:text-amber-300 transition list-none flex items-center justify-between select-none py-0.5">
-                      <span className="flex items-center gap-1.5 font-semibold">
-                        <AlertTriangle className="size-3 text-amber-400" />
-                        <span>À vérifier si problème regex ({analysis.technical.assumptions.length})</span>
-                      </span>
-                      <ChevronDown className="size-3 transition-transform group-open/assumptions:rotate-180" />
-                    </summary>
-                    <ul className="mt-1.5 space-y-1 pl-2 text-[11px] text-muted-foreground">
-                      {analysis.technical.assumptions.map((ass, i) => (
-                        <li key={i} className="flex items-start gap-1.5">
-                          <span className="text-amber-400 shrink-0">•</span>
-                          <span>{ass}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                )}
-              </div>
+              {/* À vérifier si problème regex (masqué par défaut, dépliable) */}
+              {analysis.technical.assumptions.length > 0 && (
+                <details className="group/assumptions rounded-lg border border-border/70 bg-surface-2/30 p-2.5 text-xs">
+                  <summary className="cursor-pointer text-[11px] font-medium text-amber-400 hover:text-amber-300 transition list-none flex items-center justify-between select-none py-0.5">
+                    <span className="flex items-center gap-1.5 font-semibold">
+                      <AlertTriangle className="size-3 text-amber-400" />
+                      <span>À vérifier si problème regex ({analysis.technical.assumptions.length})</span>
+                    </span>
+                    <ChevronDown className="size-3 transition-transform group-open/assumptions:rotate-180" />
+                  </summary>
+                  <ul className="mt-2 space-y-1 pl-1 text-[11px] text-muted-foreground border-t border-border/50 pt-2">
+                    {analysis.technical.assumptions.map((ass, i) => (
+                      <li key={i} className="flex items-start gap-1.5">
+                        <span className="text-amber-400 shrink-0">•</span>
+                        <span>{ass}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
             </div>
 
             <div>

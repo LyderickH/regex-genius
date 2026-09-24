@@ -22,6 +22,7 @@ import {
   Home,
   Github,
   Globe,
+  BookOpen,
 } from "lucide-react";
 import { usePwa } from "@/hooks/usePwa";
 import { Toaster } from "@/components/ui/sonner";
@@ -34,6 +35,7 @@ import { WelcomeHero } from "@/components/regex-tool/WelcomeHero";
 import { LLMControlDialog } from "@/components/regex-tool/LLMControlDialog";
 import { ExternalPromptDialog } from "@/components/regex-tool/ExternalPromptDialog";
 import { ExportOptionsDialog } from "@/components/regex-tool/ExportOptionsDialog";
+import { CheatSheetDialog } from "@/components/regex-tool/CheatSheetDialog";
 import { FileLoadingModal, type FileLoadingState } from "@/components/regex-tool/FileLoadingModal";
 import { localLLM } from "@/lib/llm/webllm-service";
 import { runSynthesisPipeline } from "@/lib/llm/pipeline";
@@ -114,6 +116,7 @@ function Index() {
   const [externalPromptOpen, setExternalPromptOpen] = useState(false);
   const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [cheatSheetOpen, setCheatSheetOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<"csv" | "xlsx">("csv");
   const fullSourceRef = useRef<{ file?: File; rawText?: string; totalLines: number } | null>(null);
   const [isForcedAll, setIsForcedAll] = useState(false);
@@ -1310,6 +1313,17 @@ function detectBestSourceCol(matrix: Matrix): number {
 
           <div className="h-4 w-px bg-border/60 mx-0.5 hidden sm:block" />
 
+          {/* Onglet / Bouton Pense-bête (Cheat Sheet) */}
+          <button
+            type="button"
+            onClick={() => setCheatSheetOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/35 bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-amber-500/5 hover:border-amber-400 hover:bg-amber-500/20 px-3 py-1 text-xs font-semibold text-amber-300 transition cursor-pointer shadow-xs group"
+            title="Ouvrir le pense-bête condensé pour comprendre et débugger 95% des regex"
+          >
+            <BookOpen className="size-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
+            <span>Pense-bête (Cheat Sheet)</span>
+          </button>
+
           {/* Lien Portfolio */}
           <a
             href="https://lyderickh.github.io/"
@@ -1345,6 +1359,7 @@ function detectBestSourceCol(matrix: Matrix): number {
             onImportFile={handleFile}
             onOpenPaste={() => setPasteOpen(true)}
             onStartBlank={startBlank}
+            onOpenCheatSheet={() => setCheatSheetOpen(true)}
             isOffline={isOffline}
             canInstall={canInstall}
             isInstalled={isInstalled}
@@ -1559,6 +1574,7 @@ function detectBestSourceCol(matrix: Matrix): number {
       />
 
       <FileLoadingModal progress={fileLoading} />
+      <CheatSheetDialog open={cheatSheetOpen} onOpenChange={setCheatSheetOpen} />
 
       {headerAsk && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6 animate-in fade-in duration-150">

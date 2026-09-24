@@ -72,7 +72,25 @@ function describeCaptureContent(
     };
   }
 
-  // 6. Chiffres uniquement (ex: \d+, [0-9]+, [0-9]{3}, etc.)
+  // 6. Paramètre de campagne d'URL (ex: utm_campaign)
+  if (/utm_campaign|campaign|campagne/i.test(fullPattern) || /campagne|campaign/i.test(columnName ?? "")) {
+    return {
+      what: "le nom de campagne",
+      accord: "situé",
+      standalone: "Extrait le nom de campagne à partir du paramètre d'URL.",
+    };
+  }
+
+  // 7. Statut HTTP ou code serveur
+  if (/HTTP|status/i.test(fullPattern) || /statut|code_http/i.test(columnName ?? "")) {
+    return {
+      what: "le code de statut",
+      accord: "situé",
+      standalone: "Extrait le code de statut numérique de la requête.",
+    };
+  }
+
+  // 8. Chiffres uniquement (ex: \d+, [0-9]+, [0-9]{3}, etc.)
   const noRegexMetas = rawCapture.replace(/\\d|\[0-9\]|\+|-|\*|\?|\{|\}|\d|\\s|\s/g, "");
   if (noRegexMetas.length === 0 && /(\\d|\[0-9\]|\d)/.test(rawCapture)) {
     return {
@@ -82,7 +100,7 @@ function describeCaptureContent(
     };
   }
 
-  // 7. Lettres uniquement (ex: [a-zA-Z]+)
+  // 9. Lettres uniquement (ex: [a-zA-Z]+)
   if (/^\[?[a-zA-Z\s-]+\]?[\+*]?$/.test(rawCapture)) {
     return {
       what: "les lettres ou mots",
@@ -91,16 +109,17 @@ function describeCaptureContent(
     };
   }
 
-  // 8. Alphanumérique / Identifiant (ex: [A-Za-z0-9_-]+)
+  // 10. Alphanumérique / Identifiant (ex: [A-Za-z0-9_-]+)
   if (/0-9.*a-z|a-z.*0-9|\\w/i.test(rawCapture) && /\[.*\]/.test(rawCapture)) {
+    const isNamedCol = columnName && !/^col\s*\d+$/i.test(columnName.trim()) && !/^colonne\s*\d+$/i.test(columnName.trim());
     return {
-      what: "l'identifiant alphanumérique",
+      what: isNamedCol ? `la valeur « ${columnName} » (identifiant alphanumérique)` : "l'identifiant alphanumérique",
       accord: "situé",
       standalone: "Extrait l'identifiant composé de lettres, chiffres ou tirets.",
     };
   }
 
-  // 9. Négation de délimiteur (ex: [^,]+, [^|]+, [^\r\n]+, [^>]+)
+  // 11. Négation de délimiteur (ex: [^,]+, [^|]+, [^\r\n]+, [^>]+)
   const negMatch = rawCapture.match(/\[\^([^\]]+)\]/);
   if (negMatch) {
     const excluded = negMatch[1]?.replace(/\\r|\\n/g, "").replace(/\\/g, "");
@@ -113,7 +132,11 @@ function describeCaptureContent(
     }
   }
 
-  return { what: "le texte", accord: "situé" };
+  const isNamedCol = columnName && !/^col\s*\d+$/i.test(columnName.trim()) && !/^colonne\s*\d+$/i.test(columnName.trim());
+  return {
+    what: isNamedCol ? `la valeur « ${columnName} »` : "le texte",
+    accord: "situé",
+  };
 }
 
 /**
