@@ -157,6 +157,17 @@ function runsPattern(s: string, exact: boolean): string {
     .join("");
 }
 
+function runsPatternFlexible(s: string): string {
+  return runs(s)
+    .map((r) => {
+      if (r.kind === "d") return "\\d+";
+      if (r.kind === "a") return "[A-Za-z]+";
+      if (r.kind === "o" && /^\s+$/.test(r.text)) return "[ \\t]*";
+      return escapeRegex(r.text);
+    })
+    .join("");
+}
+
 /** Transformations classiques : date, heure, jour, opérations. */
 function applyFmt(v: string, f: Fmt): string {
   if (f === "none") return v;
@@ -254,6 +265,48 @@ function capturePatterns(raw: string, rightChar: string | null): string[] {
   set.add(escapeRegex(raw));
   set.add(runsPattern(raw, true));
   set.add(runsPattern(raw, false));
+  set.add(runsPatternFlexible(raw));
+
+  // Reconnaissance spécialisée des identifiants et formats métiers fréquents :
+  const rawClean = raw.replace(/[\s\u00a0\u202f]/g, "");
+
+  // 1. IBAN (ex: FR76 3000 6000 0112 3456 7890 189 ou DE89370400440532013000)
+  const ibanNorm = rawClean.toUpperCase();
+  if (/^[A-Z]{2}\d{2}[A-Z0-9]{10,32}$/.test(ibanNorm)) {
+    set.add("[A-Z]{2}\\d{2}(?:[ \\t]*\\d+)+");
+    set.add("[A-Z]{2}\\d{2}(?:[ \\t]*[A-Z0-9]+)+");
+    set.add("[A-Z]{2}\\d{2}[A-Z0-9\\s]{10,34}");
+    set.add("[A-Za-z]{2}\\d{2}(?:[ \\t]*\\d+)+");
+  }
+
+  // 2. Numéro de Sécurité Sociale NIR (13 ou 15 chiffres commençant par 1 ou 2)
+  if (/^[12]\d{12}(\d{2})?$/.test(rawClean)) {
+    set.add("[12][\\d\\s\\u00a0]{13,25}");
+    set.add("[12](?:[ \\t]*\\d){12,15}");
+    set.add("[12](?:[ \\t]*\\d+)+");
+  }
+
+  // 3. SIREN (9 chiffres) / SIRET (14 chiffres)
+  if (/^\d{9}(\d{5})?$/.test(rawClean)) {
+    set.add("\\d{3}[ \\t]*\\d{3}[ \\t]*\\d{3}(?:[ \\t]*\\d{5})?");
+    set.add("\\d{9}(?:[ \\t]*\\d{5})?");
+  }
+
+  // 4. Numéro de téléphone français / international
+  if (/^(?:\+33|0033|0)[1-9]\d{8}$/.test(raw.replace(/[\s\u00a0\u202f.-]/g, ""))) {
+    set.add("(?:\\+33|0033|0)[1-9](?:[\\s.-]*\\d{2}){4}");
+    set.add("(?:\\+33|0033|0)[\\d\\s.-]{9,16}");
+  }
+
+  // 5. Codes ou références structurées avec tirets / slashes (ex: FA-2024-0001, FAC/2024/87)
+  if (/^[A-Za-z0-9]+([-_/][A-Za-z0-9]+)+$/.test(raw)) {
+    set.add("[A-Za-z0-9]+(?:[-_/][A-Za-z0-9]+)+");
+    const pfx = raw.match(/^[A-Za-z]+/)?.[0];
+    if (pfx && pfx.length >= 2) {
+      set.add(`${escapeRegex(pfx)}[-_/][A-Za-z0-9]+(?:[-_/][A-Za-z0-9]+)*`);
+    }
+  }
+
   if (/^-?\d+$/.test(raw)) {
     set.add("\\d+");
     set.add("-?\\d+");
@@ -518,9 +571,14 @@ function buildCandidates(
     // chaque repère garde son texte d'origine pour être qualifié (technique / mot de liaison)
     const lefts = new Map<string, string | null>([["", null]]);
     if (pos === 0) lefts.set("^", null);
+    if (pos === 0 || /\b$/.test(left) || /\s$/.test(left)) lefts.set("\\b", null);
     for (const p of fieldPrefixes(input, pos)) lefts.set(p, "|");
     for (const l of shared?.lefts ?? []) lefts.set(l, null);
     for (let l = 1; l <= 8 && l <= left.length; l++) {
+      // Éviter de tronquer un mot en plein milieu (ex: "EPA " dans "SEPA", "mis " dans "Remboursement")
+      if (left.length > l && /[A-Za-z0-9À-ÿ]/.test(left.charAt(left.length - l - 1)) && /[A-Za-z0-9À-ÿ]/.test(left.charAt(left.length - l))) {
+        continue;
+      }
       const chunk = left.slice(-l);
       lefts.set(escapeRegex(chunk), chunk);
       lefts.set(runsPattern(chunk, true), chunk);
@@ -532,8 +590,13 @@ function buildCandidates(
 
     const rights = new Map<string, string | null>([["", null]]);
     if (right === "") rights.set("$", null);
+    if (right === "" || /^\b/.test(right) || /^\s/.test(right)) rights.set("\\b", null);
     for (const r of shared?.rights ?? []) rights.set(r, null);
     for (let r = 1; r <= 4 && r <= right.length; r++) {
+      // Éviter de tronquer un mot en plein milieu (ex: " pou" dans "pour")
+      if (right.length > r && /[A-Za-z0-9À-ÿ]/.test(right.charAt(r - 1)) && /[A-Za-z0-9À-ÿ]/.test(right.charAt(r))) {
+        continue;
+      }
       const chunk = right.slice(0, r);
       rights.set(escapeRegex(chunk), chunk);
       rights.set(runsPattern(chunk, true), chunk);

@@ -22,6 +22,33 @@ function describeCaptureContent(
   fullPattern: string,
   columnName?: string,
 ): { what: string; accord: string; standalone?: string } {
+  // 0. IBAN (identifiant bancaire international)
+  if (/IBAN/i.test(columnName ?? "") || /\[A-Z\]\{2\}\\d\{2\}/.test(rawCapture) || /\[A-Z\]\{2\}\\d\{2\}/.test(fullPattern)) {
+    return {
+      what: "l'identifiant bancaire (IBAN)",
+      accord: "situé",
+      standalone: "Extrait l'identifiant bancaire international (IBAN).",
+    };
+  }
+
+  // 0b. Numéro de Sécurité Sociale (NIR)
+  if (/NIR|sécurité\s*sociale|secu/i.test(columnName ?? "") || (/\[12\]/.test(rawCapture) && /\\d/.test(rawCapture))) {
+    return {
+      what: "le numéro de sécurité sociale (NIR)",
+      accord: "situé",
+      standalone: "Extrait le numéro d'inscription au répertoire (NIR / Sécurité Sociale).",
+    };
+  }
+
+  // 0c. SIREN / SIRET
+  if (/SIREN|SIRET/i.test(columnName ?? "") || (/\\d\{3\}\[ \\t\]\*\\d\{3\}/.test(rawCapture) || /\\d\{9\}/.test(rawCapture))) {
+    return {
+      what: "le numéro SIREN/SIRET",
+      accord: "situé",
+      standalone: "Extrait le numéro d'identification d'entreprise (SIREN/SIRET).",
+    };
+  }
+
   // 1. Adresse IP IPv4 : 4 blocs de chiffres séparés par des points
   const dotParts = rawCapture.split(/\\?\./);
   if (dotParts.length === 4 && dotParts.every((p) => /\\d|\[0-9\]|\d/.test(p))) {
@@ -44,14 +71,16 @@ function describeCaptureContent(
     };
   }
 
-  // 3. Horaire : 2 ou 3 blocs de chiffres séparés par :
-  const timeParts = rawCapture.split(/:/);
-  if ((timeParts.length === 2 || timeParts.length === 3) && timeParts.every((p) => /\\d|\[0-9\]|\d/.test(p))) {
-    return {
-      what: "l'horaire",
-      accord: "situé",
-      standalone: "Extrait l'horaire (heures et minutes).",
-    };
+  // 3. Horaire : 2 ou 3 blocs de chiffres séparés par : (hors groupes non capturants)
+  if (!/\(\?:/.test(rawCapture) && !/[a-zA-Z]/.test(rawCapture.replace(/\\d/g, ""))) {
+    const timeParts = rawCapture.split(/:/);
+    if ((timeParts.length === 2 || timeParts.length === 3) && timeParts.every((p) => /\\d|\[0-9\]|\d/.test(p))) {
+      return {
+        what: "l'horaire",
+        accord: "situé",
+        standalone: "Extrait l'horaire (heures et minutes).",
+      };
+    }
   }
 
   // 4. Adresse e-mail
