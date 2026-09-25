@@ -84,6 +84,7 @@ export function DataGrid({
   const container = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [height, setHeight] = useState(600);
+  const [canScrollRight, setCanScrollRight] = useState(false);
   const [sourceSelection, setSourceSelection] = useState<{ row: number; text: string } | null>(null);
   // widths[0] = colonne source, widths[1..n] = colonnes de résultat
   const [widths, setWidths] = useState<number[]>([]);
@@ -92,14 +93,30 @@ export function DataGrid({
   const anchor = useRef<{ c: number; r: number } | null>(null);
   const dragging = useRef(false);
 
+  const updateScrollRight = useCallback(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const hasOverflow = el.scrollWidth > el.clientWidth + 2;
+    const isAtEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 10;
+    setCanScrollRight(hasOverflow && !isAtEnd);
+  }, []);
+
   useEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setHeight(el.clientHeight));
+    const ro = new ResizeObserver(() => {
+      setHeight(el.clientHeight);
+      updateScrollRight();
+    });
     ro.observe(el);
     setHeight(el.clientHeight);
+    updateScrollRight();
     return () => ro.disconnect();
-  }, []);
+  }, [updateScrollRight]);
+
+  useEffect(() => {
+    updateScrollRight();
+  }, [widths, columns, rows.length, updateScrollRight]);
 
   // Synchronise les largeurs et les agrandit automatiquement pour que le
   // contenu le plus long reste entièrement visible. Un réglage manuel plus
@@ -392,7 +409,7 @@ export function DataGrid({
     <div
       ref={container}
       tabIndex={-1}
-      className="flex min-h-0 flex-1 flex-col overflow-hidden outline-none"
+      className="relative flex min-h-0 flex-1 flex-col overflow-hidden outline-none"
       onKeyDown={onGridKeyDown}
     >
       {/* corps (l'en-tête défile avec lui, en restant collé en haut) */}
@@ -400,8 +417,9 @@ export function DataGrid({
         ref={scroller}
         onScroll={(e) => {
           setScrollTop(e.currentTarget.scrollTop);
+          updateScrollRight();
         }}
-        className="min-h-0 flex-1 overflow-auto"
+        className="min-h-0 flex-1 overflow-auto custom-scrollbar"
       >
       <div
         className="sticky top-0 z-30 grid w-max border-b border-grid-line bg-surface-2 text-xs"
@@ -766,6 +784,17 @@ export function DataGrid({
           </button>
         </div>
       )}
+
+      {/* Dégradé d'estompement et ombre interne sur le bord droit : signale visuellement qu'il reste du contenu masqué */}
+      <div
+        className={cn(
+          "pointer-events-none absolute top-0 bottom-0 right-0 z-30 w-16 transition-opacity duration-300",
+          "bg-gradient-to-l from-background/95 via-background/40 to-transparent",
+          "shadow-[inset_-14px_0_18px_-8px_rgba(0,0,0,0.85)]",
+          canScrollRight ? "opacity-100" : "opacity-0"
+        )}
+        aria-hidden="true"
+      />
     </div>
   );
 }
