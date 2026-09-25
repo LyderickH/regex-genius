@@ -83,11 +83,14 @@ export function parsePastedText(text: string, options?: ParseOptions): Matrix {
     if (parsed.data.length) return (parsed.data as Matrix).map((r) => r.map((c) => (c == null ? "" : String(c))));
   }
 
-  // Si "avec délimiteur" explicite sans séparateur fixe, tenter détection auto PapaParse
-  if (options?.delimiterMode === "with_delimiter") {
+  // Si détection incertaine ou lignes hétérogènes, tester la détection automatique de PapaParse (sauf mode sans délimiteur)
+  if (options?.delimiterMode !== "without_delimiter") {
     const parsed = Papa.parse<string[]>(cleanText, { skipEmptyLines: true });
     if (parsed.data.length && (parsed.data[0]?.length ?? 0) > 1) {
-      return (parsed.data as Matrix).map((r) => r.map((c) => (c == null ? "" : String(c))));
+      const multiColCount = parsed.data.slice(0, 50).filter((r) => r.length > 1).length;
+      if (multiColCount >= Math.min(parsed.data.length, 50) * 0.7) {
+        return (parsed.data as Matrix).map((r) => r.map((c) => (c == null ? "" : String(c))));
+      }
     }
   }
 
@@ -260,7 +263,7 @@ export async function parseFileDataset(
     };
   }
 
-  if (name.endsWith(".csv") || options?.delimiterMode === "with_delimiter") {
+  if (name.endsWith(".csv") || name.endsWith(".tsv") || options?.delimiterMode === "with_delimiter") {
     const firstChunk = text.slice(0, 4000);
     const hasDelimiter =
       options?.delimiter !== undefined ||
@@ -342,6 +345,7 @@ export async function exportFullDatasetStreaming({
   columns,
   filename = "resultats_complet.csv",
   delimiterMode = "with_delimiter",
+  sourceColIndex = 0,
   onProgress,
 }: {
   file?: File | null;
@@ -351,6 +355,7 @@ export async function exportFullDatasetStreaming({
   columns: { name: string; rule: Rule | null }[];
   filename?: string;
   delimiterMode?: DelimiterMode;
+  sourceColIndex?: number;
   onProgress?: (percent: number) => void;
 }): Promise<void> {
   const sep = ";";
@@ -402,11 +407,13 @@ export async function exportFullDatasetStreaming({
     const rawLine = lines[i]!;
     let src = rawLine;
     if (delimiterMode !== "without_delimiter") {
-      if (rawLine.includes(sep) || rawLine.includes(",")) {
-        const delim = rawLine.includes(sep) ? sep : ",";
-        const endIdx = rawLine.indexOf(delim);
-        if (endIdx > 0 && !rawLine.startsWith('"')) {
-          src = rawLine.slice(0, endIdx);
+      const candDelims = [";", ",", "\t", "|"].filter((d) => rawLine.includes(d));
+      if (candDelims.length > 0) {
+        const delim = candDelims[0]!;
+        const parts = rawLine.split(delim);
+        if (parts.length > 1) {
+          const colIdx = Math.min(Math.max(0, sourceColIndex ?? 0), parts.length - 1);
+          src = parts[colIdx] ?? rawLine;
         }
       }
     }

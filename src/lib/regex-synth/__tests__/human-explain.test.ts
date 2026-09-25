@@ -209,4 +209,22 @@ describe("explainRegexTechnical & analyzeRegexFull", () => {
     expect(full.technical.steps.some((s) => s.label.includes("substitution"))).toBe(true);
     expect(full.human).toContain("Inverse l'ordre");
   });
+
+  it("explains value between identical delimiters (,val,)", () => {
+    const text = explainRegexHuman({
+      source: ",([^,]+),",
+      flags: "",
+      transform: { strip: "none", dec: "none", casing: "none", fmt: "none" },
+    });
+    expect(text).toBe("Extrait le texte situé entre deux séparateurs « , ».");
+  });
+
+  it("explains value at line start until delimiter (^val,)", () => {
+    const text = explainRegexHuman({
+      source: "^([^,]+),",
+      flags: "",
+      transform: { strip: "none", dec: "none", casing: "none", fmt: "none" },
+    });
+    expect(text).toBe("Extrait le texte situé au début de la ligne jusqu'au délimiteur « , ».");
+  });
 });

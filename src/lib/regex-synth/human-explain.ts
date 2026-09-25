@@ -229,14 +229,34 @@ export function explainRegexHuman(
     const rawSuffix = segments.slice(closeIdx + 1).map((s) => s.text).join("");
     const cleanSuffix = cleanLiteral(rawSuffix);
 
+    const startsAtBeginning = rawPrefix === "^" || rawPrefix.startsWith("^[^");
+    const endsAtEnd = rawSuffix === "$" || rawSuffix.endsWith("$");
+
+    const isNamedCol = columnName && !/^col\s*\d+$/i.test(columnName.trim()) && !/^colonne\s*\d+$/i.test(columnName.trim());
+    const finalWhat =
+      what.includes("jusqu'au délimiteur") && (cleanSuffix || cleanPrefix)
+        ? isNamedCol
+          ? `la valeur « ${columnName} »`
+          : "le texte"
+        : what;
+
     if (cleanPrefix && cleanSuffix) {
-      return appendTransform(`Extrait ${what} ${accord} après « ${cleanPrefix} » et avant « ${cleanSuffix} ».`);
+      if (cleanPrefix === cleanSuffix) {
+        return appendTransform(`Extrait ${finalWhat} ${accord} entre deux séparateurs « ${cleanPrefix} ».`);
+      }
+      return appendTransform(`Extrait ${finalWhat} ${accord} après « ${cleanPrefix} » et avant « ${cleanSuffix} ».`);
+    }
+    if (startsAtBeginning && cleanSuffix) {
+      return appendTransform(`Extrait ${finalWhat} ${accord} au début de la ligne jusqu'au délimiteur « ${cleanSuffix} ».`);
+    }
+    if (cleanPrefix && endsAtEnd) {
+      return appendTransform(`Extrait ${finalWhat} ${accord} situé après « ${cleanPrefix} » jusqu'à la fin de la ligne.`);
     }
     if (cleanPrefix) {
-      return appendTransform(`Extrait ${what} ${accord} immédiatement après « ${cleanPrefix} ».`);
+      return appendTransform(`Extrait ${finalWhat} ${accord} immédiatement après « ${cleanPrefix} ».`);
     }
     if (cleanSuffix) {
-      return appendTransform(`Extrait ${what} ${accord} juste avant « ${cleanSuffix} ».`);
+      return appendTransform(`Extrait ${finalWhat} ${accord} juste avant « ${cleanSuffix} ».`);
     }
     if (standalone) {
       return appendTransform(standalone);

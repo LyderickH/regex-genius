@@ -128,6 +128,12 @@ function escapeClass(s: string): string {
   return s.replace(/[\\\]^-]/g, "\\$&");
 }
 
+/** Supprime les artefacts de synthèse illogiques comme les quantificateurs redondants {1}. */
+export function cleanRegexSource(s: string): string {
+  if (!s) return s;
+  return s.replace(/(?<!\\)(?<!\{)\{1\}(?![0-9,])/g, "");
+}
+
 type Run = { kind: "d" | "a" | "o"; text: string };
 
 function runs(s: string): Run[] {
@@ -144,8 +150,8 @@ function runs(s: string): Run[] {
 function runsPattern(s: string, exact: boolean): string {
   return runs(s)
     .map((r) => {
-      if (r.kind === "d") return exact ? `\\d{${r.text.length}}` : "\\d+";
-      if (r.kind === "a") return exact ? `[A-Za-z]{${r.text.length}}` : "[A-Za-z]+";
+      if (r.kind === "d") return exact ? (r.text.length === 1 ? "\\d" : `\\d{${r.text.length}}`) : "\\d+";
+      if (r.kind === "a") return exact ? (r.text.length === 1 ? "[A-Za-z]" : `[A-Za-z]{${r.text.length}}`) : "[A-Za-z]+";
       return escapeRegex(r.text);
     })
     .join("");
@@ -251,7 +257,7 @@ function capturePatterns(raw: string, rightChar: string | null): string[] {
   if (/^-?\d+$/.test(raw)) {
     set.add("\\d+");
     set.add("-?\\d+");
-    if (!raw.startsWith("-")) set.add(`\\d{${raw.length}}`);
+    if (!raw.startsWith("-")) set.add(raw.length === 1 ? "\\d" : `\\d{${raw.length}}`);
   }
   if (/^[A-Za-z]+$/.test(raw)) {
     set.add("[A-Za-z]+");
@@ -385,9 +391,9 @@ function fieldPrefixes(input: string, pos: number): string[] {
     const n = input.slice(0, pos).split(d).length - 1;
     const cls = `[^${escapeClass(d)}]`;
     const lit = escapeRegex(d);
-    out.push(n === 0 ? "^" : `^(?:${cls}*${lit}){${n}}`);
+    out.push(n === 0 ? "^" : n === 1 ? `^${cls}*${lit}` : `^(?:${cls}*${lit}){${n}}`);
     if (n > 0) {
-      out.push(`^(?:${cls}*${lit}){${n}}\\s*`);
+      out.push(n === 1 ? `^${cls}*${lit}\\s*` : `^(?:${cls}*${lit}){${n}}\\s*`);
     } else {
       out.push("^\\s*");
     }
@@ -482,13 +488,15 @@ function antiUnify(raws: string[]): string[] {
         loose += cls;
       }
     } else if (kind === "d") {
-      exact += lens.size === 1 ? `\\d{${parts[0]!.length}}` : "\\d+";
+      const len = parts[0]!.length;
+      exact += lens.size === 1 ? (len === 1 ? "\\d" : `\\d{${len}}`) : "\\d+";
       loose += "\\d+";
     } else {
       const upper = parts.every((p) => p === p.toUpperCase());
       const lower = parts.every((p) => p === p.toLowerCase());
       const cls = upper ? "[A-Z]" : lower ? "[a-z]" : "[A-Za-zÀ-ÿ]";
-      exact += lens.size === 1 ? `${cls}{${parts[0]!.length}}` : `${cls}+`;
+      const len = parts[0]!.length;
+      exact += lens.size === 1 ? (len === 1 ? cls : `${cls}{${len}}`) : `${cls}+`;
       loose += `${cls}+`;
     }
   }
@@ -973,11 +981,11 @@ export function synthesizeRule(
         globalBestLen = bestLen;
       }
       const bestFit = coverageFit(best.source, best.transform, inputs, shapes);
-      if (bestFit.fit >= target && bestFit.cov === bestFit.fit) return best;
+      if (bestFit.fit >= target && bestFit.cov === bestFit.fit) return { ...best, source: cleanRegexSource(best.source) };
     }
     if (Date.now() > deadline) break;
   }
-  return globalBest;
+  return globalBest ? { ...globalBest, source: cleanRegexSource(globalBest.source) } : null;
 }
 
 
@@ -2053,7 +2061,8 @@ export function combineColumns(
       const gap = infos[i]!.n - infos[i - 1]!.n;
       if (gap < 1) return null;
       const cls = `[^${escapeClass(d)}]`;
-      out += `${cls}*(?:\\${d}${cls}*){${gap - 1}}\\${d}` + strip(ordered[i]!.rule.source, false);
+      const gapStr = gap - 1 === 1 ? `\\${d}${cls}*` : gap - 1 === 0 ? "" : `(?:\\${d}${cls}*){${gap - 1}}`;
+      out += `${cls}*${gapStr}\\${d}` + strip(ordered[i]!.rule.source, false);
     }
     return out;
   };
@@ -2090,12 +2099,13 @@ export function combineColumns(
     }
     const cls = `[^${escapeClass(d)}]`;
     const lit = escapeRegex(d);
-    let out = idx[0] === 0 ? "^" : `^(?:${cls}*${lit}){${idx[0]}}`;
+    let out = idx[0] === 0 ? "^" : idx[0] === 1 ? `^${cls}*${lit}` : `^(?:${cls}*${lit}){${idx[0]}}`;
     for (let i = 0; i < caps.length; i++) {
       if (i > 0) {
         const gap = idx[i]! - idx[i - 1]!;
         if (gap < 1) return null;
-        out += `${cls}*${lit}(?:${cls}*${lit}){${gap - 1}}`;
+        const gapLit = gap - 1 === 1 ? `${cls}*${lit}` : gap - 1 === 0 ? "" : `(?:${cls}*${lit}){${gap - 1}}`;
+        out += `${cls}*${lit}${gapLit}`;
       }
       // le champ peut commencer par des espaces avant la valeur
       out += `${cls}*?(${caps[i]})`;

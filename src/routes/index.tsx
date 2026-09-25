@@ -135,8 +135,23 @@ function Index() {
     rawText?: string;
     totalLines: number;
     delimiterMode?: DelimiterMode;
+    sourceColIndex?: number;
   } | null>(null);
   const [isForcedAll, setIsForcedAll] = useState(false);
+
+  // Fermer les menus déroulants de la barre d'outils lors d'un clic à l'extérieur
+  useEffect(() => {
+    if (!importDropdownOpen && !exportDropdownOpen) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target?.closest("[data-dropdown-container]")) {
+        setImportDropdownOpen(false);
+        setExportDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [importDropdownOpen, exportDropdownOpen]);
 
   // --- Statut PWA, Mode Avion et Installation Locale
   const { isOffline, canInstall, isInstalled, installApp } = usePwa();
@@ -635,6 +650,10 @@ function detectBestSourceCol(matrix: Matrix): number {
 
     if (cols.length === 0) {
       cols.push(emptyColumn("Résultat 1", len));
+    }
+
+    if (fullSourceRef.current) {
+      fullSourceRef.current.sourceColIndex = effectiveSourceIdx;
     }
 
     // Préserve les exemples déjà saisis par l'utilisateur si demandé (ex: lors d'un affichage forcé +50k)
@@ -1167,6 +1186,7 @@ function detectBestSourceCol(matrix: Matrix): number {
       rawText: fullSourceRef.current.rawText,
       totalLines: fullSourceRef.current.totalLines,
       delimiterMode: fullSourceRef.current.delimiterMode,
+      sourceColIndex: fullSourceRef.current.sourceColIndex ?? 0,
       header,
       columns: columns.map((c) => ({ name: c.name, rule: c.rule })),
       filename: `resultats_complet_${fullSourceRef.current.totalLines}_lignes.csv`,
@@ -1294,10 +1314,15 @@ function detectBestSourceCol(matrix: Matrix): number {
           )}
 
           {/* Bouton Importer avec options avec / sans délimiteur */}
-          <div className="relative">
+          <div className="relative" data-dropdown-container="import">
             <button
               type="button"
-              onClick={() => setImportDropdownOpen((prev) => !prev)}
+              onClick={() =>
+                setImportDropdownOpen((prev) => {
+                  if (!prev) setExportDropdownOpen(false);
+                  return !prev;
+                })
+              }
               className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-foreground transition hover:border-primary hover:text-primary"
               title="Importer des données (avec ou sans délimiteur)"
             >
@@ -1368,10 +1393,15 @@ function detectBestSourceCol(matrix: Matrix): number {
               />
 
               {/* Bouton Exporter unique avec choix de format */}
-              <div className="relative">
+              <div className="relative" data-dropdown-container="export">
                 <button
                   type="button"
-                  onClick={() => setExportDropdownOpen((prev) => !prev)}
+                  onClick={() =>
+                    setExportDropdownOpen((prev) => {
+                      if (!prev) setImportDropdownOpen(false);
+                      return !prev;
+                    })
+                  }
                   className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-foreground transition hover:border-primary hover:text-primary"
                   title="Exporter vos données nettoyées et calculées"
                 >
@@ -1985,7 +2015,7 @@ function detectBestSourceCol(matrix: Matrix): number {
                     <option value="auto">Auto (Tabulation, ;, ,)</option>
                     <option value=";">Point-virgule (;)</option>
                     <option value=",">Virgule (,)</option>
-                    <option value="&#9;">Tabulation (\t)</option>
+                    <option value={"\t"}>Tabulation (\t)</option>
                     <option value="|">Pipe (|)</option>
                   </select>
                 </div>
