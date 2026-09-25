@@ -279,11 +279,10 @@ function capturePatterns(raw: string, rightChar: string | null): string[] {
     set.add("[A-Za-z]{2}\\d{2}(?:[ \\t]*\\d+)+");
   }
 
-  // 2. Numéro de Sécurité Sociale NIR (13 ou 15 chiffres commençant par 1 ou 2)
-  if (/^[12]\d{12}(\d{2})?$/.test(rawClean)) {
-    set.add("[12][\\d\\s\\u00a0]{13,25}");
-    set.add("[12](?:[ \\t]*\\d){12,15}");
-    set.add("[12](?:[ \\t]*\\d+)+");
+  // 2. Numéro de Sécurité Sociale NIR (13 ou 15 caractères commençant par 1 ou 2, incluant Corse 2A/2B)
+  if (/^[12][\dA-B]{12}(\d{2})?$/.test(rawClean)) {
+    set.add("[12](?:[ \\t]*[0-9A-B]+)+");
+    set.add("[12][\\d\\s\\u00a0A-B]{13,25}");
   }
 
   // 3. SIREN (9 chiffres) / SIRET (14 chiffres)
@@ -310,6 +309,8 @@ function capturePatterns(raw: string, rightChar: string | null): string[] {
   if (/^-?\d+$/.test(raw)) {
     set.add("\\d+");
     set.add("-?\\d+");
+    set.add("\\d+(?:[.,]\\d+)?");
+    set.add("-?\\d+(?:[.,]\\d+)?");
     if (!raw.startsWith("-")) set.add(raw.length === 1 ? "\\d" : `\\d{${raw.length}}`);
   }
   if (/^[A-Za-z]+$/.test(raw)) {
@@ -343,7 +344,8 @@ function capturePatterns(raw: string, rightChar: string | null): string[] {
     /^[+-]?\s*\d+$/.test(trimmed) ||
     (currSymbol !== null && (/^[+-]?\s*[\d][\d\s\u00a0\u202f.,]*\d$/.test(numRaw) || /^[+-]?\s*\d+$/.test(numRaw)));
 
-  if (isNumber) {
+  const isNIR = /^[12][\dA-B]{12}(\d{2})?$/.test(rawClean);
+  if (isNumber && !isNIR) {
     if (currSymbol) {
       const escCurr = escapeRegex(currSymbol);
       const isSuffix = trimmed.endsWith(currSymbol);
@@ -432,6 +434,17 @@ function scoreOf(cap: string, left: string, right: string): number {
   if (left === "^" || right === "$") s -= 6;
   // les motifs « n-ième champ d'une ligne délimitée » sont très fiables
   if (left.startsWith("^(?:[^")) s -= left.length + 12;
+  // Normalisation pour les nombres avec décimales optionnelles
+  if (cap.includes("(?:[.,]\\d+)?")) {
+    s -= 12;
+    if (/[€$£¥]|CHF|USD|EUR/i.test(right) || /montant|prix|facture/i.test(left)) {
+      s -= 8;
+    }
+  }
+  // Normalisation pour NIR
+  if (cap.startsWith("[12]")) {
+    s -= 15;
+  }
   return s;
 }
 
@@ -553,7 +566,11 @@ function antiUnify(raws: string[]): string[] {
       loose += `${cls}+`;
     }
   }
-  return exact === loose ? [exact] : [exact, loose];
+  const res = exact === loose ? [exact] : [exact, loose];
+  if (n === 1 && toks[0]![0]!.kind === "d") {
+    res.push("\\d+(?:[.,]\\d+)?");
+  }
+  return res;
 }
 
 function buildCandidates(
@@ -630,7 +647,24 @@ function buildCandidates(
           if (weakDelimiter(lLit)) score += 25;
           if (weakDelimiter(rLit)) score += 15;
           if (strongDelimiter(lLit)) score -= 10;
-          cands.push({ src: `${l}(${cap})${r}`, score });
+
+          // 3. Les repères partagés par TOUS les exemples sont prioritaires
+          const isSharedL = (shared?.lefts ?? []).includes(l);
+          const isSharedR = (shared?.rights ?? []).includes(r);
+          if (isSharedL) score -= 18;
+          if (isSharedR) score -= 18;
+
+          // 4. Un motif générique totalement nu (ex: \b\d+\b sans aucun mot ou contexte)
+          // est dangereux lorsqu'un contexte textuel partagé existe
+          const isGeneric = /^(?:\\d\+|\\w\+|\[A-Za-z0-9\]\+|\[\^\s\]\+|\\S\+|\[A-Za-z\]\+)$/.test(cap);
+          if (isGeneric && (l === "" || l === "\\b") && (r === "" || r === "$" || r === "\\b")) {
+            if ((shared?.lefts ?? []).length > 0 || (shared?.rights ?? []).length > 0) {
+              score += 25;
+            }
+          }
+
+          const src = `${l}(${cap})${r}`;
+          cands.push({ src, score });
         }
     }
   }
@@ -663,6 +697,10 @@ function validate(source: string, transform: Transform, examples: Example[]): bo
 
 /** Forme abstraite d'une valeur : « 1250,00 » -> « 9,9 », « 1250.00 » -> « 9.9 », « FA-2024-1 » -> « A-9-9 ». */
 function shapeOf(s: string): string {
+  // Les nombres (entiers ou avec décimales) appartiennent à la même famille de forme numérique
+  if (/^[+-]?\s*[\d\s\u00a0]+(?:[.,]\d+)?\s*$/.test(s)) {
+    return "NUM";
+  }
   return s
     .replace(/^[-+]/, "")
     .replace(/[0-9]+/g, "9")
