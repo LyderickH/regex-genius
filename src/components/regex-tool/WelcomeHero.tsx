@@ -179,35 +179,16 @@ export function WelcomeHero({
             </HoverCardContent>
           </HoverCard>
 
-          {/* Bouton Pense-bête Cheat Sheet */}
+          {/* Bouton Cheat Sheet compact */}
           {onOpenCheatSheet && (
             <button
               type="button"
               onClick={onOpenCheatSheet}
-              className="group inline-flex items-center gap-2 rounded-full border border-amber-500/35 bg-gradient-to-r from-amber-500/15 to-amber-500/5 px-3.5 py-1 text-xs font-semibold text-amber-300 shadow-xs backdrop-blur-sm transition-all hover:border-amber-400 hover:bg-amber-500/25 cursor-pointer"
-              title="Ouvrir le pense-bête condensé pour comprendre et débugger 95% des regex"
+              className="group inline-flex items-center gap-1.5 rounded-full border border-amber-500/35 bg-gradient-to-r from-amber-500/15 to-amber-500/5 px-2.5 py-0.5 text-[11px] font-medium text-amber-300 shadow-xs backdrop-blur-sm transition-all hover:border-amber-400 hover:bg-amber-500/25 cursor-pointer"
+              title="Ouvrir le cheat sheet condensé des regex"
             >
-              <BookOpen className="size-3.5 text-amber-400 transition-transform group-hover:scale-110" />
-              <span>Pense-bête (Cheat Sheet)</span>
-              <span className="rounded-full bg-amber-500/20 px-2 py-0.5 font-mono text-[10px] text-amber-200">
-                95 % des cas
-              </span>
-            </button>
-          )}
-
-          {/* Bouton Formats & Types attendus */}
-          {onOpenFormatsGuide && (
-            <button
-              type="button"
-              onClick={onOpenFormatsGuide}
-              className="group inline-flex items-center gap-2 rounded-full border border-cyan-500/35 bg-gradient-to-r from-cyan-500/15 to-cyan-500/5 px-3.5 py-1 text-xs font-semibold text-cyan-300 shadow-xs backdrop-blur-sm transition-all hover:border-cyan-400 hover:bg-cyan-500/25 cursor-pointer"
-              title="Explications des types de fichiers (.csv, .xlsx, .txt, .log) et formats attendus"
-            >
-              <FileSpreadsheet className="size-3.5 text-cyan-400 transition-transform group-hover:scale-110" />
-              <span>Formats & types attendus</span>
-              <span className="rounded-full bg-cyan-500/20 px-2 py-0.5 font-mono text-[10px] text-cyan-200">
-                .csv · .xlsx · .txt
-              </span>
+              <BookOpen className="size-3 text-amber-400 transition-transform group-hover:scale-110" />
+              <span>Cheat Sheet</span>
             </button>
           )}
         </div>

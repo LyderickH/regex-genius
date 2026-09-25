@@ -22,6 +22,8 @@ import {
   Pencil,
   RotateCcw,
   X,
+  FileSpreadsheet,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -70,6 +72,7 @@ export function PatternPanel({
   onSwitchToRawLines,
   onKeepOnlyTwoExamples,
   isDelimitedMode,
+  onOpenFormatsGuide,
 }: {
   column: OutputColumn | null;
   rowCount: number;
@@ -87,6 +90,7 @@ export function PatternPanel({
   onSwitchToRawLines?: () => void;
   onKeepOnlyTwoExamples?: () => void;
   isDelimitedMode?: boolean;
+  onOpenFormatsGuide?: () => void;
 }) {
   const [dialectId, setDialectId] = useState("excel");
   const [codeLocale, setCodeLocale] = useState<CodeLocale>("fr");
@@ -376,14 +380,26 @@ export function PatternPanel({
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   Vos valeurs attendues ne figurent pas dans la colonne source <strong className="text-foreground">« {sourceName || "Données source"} »</strong>. Votre fichier CSV a très probablement été découpé par délimiteur, ce qui a fragmenté la ligne brute !
                 </p>
-                <button
-                  type="button"
-                  onClick={onSwitchToRawLines}
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-amber-500 px-3 py-1.5 text-xs font-bold text-slate-950 hover:bg-amber-400 transition shadow"
-                >
-                  <FileText className="size-3.5" />
-                  <span>Basculer en lignes brutes complètes (sans délimiteur)</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={onSwitchToRawLines}
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-amber-500 px-3 py-1.5 text-xs font-bold text-slate-950 hover:bg-amber-400 transition shadow"
+                  >
+                    <FileText className="size-3.5" />
+                    <span>Basculer en lignes brutes complètes (sans délimiteur)</span>
+                  </button>
+                  {onOpenFormatsGuide && (
+                    <button
+                      type="button"
+                      onClick={onOpenFormatsGuide}
+                      className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-amber-500/30 bg-surface-2 px-2.5 py-1.5 text-xs font-medium text-amber-300 hover:bg-surface-3 transition"
+                    >
+                      <FileSpreadsheet className="size-3.5 text-amber-400" />
+                      <span>Formats attendus</span>
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 
@@ -397,14 +413,26 @@ export function PatternPanel({
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   Regex Genius n'a besoin que de 1 ou 2 exemples pour déduire la formule. Laissez la machine calculer le reste !
                 </p>
-                <button
-                  type="button"
-                  onClick={onKeepOnlyTwoExamples}
-                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 transition shadow"
-                >
-                  <Sparkles className="size-3.5" />
-                  <span>Ne garder que 2 exemples et auto-compléter</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={onKeepOnlyTwoExamples}
+                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 transition shadow"
+                  >
+                    <Sparkles className="size-3.5" />
+                    <span>Ne garder que 2 exemples et auto-compléter</span>
+                  </button>
+                  {onOpenFormatsGuide && (
+                    <button
+                      type="button"
+                      onClick={onOpenFormatsGuide}
+                      className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-primary/30 bg-surface-2 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-surface-3 transition"
+                    >
+                      <FileSpreadsheet className="size-3.5 text-primary" />
+                      <span>Formats attendus</span>
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 

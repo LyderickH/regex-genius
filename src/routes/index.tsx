@@ -1509,50 +1509,48 @@ function detectBestSourceCol(matrix: Matrix): number {
           )}
         </div>
 
-        <div className="ml-auto flex items-center gap-3">
-          {/* IA locale WebGPU mise en valeur */}
+        <div className="ml-auto flex items-center gap-2">
+          {/* IA locale WebGPU compacte */}
           <button
             onClick={() => setLlmControlOpen(true)}
-            className="relative flex items-center gap-2 rounded-full border border-amber-500/40 bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-orange-500/15 px-3 py-1 text-xs font-semibold text-amber-300 hover:border-amber-400 hover:bg-amber-500/25 transition shadow-xs cursor-pointer group"
-            title="IA locale embarquée dans votre navigateur (WebGPU) : 0 octet envoyé sur Internet, 100% privé et sécurisé"
+            className="flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-medium text-amber-300 hover:border-amber-400 hover:bg-amber-500/20 transition cursor-pointer group"
+            title="IA locale embarquée dans votre navigateur (WebGPU) : 0 octet envoyé sur Internet, 100% privé"
           >
-            <span className="relative flex size-2">
+            <span className="relative flex size-1.5">
               <span className={cn(
                 "absolute inline-flex h-full w-full rounded-full opacity-75",
                 isLLMRunning ? "animate-ping bg-amber-400" : llmReport.status === "ready" ? "bg-emerald-400 animate-pulse" : "bg-amber-500"
               )} />
               <span className={cn(
-                "relative inline-flex size-2 rounded-full",
+                "relative inline-flex size-1.5 rounded-full",
                 llmReport.status === "ready" ? "bg-emerald-400" : "bg-amber-400"
               )} />
             </span>
-            <Sparkles className="size-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
-            <span>IA locale (WebGPU)</span>
-            <span className="hidden xl:inline text-[10px] font-mono opacity-80 text-amber-200">
-              · {localLLM.getCurrentModelConfig().name}
-            </span>
+            <Sparkles className="size-3 text-amber-400" />
+            <span>IA locale ({localLLM.getCurrentModelConfig().name})</span>
           </button>
+
           {/* Badge Mode Avion / Hors-ligne en direct */}
           {isOffline && (
             <div
-              className="flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-400 animate-pulse"
+              className="flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-400 animate-pulse"
               title="Mode avion actif : aucune connexion Internet, calculs 100% locaux dans votre RAM"
             >
               <Plane className="size-3" />
-              <span>Mode Avion (0 réseau)</span>
+              <span>Avion</span>
             </div>
           )}
 
-          {/* Bouton d'installation PWA dans le header */}
+          {/* Bouton d'installation PWA dans le header : logo download + PC */}
           {!isInstalled && (
             <button
               type="button"
               onClick={installApp}
-              className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-[11px] font-medium text-foreground hover:border-primary hover:text-primary transition cursor-pointer"
+              className="hidden md:inline-flex items-center gap-1 rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] font-medium text-foreground hover:border-primary hover:text-primary transition cursor-pointer"
               title="Installer Regex Genius sur votre PC (PWA autonome utilisable hors-ligne)"
             >
               <Download className="size-3 text-primary" />
-              <span>Installer sur PC</span>
+              <span>PC</span>
             </button>
           )}
 
@@ -1561,34 +1559,22 @@ function detectBestSourceCol(matrix: Matrix): number {
               className="hidden md:inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground"
               title="Application locale installée sur votre ordinateur"
             >
-              <Laptop className="size-3.5 text-primary" />
-              <span>App locale</span>
+              <Laptop className="size-3 text-primary" />
+              <span>PC</span>
             </div>
           )}
 
-          <div className="h-4 w-px bg-border/60 mx-0.5 hidden sm:block" />
+          <div className="h-3.5 w-px bg-border/60 mx-0.5 hidden sm:block" />
 
-          {/* Onglet / Bouton Pense-bête (Cheat Sheet) */}
+          {/* Onglet / Bouton Cheat Sheet : compact, uniquement "Cheat Sheet" */}
           <button
             type="button"
             onClick={() => setCheatSheetOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/35 bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-amber-500/5 hover:border-amber-400 hover:bg-amber-500/20 px-3 py-1 text-xs font-semibold text-amber-300 transition cursor-pointer shadow-xs group"
-            title="Ouvrir le pense-bête condensé pour comprendre et débugger 95% des regex"
+            className="inline-flex items-center gap-1 rounded-full border border-amber-500/35 bg-amber-500/10 hover:border-amber-400 hover:bg-amber-500/20 px-2.5 py-0.5 text-[11px] font-medium text-amber-300 transition cursor-pointer shadow-xs group"
+            title="Ouvrir le cheat sheet synthétique des expressions régulières"
           >
-            <BookOpen className="size-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
-            <span className="hidden sm:inline">Pense-bête (Cheat Sheet)</span>
-            <span className="sm:hidden">Pense-bête</span>
-          </button>
-
-          {/* Onglet / Bouton Formats & types attendus */}
-          <button
-            type="button"
-            onClick={() => setFormatsDialogOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/35 bg-gradient-to-r from-cyan-500/15 via-cyan-500/10 to-cyan-500/5 hover:border-cyan-400 hover:bg-cyan-500/20 px-3 py-1 text-xs font-semibold text-cyan-300 transition cursor-pointer shadow-xs group"
-            title="Explications des types de fichiers (.csv, .xlsx, .txt, .log) et formats attendus"
-          >
-            <FileSpreadsheet className="size-3.5 text-cyan-400 group-hover:scale-110 transition-transform" />
-            <span>Formats attendus</span>
+            <BookOpen className="size-3 text-amber-400 group-hover:scale-110 transition-transform" />
+            <span>Cheat Sheet</span>
           </button>
 
           {/* Lien Portfolio */}
@@ -1807,6 +1793,7 @@ function detectBestSourceCol(matrix: Matrix): number {
                 rowCount={rows.length}
                 rows={rows}
                 sourceName={sourceName}
+                onOpenFormatsGuide={() => setFormatsDialogOpen(true)}
                 onSwitchToRawLines={fullSourceRef.current?.rawLinesMatrix ? switchToRawLines : undefined}
                 onKeepOnlyTwoExamples={activeId ? () => keepOnlyTwoExamples(activeId) : undefined}
                 isDelimitedMode={fullSourceRef.current?.delimiterMode === "with_delimiter"}
