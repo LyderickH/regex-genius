@@ -325,12 +325,13 @@ export function CheatSheetDialog({
                       id={`cheatsheet-row-${item.symbol}`}
                       className="hover:bg-surface-2/40 transition-colors group"
                     >
-                      {/* Symbole seul sans bouton doublon */}
+                      {/* Symbole cliquable pour ouvrir la mini-boîte */}
                       <td className="py-2.5 px-3 font-mono font-bold align-middle">
                         <button
-                          onClick={() => copySymbol(item.symbol)}
+                          type="button"
+                          onClick={() => handleShowDetail(item.symbol)}
                           className="inline-flex items-center gap-1 font-mono text-xs font-bold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/25 transition cursor-pointer"
-                          title="Cliquer pour copier ce symbole"
+                          title="Cliquer pour ouvrir la boîte d'exemples de ce symbole"
                         >
                           <span>{item.symbol}</span>
                         </button>
@@ -347,12 +348,12 @@ export function CheatSheetDialog({
                             className="shrink-0 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium border bg-surface-2 hover:bg-surface-3 text-muted-foreground hover:text-amber-300 border-border/80"
                           >
                             <Plus className="size-2.5" />
-                            <span>+ d’ex</span>
+                            <span>Exemples</span>
                           </button>
                         </div>
                       </td>
 
-                      {/* Exemple concret avec l'unique bouton + d'ex à droite */}
+                      {/* Exemple concret avec l'unique bouton Exemples à droite */}
                       <td className="py-2.5 px-3 text-muted-foreground text-[11px] hidden sm:table-cell font-mono align-middle">
                         <div className="flex items-center justify-between gap-2">
                           <span className="truncate">{item.example}</span>
@@ -363,7 +364,7 @@ export function CheatSheetDialog({
                             title="Ouvrir la boîte d'exemples de ce symbole"
                           >
                             <Plus className="size-2.5" />
-                            <span>+ d’ex</span>
+                            <span>Exemples</span>
                           </button>
                         </div>
                       </td>

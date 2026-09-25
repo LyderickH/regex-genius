@@ -798,7 +798,7 @@ export function PatternPanel({
                             title="Ouvrir la boîte d'exemples de ce symbole"
                           >
                             <Plus className="size-2.5" />
-                            <span>+ d’ex</span>
+                            <span>Exemples</span>
                           </button>
                         )}
                         {selectedIndex !== null && (

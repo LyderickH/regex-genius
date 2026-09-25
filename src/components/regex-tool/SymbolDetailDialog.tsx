@@ -36,7 +36,7 @@ export function SymbolDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden bg-surface border-border shadow-2xl">
+      <DialogContent className="max-w-lg max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden bg-surface border-border shadow-2xl z-[70]">
         {/* En-tête de la mini-boîte */}
         <DialogHeader className="p-4 border-b border-border/80 bg-surface-2/50">
           <div className="flex items-center justify-between gap-3">
@@ -131,10 +131,10 @@ export function SymbolDetailDialog({
             <button
               type="button"
               onClick={onOpenFullCheatSheet}
-              className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-amber-300 transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-amber-300 transition cursor-pointer font-medium"
             >
               <BookOpen className="size-3.5 text-amber-400" />
-              <span>Voir toute la Cheat Sheet</span>
+              <span>Voir tout le pense-bête complet</span>
             </button>
           ) : (
             <span />

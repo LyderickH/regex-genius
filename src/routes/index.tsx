@@ -141,6 +141,7 @@ function Index() {
   }, []);
 
   const handleOpenSymbolDetail = useCallback((symbol: string) => {
+    setCheatSheetOpen(false);
     setSymbolDetailSymbol(symbol);
   }, []);
   const [formatsDialogOpen, setFormatsDialogOpen] = useState(false);
