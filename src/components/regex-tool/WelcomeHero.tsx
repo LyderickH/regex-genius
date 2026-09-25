@@ -28,6 +28,12 @@ import {
   HoverCardTrigger,
   HoverCardContent,
 } from "@/components/ui/hover-card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { BUSINESS_PRESETS, type BusinessPreset } from "@/lib/datasets/business-presets";
 
 interface WelcomeHeroProps {
@@ -416,7 +422,8 @@ export function WelcomeHero({
                     handleSample1();
                   }
                 }}
-                className="group relative flex flex-col justify-between rounded-xl border border-border/70 bg-surface/60 p-4 transition-all duration-200 hover:-translate-y-1 hover:border-primary/50 hover:bg-surface hover:shadow-md text-left cursor-pointer"
+                title={`${preset.title} (${preset.category}) : ${preset.description}`}
+                className="group relative flex flex-col justify-between rounded-xl border border-border/70 bg-surface/60 p-4 transition-all duration-200 hover:-translate-y-1 hover:border-primary/50 hover:bg-surface hover:shadow-md text-left cursor-pointer min-h-[160px]"
               >
                 <div>
                   <div className="flex items-center justify-between">
@@ -430,9 +437,29 @@ export function WelcomeHero({
                   <h3 className="mt-3 text-xs font-bold text-foreground group-hover:text-primary transition-colors">
                     {preset.title}
                   </h3>
-                  <p className="mt-1 text-[11px] text-muted-foreground leading-normal line-clamp-2">
-                    {preset.description}
-                  </p>
+                  <TooltipProvider delayDuration={120}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <p
+                          className="mt-1 text-[11px] text-muted-foreground leading-normal line-clamp-2 group-hover:line-clamp-none transition-all duration-200"
+                          title={preset.description}
+                        >
+                          {preset.description}
+                        </p>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="top"
+                        sideOffset={8}
+                        className="z-50 max-w-[280px] bg-popover/98 text-foreground border border-border/80 shadow-2xl p-2.5 text-xs rounded-xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150"
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="font-semibold text-primary text-[11px]">{preset.title}</span>
+                          <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[9px] text-muted-foreground">{preset.category}</span>
+                        </div>
+                        <p className="text-foreground/90 text-[11px] leading-relaxed">{preset.description}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
                 <div className="mt-3 flex items-center text-[11px] font-semibold text-primary">
                   <span>Essayer ce cas</span>
