@@ -751,36 +751,68 @@ export function synthesizeStructuredAnchorRule(
       }
 
       for (const k of commonIndices) {
-        // Motif de champ délimité direct
-        // ^(?:[^sep]*sep){k}\s*([^sep]+?)\s*(?:sep|$)
-        const pattern = `^(?:[^${escapedSep}]*${escapedSep}){${k}}\\s*([^${escapedSep}]+?)\\s*(?:${escapedSep}|$)`;
+        const patterns: string[] = [];
 
-        // Vérifier ReDoS
-        const { pattern: sanitizedPat, analysis } = sanitizeAndCheckReDoS(pattern);
-        if (analysis.hasCatastrophicBacktracking) continue;
+        const hasSurroundingSpaces = valid.some(
+          (ex) => ex.input.includes(` ${sep}`) || ex.input.includes(`${sep} `),
+        );
+        const allAlnum = valid.every((e) => /^[A-Za-z0-9_-]+$/.test(e.output));
+        const captureClass = allAlnum ? "[A-Za-z0-9_-]+" : `[^${escapedSep}]+`;
 
-        if (validate(sanitizedPat, transform, valid)) {
-          // Évaluation sur l'échantillon d'inputs
-          const { cov, fit } = coverageFit(
-            sanitizedPat,
-            transform,
-            inputs,
-            new Set(valid.map((e) => shapeOf(e.output))),
-          );
+        if (!hasSurroundingSpaces) {
+          if (k === 0) {
+            patterns.push(`^(${captureClass})`);
+            patterns.push(`^([^${escapedSep}]+)`);
+          } else if (k === 1) {
+            patterns.push(`^[^${escapedSep}]+${escapedSep}(${captureClass})`);
+            patterns.push(`^[^${escapedSep}]*${escapedSep}([^${escapedSep}]+)`);
+            patterns.push(`${escapedSep}(${captureClass})${escapedSep}`);
+            patterns.push(`${escapedSep}([^${escapedSep}]+)${escapedSep}`);
+          } else {
+            patterns.push(`^(?:[^${escapedSep}]*${escapedSep}){${k}}(${captureClass})`);
+            patterns.push(`^(?:[^${escapedSep}]*${escapedSep}){${k}}([^${escapedSep}]+)`);
+          }
+        }
 
-          // Score MDL (Minimum Description Length) :
-          // + points pour couverture et fit
-          // - coût proportionnel à la longueur du pattern
-          // + bonus pour simplicité structurelle
-          const mdlScore =
-            cov * 30 +
-            fit * 20 -
-            sanitizedPat.length * 0.1 +
-            (sep === "|" || sep === ";" ? 15 : 5);
+        // Cas avec espaces (ex: format " | " du FEC comptable)
+        if (k === 0) {
+          patterns.push(`^\\s*([^${escapedSep}]+?)\\s*(?:${escapedSep}|$)`);
+        } else if (k === 1) {
+          patterns.push(`^[^${escapedSep}]*${escapedSep}\\s*([^${escapedSep}]+?)\\s*(?:${escapedSep}|$)`);
+        } else {
+          patterns.push(`^(?:[^${escapedSep}]*${escapedSep}){${k}}\\s*([^${escapedSep}]+?)\\s*(?:${escapedSep}|$)`);
+        }
 
-          if (mdlScore > bestScore) {
-            bestScore = mdlScore;
-            bestRule = { source: sanitizedPat, flags: "", transform };
+        for (const pattern of patterns) {
+          // Vérifier ReDoS
+          const { pattern: sanitizedPat, analysis } = sanitizeAndCheckReDoS(pattern);
+          if (analysis.hasCatastrophicBacktracking) continue;
+
+          if (validate(sanitizedPat, transform, valid)) {
+            // Évaluation sur l'échantillon d'inputs
+            const { cov, fit } = coverageFit(
+              sanitizedPat,
+              transform,
+              inputs,
+              new Set(valid.map((e) => shapeOf(e.output))),
+            );
+
+            // Score MDL (Minimum Description Length) :
+            // + points pour couverture et fit
+            // - pénalité pour longueur et verbiage inutile
+            // + bonus pour concision et lisibilité humaine
+            const brevityBonus = Math.max(0, 40 - sanitizedPat.length) * 0.6;
+            const mdlScore =
+              cov * 30 +
+              fit * 20 -
+              sanitizedPat.length * 0.2 +
+              brevityBonus +
+              (sep === "|" || sep === ";" ? 15 : 5);
+
+            if (mdlScore > bestScore) {
+              bestScore = mdlScore;
+              bestRule = { source: sanitizedPat, flags: "", transform };
+            }
           }
         }
       }
@@ -1854,13 +1886,19 @@ export function synthesize(inputs: string[], expected: (string | null)[]): Synth
     const structRes = applyRule(structural, synthInputs);
     const structOk = explains(structural, examples);
     if (structOk >= examples.length) {
-      // Si la règle structurelle explique 100% des exemples, vérifier si synthesizeRule fait mieux
+      // Si la règle structurelle explique 100% des exemples, vérifier si synthesizeRule propose une formulation plus simple
       const single = synthesizeRule(examples, synthInputs);
       if (!single || explains(single, examples) < examples.length) {
         return finalize(structRes);
       }
       const singleRes = applyRule(single, synthInputs);
-      if (structRes.matched >= singleRes.matched || structural.source.startsWith("^")) {
+      // Si la règle unifiée (single) couvre autant de lignes que la règle délimitée, et est plus simple ou concise :
+      if (singleRes.matched >= structRes.matched) {
+        if (single.source.length <= structural.source.length + 5) {
+          return finalize(singleRes);
+        }
+      }
+      if (structRes.matched >= singleRes.matched) {
         return finalize(structRes);
       }
     }
