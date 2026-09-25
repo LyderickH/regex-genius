@@ -37,6 +37,7 @@ import { LLMControlDialog } from "@/components/regex-tool/LLMControlDialog";
 import { ExternalPromptDialog } from "@/components/regex-tool/ExternalPromptDialog";
 import { ExportOptionsDialog } from "@/components/regex-tool/ExportOptionsDialog";
 import { CheatSheetDialog } from "@/components/regex-tool/CheatSheetDialog";
+import { SupportedFormatsDialog } from "@/components/regex-tool/SupportedFormatsDialog";
 import { FileLoadingModal, type FileLoadingState } from "@/components/regex-tool/FileLoadingModal";
 import { localLLM } from "@/lib/llm/webllm-service";
 import { runSynthesisPipeline } from "@/lib/llm/pipeline";
@@ -129,6 +130,7 @@ function Index() {
   const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [cheatSheetOpen, setCheatSheetOpen] = useState(false);
+  const [formatsDialogOpen, setFormatsDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<"csv" | "xlsx">("csv");
   const fullSourceRef = useRef<{
     file?: File;
@@ -1558,7 +1560,19 @@ function detectBestSourceCol(matrix: Matrix): number {
             title="Ouvrir le pense-bête condensé pour comprendre et débugger 95% des regex"
           >
             <BookOpen className="size-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
-            <span>Pense-bête (Cheat Sheet)</span>
+            <span className="hidden sm:inline">Pense-bête (Cheat Sheet)</span>
+            <span className="sm:hidden">Pense-bête</span>
+          </button>
+
+          {/* Onglet / Bouton Formats & types attendus */}
+          <button
+            type="button"
+            onClick={() => setFormatsDialogOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/35 bg-gradient-to-r from-cyan-500/15 via-cyan-500/10 to-cyan-500/5 hover:border-cyan-400 hover:bg-cyan-500/20 px-3 py-1 text-xs font-semibold text-cyan-300 transition cursor-pointer shadow-xs group"
+            title="Explications des types de fichiers (.csv, .xlsx, .txt, .log) et formats attendus"
+          >
+            <FileSpreadsheet className="size-3.5 text-cyan-400 group-hover:scale-110 transition-transform" />
+            <span>Formats attendus</span>
           </button>
 
           {/* Lien Portfolio */}
@@ -1600,6 +1614,7 @@ function detectBestSourceCol(matrix: Matrix): number {
             }}
             onStartBlank={startBlank}
             onOpenCheatSheet={() => setCheatSheetOpen(true)}
+            onOpenFormatsGuide={() => setFormatsDialogOpen(true)}
             isOffline={isOffline}
             canInstall={canInstall}
             isInstalled={isInstalled}
@@ -1821,6 +1836,7 @@ function detectBestSourceCol(matrix: Matrix): number {
 
       <FileLoadingModal progress={fileLoading} />
       <CheatSheetDialog open={cheatSheetOpen} onOpenChange={setCheatSheetOpen} />
+      <SupportedFormatsDialog open={formatsDialogOpen} onOpenChange={setFormatsDialogOpen} />
 
       {headerAsk && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6 animate-in fade-in duration-150">

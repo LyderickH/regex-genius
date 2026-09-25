@@ -39,6 +39,7 @@ interface WelcomeHeroProps {
   onOpenPaste: (initialMode?: "with_delimiter" | "without_delimiter") => void;
   onStartBlank: () => void;
   onOpenCheatSheet?: () => void;
+  onOpenFormatsGuide?: () => void;
   isOffline?: boolean;
   canInstall?: boolean;
   isInstalled?: boolean;
@@ -54,6 +55,7 @@ export function WelcomeHero({
   onOpenPaste,
   onStartBlank,
   onOpenCheatSheet,
+  onOpenFormatsGuide,
   isOffline = false,
   canInstall = false,
   isInstalled = false,
@@ -192,6 +194,22 @@ export function WelcomeHero({
               </span>
             </button>
           )}
+
+          {/* Bouton Formats & Types attendus */}
+          {onOpenFormatsGuide && (
+            <button
+              type="button"
+              onClick={onOpenFormatsGuide}
+              className="group inline-flex items-center gap-2 rounded-full border border-cyan-500/35 bg-gradient-to-r from-cyan-500/15 to-cyan-500/5 px-3.5 py-1 text-xs font-semibold text-cyan-300 shadow-xs backdrop-blur-sm transition-all hover:border-cyan-400 hover:bg-cyan-500/25 cursor-pointer"
+              title="Explications des types de fichiers (.csv, .xlsx, .txt, .log) et formats attendus"
+            >
+              <FileSpreadsheet className="size-3.5 text-cyan-400 transition-transform group-hover:scale-110" />
+              <span>Formats & types attendus</span>
+              <span className="rounded-full bg-cyan-500/20 px-2 py-0.5 font-mono text-[10px] text-cyan-200">
+                .csv · .xlsx · .txt
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Sous-titre */}
@@ -207,7 +225,7 @@ export function WelcomeHero({
           <label className="group relative flex cursor-pointer flex-col justify-between rounded-2xl border border-primary/30 bg-surface/90 p-6 shadow-md transition-all duration-200 hover:-translate-y-1 hover:border-primary hover:bg-surface hover:shadow-primary/10">
             <input
               type="file"
-              accept=".txt,.csv,.tsv,.xlsx,.xls"
+              accept=".txt,.csv,.tsv,.xlsx,.xls,.log"
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
@@ -221,8 +239,39 @@ export function WelcomeHero({
               <h2 className="mt-4 text-base font-bold text-foreground">Importer vos données</h2>
               <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
                 Glissez-déposez ou parcourez un fichier <strong>.xlsx</strong>, <strong>.csv</strong>,{" "}
-                <strong>.tsv</strong> ou <strong>.txt</strong> (jusqu'à 1M+ de lignes).
+                <strong>.tsv</strong>, <strong>.txt</strong> ou <strong>.log</strong> (jusqu'à 1M+ de lignes).
               </p>
+
+              {onOpenFormatsGuide && (
+                <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground/80 tracking-wider">Formats :</span>
+                  {[".CSV", ".XLSX", ".TXT", ".LOG", "Ctrl+V"].map((ext) => (
+                    <span
+                      key={ext}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onOpenFormatsGuide();
+                      }}
+                      className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 transition cursor-pointer"
+                      title={`Voir les détails et structure pour le format ${ext}`}
+                    >
+                      {ext}
+                    </span>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onOpenFormatsGuide();
+                    }}
+                    className="text-[11px] font-medium text-cyan-400 hover:underline ml-1"
+                  >
+                    Guide détaillé →
+                  </button>
+                </div>
+              )}
             </div>
             <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-3">
               <span className="flex items-center text-xs font-semibold text-primary">
@@ -310,6 +359,36 @@ export function WelcomeHero({
               </button>
             </div>
           </div>
+        </div>
+
+        {/* Encart explicatif rapide des formats et structure attendue */}
+        <div className="mt-4 flex w-full flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-2xl border border-cyan-500/30 bg-gradient-to-r from-cyan-950/20 via-surface to-surface p-4 text-left shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-cyan-500/15 text-cyan-400 font-bold border border-cyan-500/30">
+              <FileSpreadsheet className="size-5" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-foreground flex items-center gap-2">
+                <span>Structure attendue : 1 colonne Source brute + 1 ou 2 exemples souhaités</span>
+                <span className="rounded bg-emerald-500/20 px-1.5 py-0.2 text-[10px] font-semibold text-emerald-300">
+                  Zéro prise de tête
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+                Importez vos lignes brutes (logs, factures, exports). Remplissez simplement <strong>1 ou 2 exemples</strong> sur la colonne résultat : Regex Genius calcule la formule et génère tout le reste.
+              </p>
+            </div>
+          </div>
+          {onOpenFormatsGuide && (
+            <button
+              type="button"
+              onClick={onOpenFormatsGuide}
+              className="inline-flex items-center gap-1.5 shrink-0 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20 transition cursor-pointer self-stretch sm:self-auto justify-center"
+            >
+              <span>Explication des formats</span>
+              <ArrowRight className="size-3.5" />
+            </button>
+          )}
         </div>
 
         {/* Séparateur & En-tête des modèles métiers */}

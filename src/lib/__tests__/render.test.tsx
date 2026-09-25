@@ -3,6 +3,7 @@ import React from "react";
 import { WelcomeHero } from "../../components/regex-tool/WelcomeHero";
 import { DataGrid } from "../../components/regex-tool/DataGrid";
 import { PatternPanel } from "../../components/regex-tool/PatternPanel";
+import { SupportedFormatsDialog } from "../../components/regex-tool/SupportedFormatsDialog";
 import { renderToString } from "react-dom/server";
 
 describe("Component SSR render", () => {
@@ -12,9 +13,20 @@ describe("Component SSR render", () => {
         onImportFile: () => {},
         onOpenPaste: () => {},
         onStartBlank: () => {},
+        onOpenFormatsGuide: () => {},
       })
     );
     console.log("WelcomeHero length:", html.length);
+  });
+
+  it("renders SupportedFormatsDialog", () => {
+    const html = renderToString(
+      React.createElement(SupportedFormatsDialog, {
+        open: true,
+        onOpenChange: () => {},
+      })
+    );
+    console.log("SupportedFormatsDialog length:", html.length);
   });
 
   it("renders DataGrid", () => {
