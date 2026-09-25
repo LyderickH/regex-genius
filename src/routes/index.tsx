@@ -24,6 +24,7 @@ import {
   Globe,
   BookOpen,
   Split,
+  X,
 } from "lucide-react";
 import { usePwa } from "@/hooks/usePwa";
 import { Toaster } from "@/components/ui/sonner";
@@ -155,6 +156,21 @@ function Index() {
     document.addEventListener("mousedown", handleOutsideClick);
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, [importDropdownOpen, exportDropdownOpen]);
+
+  // Fermer les modales avec la touche Échap
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (headerAsk) setHeaderAsk(null);
+        if (pasteOpen) {
+          setPasteOpen(false);
+          setPasteText("");
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [headerAsk, pasteOpen]);
 
   // --- Statut PWA, Mode Avion et Installation Locale
   const { isOffline, canInstall, isInstalled, installApp } = usePwa();
@@ -1839,15 +1855,32 @@ function detectBestSourceCol(matrix: Matrix): number {
       <SupportedFormatsDialog open={formatsDialogOpen} onOpenChange={setFormatsDialogOpen} />
 
       {headerAsk && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6 animate-in fade-in duration-150">
-          <div className="w-full max-w-xl rounded-xl border border-border bg-surface p-5 shadow-2xl space-y-4">
-            <div>
-              <h3 className="text-sm font-semibold text-foreground">
-                Configuration de l'importation
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Choisissez le mode d'importation et configurez vos colonnes.
-              </p>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6 animate-in fade-in duration-150 backdrop-blur-xs"
+          onClick={() => setHeaderAsk(null)}
+        >
+          <div
+            className="relative w-full max-w-xl rounded-xl border border-border bg-surface p-5 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">
+                  Configuration de l'importation
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Choisissez le mode d'importation et configurez vos colonnes.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHeaderAsk(null)}
+                className="rounded-lg p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground transition cursor-pointer"
+                title="Fermer et retourner (Échap)"
+                aria-label="Fermer"
+              >
+                <X className="size-4" />
+              </button>
             </div>
 
             {/* Sélecteur Avec délimiteur / Sans délimiteur */}
@@ -1943,11 +1976,18 @@ function detectBestSourceCol(matrix: Matrix): number {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-2 border-t border-border">
-                  <span className="text-xs text-muted-foreground">
-                    La 1re ligne est-elle un en-tête ?
-                  </span>
-                  <div className="flex gap-2">
+                <div className="flex items-center justify-between pt-2 border-t border-border gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setHeaderAsk(null)}
+                    className="rounded-md border border-border px-3.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-surface-2 hover:text-foreground transition cursor-pointer"
+                  >
+                    Annuler (Retour)
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground hidden sm:inline">
+                      La 1re ligne est-elle un en-tête ?
+                    </span>
                     <button
                       onClick={() => {
                         const m = headerAsk.matrix;
@@ -1996,11 +2036,18 @@ function detectBestSourceCol(matrix: Matrix): number {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-2 border-t border-border">
-                  <span className="text-xs text-muted-foreground">
-                    La 1re ligne est-elle un en-tête ?
-                  </span>
-                  <div className="flex gap-2">
+                <div className="flex items-center justify-between pt-2 border-t border-border gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setHeaderAsk(null)}
+                    className="rounded-md border border-border px-3.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-surface-2 hover:text-foreground transition cursor-pointer"
+                  >
+                    Annuler (Retour)
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground hidden sm:inline">
+                      La 1re ligne est-elle un en-tête ?
+                    </span>
                     <button
                       onClick={() => {
                         const rawM = headerAsk.rawLinesMatrix ?? headerAsk.matrix.map((r) => [r.join(";")]);
@@ -2032,13 +2079,36 @@ function detectBestSourceCol(matrix: Matrix): number {
       )}
 
       {pasteOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6 animate-in fade-in duration-150">
-          <div className="w-full max-w-2xl rounded-xl border border-border bg-surface p-5 shadow-2xl space-y-4">
-            <div>
-              <h3 className="text-sm font-semibold text-foreground">Coller vos données</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Une ligne par enregistrement. Choisissez si le texte doit être découpé en colonnes ou importé brut.
-              </p>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6 animate-in fade-in duration-150 backdrop-blur-xs"
+          onClick={() => {
+            setPasteOpen(false);
+            setPasteText("");
+          }}
+        >
+          <div
+            className="relative w-full max-w-2xl rounded-xl border border-border bg-surface p-5 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Coller vos données</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Une ligne par enregistrement. Choisissez si le texte doit être découpé en colonnes ou importé brut.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setPasteOpen(false);
+                  setPasteText("");
+                }}
+                className="rounded-lg p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground transition cursor-pointer"
+                title="Fermer et annuler (Échap)"
+                aria-label="Fermer"
+              >
+                <X className="size-4" />
+              </button>
             </div>
 
             {/* Options de délimiteur */}
