@@ -136,6 +136,7 @@ function Index() {
     totalLines: number;
     delimiterMode?: DelimiterMode;
     sourceColIndex?: number;
+    rawLinesMatrix?: Matrix;
   } | null>(null);
   const [isForcedAll, setIsForcedAll] = useState(false);
 
@@ -774,24 +775,24 @@ function detectBestSourceCol(matrix: Matrix): number {
       setFileLoading(null);
       setIsForcedAll(false);
 
-      const activeDelimiterMode = preferredMode ?? parsed.delimiterMode ?? "with_delimiter";
+      const activeDelimiterMode = preferredMode ?? parsed.delimiterMode ?? "without_delimiter";
+
+      fullSourceRef.current = {
+        file,
+        totalLines: parsed.totalLines,
+        delimiterMode: activeDelimiterMode,
+        rawLinesMatrix: parsed.rawLinesMatrix,
+      };
 
       if (parsed.isSampled) {
-        fullSourceRef.current = {
-          file,
-          totalLines: parsed.totalLines,
-          delimiterMode: activeDelimiterMode,
-        };
         toast.info(
           `Échantillon interactif de ${parsed.matrix.length.toLocaleString("fr-FR")} lignes chargé (sur ${parsed.totalLines.toLocaleString("fr-FR")} lignes au total). L'export pourra traiter l'intégralité du fichier.`,
           { duration: 6000 },
         );
-      } else {
-        fullSourceRef.current = null;
       }
 
       if (preferredMode === "without_delimiter") {
-        loadMatrix(parsed.matrix);
+        loadMatrix(parsed.rawLinesMatrix ?? parsed.matrix);
         return;
       }
 
@@ -803,7 +804,7 @@ function detectBestSourceCol(matrix: Matrix): number {
           matrix: parsed.matrix,
           rawLinesMatrix: parsed.rawLinesMatrix,
           defaultSourceIdx: bestCol,
-          mode: "with_delimiter",
+          mode: preferredMode ?? "without_delimiter",
           fileName: file.name,
         });
       } else {
@@ -976,19 +977,18 @@ function detectBestSourceCol(matrix: Matrix): number {
   const pasteBlock = (text: string, options?: ParseOptions) => {
     const parsed = parsePastedDataset(text, 50_000, options);
     setIsForcedAll(false);
-    const activeDelimiterMode = options?.delimiterMode ?? parsed.delimiterMode ?? "with_delimiter";
+    const activeDelimiterMode = options?.delimiterMode ?? parsed.delimiterMode ?? "without_delimiter";
+    fullSourceRef.current = {
+      rawText: text,
+      totalLines: parsed.totalLines,
+      delimiterMode: activeDelimiterMode,
+      rawLinesMatrix: parsed.rawLinesMatrix,
+    };
     if (parsed.isSampled) {
-      fullSourceRef.current = {
-        rawText: text,
-        totalLines: parsed.totalLines,
-        delimiterMode: activeDelimiterMode,
-      };
       toast.info(
         `Échantillon interactif de ${parsed.matrix.length.toLocaleString("fr-FR")} lignes chargé sur ${parsed.totalLines.toLocaleString("fr-FR")} au total.`,
         { duration: 6000 },
       );
-    } else if (rows.length === 0) {
-      fullSourceRef.current = null;
     }
     const matrix = parsed.matrix;
     if (!matrix.length) return;
@@ -1000,7 +1000,7 @@ function detectBestSourceCol(matrix: Matrix): number {
           matrix,
           rawLinesMatrix: parsed.rawLinesMatrix,
           defaultSourceIdx: bestCol,
-          mode: "with_delimiter",
+          mode: "without_delimiter",
         });
         return;
       }
@@ -1195,6 +1195,35 @@ function detectBestSourceCol(matrix: Matrix): number {
     toast.success(
       `✓ ${fullSourceRef.current.totalLines.toLocaleString("fr-FR")} lignes traitées et exportées avec succès !`,
     );
+  };
+
+  /** Bascule instantanément l'affichage vers les lignes brutes (sans délimiteur) */
+  const switchToRawLines = () => {
+    const rawM = fullSourceRef.current?.rawLinesMatrix;
+    if (!rawM || rawM.length === 0) return;
+    if (fullSourceRef.current) fullSourceRef.current.delimiterMode = "without_delimiter";
+    loadMatrix(rawM);
+    toast.success("Passage en lignes brutes (sans délimiteur) ! Saisissez vos exemples dans la colonne Résultat.");
+  };
+
+  /** Supprime les exemples au-delà du 2e pour relancer l'auto-complétion par regex */
+  const keepOnlyTwoExamples = (colId: string) => {
+    setColumns((cols) =>
+      cols.map((c) => {
+        if (c.id !== colId) return c;
+        const nextUser = new Array(c.user.length).fill(null);
+        let kept = 0;
+        for (let i = 0; i < c.user.length && kept < 2; i++) {
+          if (c.user[i] != null && c.user[i] !== "") {
+            nextUser[i] = c.user[i];
+            kept++;
+          }
+        }
+        scheduleSynth(c.id, rows, nextUser);
+        return { ...c, user: nextUser };
+      }),
+    );
+    toast.success("2 exemples conservés ! La regex a été synthétisée et auto-complète le reste du tableau.");
   };
 
   const active = columns.find((c) => c.id === activeId) ?? null;
@@ -1436,6 +1465,20 @@ function detectBestSourceCol(matrix: Matrix): number {
                   </div>
                 )}
               </div>
+
+              {/* Bouton de bascule rapide vers les lignes brutes si importé avec délimiteur */}
+              {fullSourceRef.current?.rawLinesMatrix &&
+                fullSourceRef.current?.delimiterMode === "with_delimiter" && (
+                  <button
+                    type="button"
+                    onClick={switchToRawLines}
+                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/15 px-2.5 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/25 transition shadow-xs"
+                    title="Votre fichier a été découpé par délimiteur. Cliquez ici pour recharger chaque ligne brute complète dans 1 colonne et créer vos regex !"
+                  >
+                    <FileText className="size-3.5 text-amber-400" />
+                    <span>Lignes brutes (sans délimiteur)</span>
+                  </button>
+                )}
 
               <ToolbarButton icon={ClipboardCopy} label="Copier le tableau" onClick={copyTable} />
 
@@ -1732,6 +1775,10 @@ function detectBestSourceCol(matrix: Matrix): number {
                 column={active}
                 rowCount={rows.length}
                 rows={rows}
+                sourceName={sourceName}
+                onSwitchToRawLines={fullSourceRef.current?.rawLinesMatrix ? switchToRawLines : undefined}
+                onKeepOnlyTwoExamples={activeId ? () => keepOnlyTwoExamples(activeId) : undefined}
+                isDelimitedMode={fullSourceRef.current?.delimiterMode === "with_delimiter"}
                 onGoToRow={(row) => {
                   const idx = columns.findIndex((c) => c.id === activeId);
                   if (idx < 0) return;
@@ -1795,6 +1842,30 @@ function detectBestSourceCol(matrix: Matrix): number {
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
+                  onClick={() => setHeaderAsk((prev) => (prev ? { ...prev, mode: "without_delimiter" } : null))}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-lg border p-2.5 text-xs font-medium transition cursor-pointer text-left",
+                    headerAsk.mode === "without_delimiter"
+                      ? "border-amber-500 bg-amber-500/10 text-amber-300 font-semibold ring-1 ring-amber-500"
+                      : "border-border bg-surface-2/40 text-muted-foreground hover:bg-surface-2 hover:text-foreground",
+                  )}
+                >
+                  <FileText className="size-4 shrink-0 text-amber-400" />
+                  <div>
+                    <div className="leading-tight font-semibold flex items-center gap-1.5">
+                      <span>Sans délimiteur</span>
+                      <span className="rounded bg-amber-500/20 px-1 py-0.2 text-[9px] text-amber-300 font-bold uppercase">
+                        Recommandé Regex
+                      </span>
+                    </div>
+                    <div className="text-[10px] font-normal opacity-80 mt-0.5">
+                      Lignes brutes entières dans 1 colonne source
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setHeaderAsk((prev) => (prev ? { ...prev, mode: "with_delimiter" } : null))}
                   className={cn(
                     "flex items-center gap-2.5 rounded-lg border p-2.5 text-xs font-medium transition cursor-pointer text-left",
@@ -1805,28 +1876,9 @@ function detectBestSourceCol(matrix: Matrix): number {
                 >
                   <Split className="size-4 shrink-0 text-primary" />
                   <div>
-                    <div className="leading-tight">Avec délimiteur</div>
+                    <div className="leading-tight font-semibold">Avec délimiteur</div>
                     <div className="text-[10px] font-normal opacity-80 mt-0.5">
-                      {headerAsk.matrix[0]?.length ?? 1} colonnes séparées
-                    </div>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setHeaderAsk((prev) => (prev ? { ...prev, mode: "without_delimiter" } : null))}
-                  className={cn(
-                    "flex items-center gap-2.5 rounded-lg border p-2.5 text-xs font-medium transition cursor-pointer text-left",
-                    headerAsk.mode === "without_delimiter"
-                      ? "border-primary bg-primary/10 text-primary font-semibold ring-1 ring-primary"
-                      : "border-border bg-surface-2/40 text-muted-foreground hover:bg-surface-2 hover:text-foreground",
-                  )}
-                >
-                  <FileText className="size-4 shrink-0 text-amber-500" />
-                  <div>
-                    <div className="leading-tight">Sans délimiteur</div>
-                    <div className="text-[10px] font-normal opacity-80 mt-0.5">
-                      Texte brut (1 seule colonne)
+                      Découpé en {headerAsk.matrix[0]?.length ?? 1} colonnes (Tableur)
                     </div>
                   </div>
                 </button>
@@ -1835,6 +1887,9 @@ function detectBestSourceCol(matrix: Matrix): number {
 
             {headerAsk.mode === "with_delimiter" ? (
               <>
+                <p className="text-[11px] text-amber-400/90 leading-relaxed bg-amber-500/10 border border-amber-500/20 rounded p-2">
+                  ⚠️ <strong>Attention :</strong> en mode « Avec délimiteur », votre fichier est déjà découpé. La 1re colonne ne contiendra que son propre morceau de texte, et non la ligne complète. Pour concevoir des Regex sur vos lignes, préférez le mode <strong>« Sans délimiteur »</strong>.
+                </p>
                 {/* Sélecteur de la colonne source */}
                 <div className="rounded-lg border border-border/80 bg-surface-2/40 p-3 space-y-2">
                   <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">

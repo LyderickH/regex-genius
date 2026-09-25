@@ -681,7 +681,15 @@ export function DataGrid({
                               }
                             }
                           }}
-                          placeholder={col.rule ? "" : "résultat attendu…"}
+                          placeholder={
+                            col.rule
+                              ? ""
+                              : visualRow === 0
+                                ? "1er exemple attendu…"
+                                : visualRow === 1
+                                  ? "(Optionnel) 2e exemple…"
+                                  : "✨ Sera calculé par la Regex…"
+                          }
                           className={cn(
                             "h-full w-full bg-transparent px-2.5 font-mono text-[13px] outline-none placeholder:text-muted-foreground/50 focus:bg-primary/15",
                             isUser ? "font-medium text-primary" : "text-derived",

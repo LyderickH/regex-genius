@@ -66,6 +66,10 @@ export function PatternPanel({
   onCopyTable,
   onUpdateRule,
   onResetRule,
+  sourceName,
+  onSwitchToRawLines,
+  onKeepOnlyTwoExamples,
+  isDelimitedMode,
 }: {
   column: OutputColumn | null;
   rowCount: number;
@@ -79,6 +83,10 @@ export function PatternPanel({
   onCopyTable?: () => void;
   onUpdateRule?: (newRule: Rule) => void;
   onResetRule?: () => void;
+  sourceName?: string;
+  onSwitchToRawLines?: () => void;
+  onKeepOnlyTwoExamples?: () => void;
+  isDelimitedMode?: boolean;
 }) {
   const [dialectId, setDialectId] = useState("excel");
   const [codeLocale, setCodeLocale] = useState<CodeLocale>("fr");
@@ -106,6 +114,24 @@ export function PatternPanel({
   const [hoveredSegment, setHoveredSegment] = useState<Segment | null>(null);
   const isDecryptingRef = useRef(false);
   const lastAnalyzedPatternRef = useRef<string | null>(null);
+
+  const examples = column ? column.user.filter((v) => v != null && v !== "").length : 0;
+
+  // Détecter si les exemples saisis ne figurent pas dans la colonne source (ex: CSV découpé avec délimiteur)
+  const valuesNotInSource = useMemo(() => {
+    if (!column || examples === 0 || rows.length === 0) return false;
+    let notFound = 0;
+    const sample = column.user.filter((v) => v != null && v !== "").slice(0, 20);
+    if (sample.length === 0) return false;
+    for (const val of sample) {
+      if (!rows.some((r) => r.includes(val))) notFound++;
+    }
+    return notFound >= Math.min(sample.length, 2);
+  }, [column, examples, rows]);
+
+  // Détecter si toutes les lignes ont été saisies comme exemples (Cas où tout le CSV a été importé comme résultats)
+  const isAllFilledWithExamples =
+    examples >= 3 && examples >= Math.min(rowCount, 20);
 
   // --- État de modification manuelle de la regex
   const [isEditing, setIsEditing] = useState(false);
@@ -269,7 +295,6 @@ export function PatternPanel({
     );
   }
 
-  const examples = column.user.filter((v) => v != null && v !== "").length;
   const isLLMRule = rule?.origin === "llm";
   const isManualRule = rule?.origin === "manual";
   const hasOriginalAuto = Boolean(rule?.originalAutoRule);
@@ -341,6 +366,48 @@ export function PatternPanel({
 
         {!rule ? (
           <div className="space-y-4 p-4 text-sm text-muted-foreground">
+            {/* Cas où les valeurs n'existent pas dans la source (ex: CSV découpé avec délimiteur par erreur) */}
+            {valuesNotInSource && onSwitchToRawLines && (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3.5 space-y-2.5 text-left animate-in fade-in duration-200">
+                <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
+                  <CircleAlert className="size-4 shrink-0 text-amber-400" />
+                  <span>Pourquoi aucune regex n'est trouvée ?</span>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Vos valeurs attendues ne figurent pas dans la colonne source <strong className="text-foreground">« {sourceName || "Données source"} »</strong>. Votre fichier CSV a très probablement été découpé par délimiteur, ce qui a fragmenté la ligne brute !
+                </p>
+                <button
+                  type="button"
+                  onClick={onSwitchToRawLines}
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-amber-500 px-3 py-1.5 text-xs font-bold text-slate-950 hover:bg-amber-400 transition shadow"
+                >
+                  <FileText className="size-3.5" />
+                  <span>Basculer en lignes brutes complètes (sans délimiteur)</span>
+                </button>
+              </div>
+            )}
+
+            {/* Cas où toutes les lignes sont déjà remplies d'exemples */}
+            {isAllFilledWithExamples && onKeepOnlyTwoExamples && (
+              <div className="rounded-lg border border-primary/40 bg-primary/10 p-3.5 space-y-2 text-left animate-in fade-in duration-200">
+                <div className="flex items-center gap-2 text-xs font-bold text-primary">
+                  <Sparkles className="size-4 shrink-0" />
+                  <span>Toutes vos lignes sont remplies ({examples} exemples) !</span>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Regex Genius n'a besoin que de 1 ou 2 exemples pour déduire la formule. Laissez la machine calculer le reste !
+                </p>
+                <button
+                  type="button"
+                  onClick={onKeepOnlyTwoExamples}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 transition shadow"
+                >
+                  <Sparkles className="size-3.5" />
+                  <span>Ne garder que 2 exemples et auto-compléter</span>
+                </button>
+              </div>
+            )}
+
             <div className="flex items-start gap-2 rounded-md border border-border bg-surface-2 p-3">
               <CircleAlert className="mt-0.5 size-4 shrink-0 text-warn" />
               <div className="space-y-1">
@@ -349,7 +416,7 @@ export function PatternPanel({
                     ? "Saisissez le résultat attendu sur 2 ou 3 lignes : le motif se déduit tout seul."
                     : "Aucune règle algorithmique classique n'explique tous vos exemples."}
                 </p>
-                {examples > 0 && (
+                {examples > 0 && !valuesNotInSource && (
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
                     💡 <strong>Astuce :</strong> Vérifiez que la colonne à gauche marquée <strong>[Source]</strong> contient bien le texte à découper. Si le texte brut se trouve dans une autre colonne, cliquez sur le bouton <span className="font-mono text-primary">⭰</span> sur son en-tête pour la définir comme source.
                   </p>
