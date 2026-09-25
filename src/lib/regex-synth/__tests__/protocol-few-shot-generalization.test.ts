@@ -211,4 +211,87 @@ describe("Protocole d'évaluation : 3 exemples d'apprentissage -> 6 cas de gén�
       expect(res.values[i]).toBe(expectedAll[i]);
     }
   });
+
+  it("Test 6 (Anti-surentraînement / Multilingue EN) : Extraction de devises et décimales anglophones ($ et .)", () => {
+    const rows = [
+      "Invoice 125 $",
+      "Invoice 80 $",
+      "Invoice 1450 $",
+      "Invoice 9 $",
+      "Invoice 12500 $",
+      "Invoice 42.50 $",
+      "Invoice 0 $",
+      "Invoice 880 $",
+      "Invoice 100000 $",
+    ];
+
+    const examples = [
+      "125",
+      "80",
+      "1450",
+      null, null, null, null, null, null,
+    ];
+
+    const expectedAll = [
+      "125",
+      "80",
+      "1450",
+      "9",
+      "12500",
+      "42.50",
+      "0",
+      "880",
+      "100000",
+    ];
+
+    const res = synthesize(rows, examples);
+    console.log("TEST 6 SYNTH (EN $):", res.rule?.source);
+
+    expect(res.rule).toBeDefined();
+    for (let i = 0; i < rows.length; i++) {
+      expect(res.values[i]).toBe(expectedAll[i]);
+    }
+  });
+
+  it("Test 7 (Anti-surentraînement / Multilingue DE) : Concurrence de dates et identifiants en allemand", () => {
+    const rows = [
+      "Bestellung Nr. 458 am 12.01.2026 bearbeitet",
+      "Bestellung Nr. 9012 am 15.01.2026 bearbeitet",
+      "Bestellung Nr. 77 am 18.01.2026 bearbeitet",
+      "Bestellung Nr. 604 am 22.01.2026 bearbeitet",
+      "Bestellung Nr. 12055 am 01.02.2026 bearbeitet",
+      "Bestellung Nr. 3 am 05.02.2026 bearbeitet",
+      "Bestellung Nr. 98112 am 10.02.2026 bearbeitet",
+      "Bestellung Nr. 4401 am 14.02.2026 bearbeitet",
+      "Bestellung Nr. 890 am 28.02.2026 bearbeitet",
+    ];
+
+    const examples = [
+      "458",
+      "9012",
+      "77",
+      null, null, null, null, null, null,
+    ];
+
+    const expectedAll = [
+      "458",
+      "9012",
+      "77",
+      "604",
+      "12055",
+      "3",
+      "98112",
+      "4401",
+      "890",
+    ];
+
+    const res = synthesize(rows, examples);
+    console.log("TEST 7 SYNTH (DE):", res.rule?.source);
+
+    expect(res.rule).toBeDefined();
+    for (let i = 0; i < rows.length; i++) {
+      expect(res.values[i]).toBe(expectedAll[i]);
+    }
+  });
 });
+

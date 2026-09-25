@@ -434,16 +434,17 @@ function scoreOf(cap: string, left: string, right: string): number {
   if (left === "^" || right === "$") s -= 6;
   // les motifs « n-ième champ d'une ligne délimitée » sont très fiables
   if (left.startsWith("^(?:[^")) s -= left.length + 12;
-  // Normalisation pour les nombres avec décimales optionnelles
-  if (cap.includes("(?:[.,]\\d+)?")) {
-    s -= 12;
-    if (/[€$£¥]|CHF|USD|EUR/i.test(right) || /montant|prix|facture/i.test(left)) {
-      s -= 8;
-    }
+  // Normalisation de la complexité syntaxique des groupes non-capturants (?:...) :
+  // En regex, chaque (?:...) ajoute 5+ caractères purement syntaxiques. Neutraliser ce surcoût
+  // permet aux motifs structurés (décimales, séparateurs souples) d'être évalués équitablement.
+  const nonCapCount = (cap.match(/\(\?:/g) || []).length;
+  if (nonCapCount > 0) {
+    s -= nonCapCount * 8;
   }
-  // Normalisation pour NIR
-  if (cap.startsWith("[12]")) {
-    s -= 15;
+
+  // Si le motif gère des décimales optionnelles au contact d'un symbole monétaire international
+  if (cap.includes("(?:[.,]\\d+)?") && /[€$£¥₹₽₩]|CHF|USD|EUR|GBP|CAD|AUD/i.test(right)) {
+    s -= 8;
   }
   return s;
 }
