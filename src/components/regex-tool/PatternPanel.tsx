@@ -305,7 +305,7 @@ export function PatternPanel({
 
   return (
     <>
-      <aside className="flex w-[380px] shrink-0 flex-col overflow-y-auto border-l border-grid-line bg-surface">
+      <aside className="flex w-[380px] shrink-0 flex-col overflow-y-auto border-l border-grid-line bg-surface custom-scrollbar">
         <div className="flex items-center justify-between border-b border-grid-line px-4 py-3">
           <div className="min-w-0">
             <div className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">

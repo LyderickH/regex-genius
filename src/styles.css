@@ -106,24 +106,30 @@
   border-bottom: 1px solid var(--color-grid-line);
 }
 
-/* Scrollbar personnalisée fine (Overlay Scrollbar type VS Code, Notion, Linear) */
+/* Scrollbar personnalisée fine (Overlay Scrollbar type VS Code, Notion, Linear) - globale & par classe */
+*,
+html,
+body,
 .custom-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
 
 /* WebKit (Chrome, Edge, Safari) */
+::-webkit-scrollbar,
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
-  height: 5px;
+  height: 6px;
   background: transparent;
   transition: width 0.2s ease-in-out, height 0.2s ease-in-out;
 }
 
+::-webkit-scrollbar-track,
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
 
+::-webkit-scrollbar-thumb,
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.2);
   border-radius: 9999px;
@@ -133,27 +139,34 @@
 }
 
 /* Effet au survol : la barre s'épaissit légèrement (8 px) et devient plus opaque (rgba(255, 255, 255, 0.4)) */
+*:hover,
 .custom-scrollbar:hover {
   scrollbar-color: rgba(255, 255, 255, 0.4) transparent;
 }
 
-.custom-scrollbar:hover::-webkit-scrollbar {
+.custom-scrollbar:hover::-webkit-scrollbar,
+aside:hover::-webkit-scrollbar,
+main:hover::-webkit-scrollbar,
+div:hover::-webkit-scrollbar,
+::-webkit-scrollbar:hover {
   width: 8px;
   height: 8px;
 }
 
-.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+.custom-scrollbar:hover::-webkit-scrollbar-thumb,
+aside:hover::-webkit-scrollbar-thumb,
+main:hover::-webkit-scrollbar-thumb,
+div:hover::-webkit-scrollbar-thumb,
+::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.4);
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.55);
-}
-
+::-webkit-scrollbar-thumb:active,
 .custom-scrollbar::-webkit-scrollbar-thumb:active {
   background: rgba(255, 255, 255, 0.7);
 }
 
+::-webkit-scrollbar-corner,
 .custom-scrollbar::-webkit-scrollbar-corner {
   background: transparent;
 }
