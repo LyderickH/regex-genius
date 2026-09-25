@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,18 +11,17 @@ import {
   Search,
   Copy,
   Check,
-  Sparkles,
   Layers,
   Clock,
   Compass,
   Code2,
   CheckCircle2,
   Plus,
-  X,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { findSymbolDetail } from "@/lib/regex-synth/symbol-examples";
+import { SymbolDetailDialog } from "./SymbolDetailDialog";
 
 interface CheatSheetItem {
   symbol: string;
@@ -82,7 +81,7 @@ const CHEAT_SHEET_DATA: CheatSheetItem[] = [
     example: "[^0-9] exclut les chiffres",
     category: "classes",
   },
-  // Compléments classes (pour ne rien oublier)
+  // Compléments classes
   {
     symbol: "\\D",
     target: "Tout sauf un chiffre (inverse de \\d)",
@@ -127,7 +126,7 @@ const CHEAT_SHEET_DATA: CheatSheetItem[] = [
     example: "Borne minimale et maximale",
     category: "quantifiers",
   },
-  // Compléments quantificateurs (très utile)
+  // Compléments quantificateurs
   {
     symbol: "+?",
     target: "Au moins 1 fois (paresseux / lazy)",
@@ -205,45 +204,25 @@ const CATEGORIES = [
 export function CheatSheetDialog({
   open,
   onOpenChange,
-  initialSymbol,
+  initialSymbol: _initialSymbol,
+  onOpenSymbolDetail,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialSymbol?: string;
+  onOpenSymbolDetail?: (symbol: string) => void;
 }) {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [copiedSymbol, setCopiedSymbol] = useState<string | null>(null);
-  const [expandedSymbols, setExpandedSymbols] = useState<Set<string>>(new Set());
+  const [localModalSymbol, setLocalModalSymbol] = useState<string | null>(null);
 
-  // Quand la cheat sheet s'ouvre avec un symbole ciblé (ex: clic depuis l'expression)
-  useEffect(() => {
-    if (open && initialSymbol) {
-      const detail = findSymbolDetail(initialSymbol);
-      if (detail) {
-        setActiveCategory(detail.category);
-        setSearch("");
-        setExpandedSymbols(new Set([detail.symbol]));
-        setTimeout(() => {
-          const el = document.getElementById(`cheatsheet-row-${detail.symbol}`);
-          if (el) {
-            el.scrollIntoView({ behavior: "smooth", block: "center" });
-          }
-        }, 180);
-      }
+  const handleShowDetail = (sym: string) => {
+    if (onOpenSymbolDetail) {
+      onOpenSymbolDetail(sym);
+    } else {
+      setLocalModalSymbol(sym);
     }
-  }, [open, initialSymbol]);
-
-  const toggleExpand = (sym: string) => {
-    setExpandedSymbols((prev) => {
-      const next = new Set(prev);
-      if (next.has(sym)) {
-        next.delete(sym);
-      } else {
-        next.add(sym);
-      }
-      return next;
-    });
   };
 
   const filtered = useMemo(() => {
@@ -269,275 +248,178 @@ export function CheatSheetDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden bg-surface border-border">
-        {/* En-tête */}
-        <DialogHeader className="p-4 sm:p-5 border-b border-border/80 bg-surface-2/40">
-          <div className="flex items-center gap-2.5">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400">
-              <BookOpen className="size-5" />
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden bg-surface border-border">
+          {/* En-tête */}
+          <DialogHeader className="p-4 sm:p-5 border-b border-border/80 bg-surface-2/40">
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-9 items-center justify-center rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                <BookOpen className="size-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
+                  <span>Pense-bête Regex condensé (Cheat Sheet)</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded-full">
+                    95 % des cas
+                  </span>
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                  Comprendre, décrypter et débugger les expressions régulières avec des exemples concrets en 1 clic.
+                </DialogDescription>
+              </div>
             </div>
-            <div>
-              <DialogTitle className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
-                <span>Pense-bête Regex condensé (Cheat Sheet)</span>
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded-full">
-                  95 % des cas
-                </span>
-              </DialogTitle>
-              <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                Comprendre, décrypter et débugger les expressions régulières avec des exemples concrets en 1 clic.
-              </DialogDescription>
+
+            {/* Barre de recherche */}
+            <div className="relative mt-3">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Rechercher un symbole (ex: \\d, +, ?, ^, parenthèse, chiffre)..."
+                className="w-full rounded-md border border-border bg-background py-1.5 pl-9 pr-4 text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
             </div>
-          </div>
 
-          {/* Barre de recherche */}
-          <div className="relative mt-3">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Rechercher un symbole (ex: \\d, +, ?, ^, parenthèse, chiffre)..."
-              className="w-full rounded-md border border-border bg-background py-1.5 pl-9 pr-4 text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </div>
+            {/* Onglets des catégories */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pt-2.5 no-scrollbar">
+              {CATEGORIES.map((cat) => {
+                const Icon = cat.icon;
+                const isActive = activeCategory === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setActiveCategory(cat.id)}
+                    className={cn(
+                      "flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition cursor-pointer",
+                      isActive
+                        ? "bg-primary text-primary-foreground shadow-xs font-semibold"
+                        : "text-muted-foreground hover:bg-surface-2 hover:text-foreground",
+                    )}
+                  >
+                    <Icon className="size-3.5" />
+                    <span>{cat.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </DialogHeader>
 
-          {/* Onglets des catégories */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pt-2.5 no-scrollbar">
-            {CATEGORIES.map((cat) => {
-              const Icon = cat.icon;
-              const isActive = activeCategory === cat.id;
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => setActiveCategory(cat.id)}
-                  className={cn(
-                    "flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition cursor-pointer",
-                    isActive
-                      ? "bg-primary text-primary-foreground shadow-xs font-semibold"
-                      : "text-muted-foreground hover:bg-surface-2 hover:text-foreground",
-                  )}
-                >
-                  <Icon className="size-3.5" />
-                  <span>{cat.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </DialogHeader>
-
-        {/* Tableau scrollable des symboles */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-          <div className="rounded-lg border border-border bg-background/80 overflow-hidden shadow-xs">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-border bg-surface-2/60 text-muted-foreground uppercase tracking-wider text-[10px] font-semibold">
-                  <th className="py-2.5 px-3 w-[150px]">Symbole</th>
-                  <th className="py-2.5 px-3">Ce que ça cible / Rôle</th>
-                  <th className="py-2.5 px-3 hidden sm:table-cell">Exemple concret</th>
-                  <th className="py-2.5 px-2 text-right w-[60px]">Copier</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
-                {filtered.map((item, idx) => {
-                  const isExpanded = expandedSymbols.has(item.symbol);
-                  const detail = findSymbolDetail(item.symbol);
-                  return (
-                    <React.Fragment key={idx}>
-                      <tr
-                        id={`cheatsheet-row-${item.symbol}`}
-                        className={cn(
-                          "hover:bg-surface-2/40 transition-colors group",
-                          isExpanded && "bg-surface-2/30",
-                        )}
-                      >
-                        {/* Symbole avec bouton + exemples */}
-                        <td className="py-2.5 px-3 font-mono font-bold align-middle">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <button
-                              onClick={() => copySymbol(item.symbol)}
-                              className="inline-flex items-center gap-1 font-mono text-xs font-bold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/25 transition cursor-pointer"
-                              title="Cliquer pour copier ce symbole"
-                            >
-                              <span>{item.symbol}</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => toggleExpand(item.symbol)}
-                              className={cn(
-                                "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold transition cursor-pointer border",
-                                isExpanded
-                                  ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                                  : "bg-surface-2 hover:bg-surface-3 text-muted-foreground hover:text-foreground border-border/80",
-                              )}
-                              title={isExpanded ? "Fermer les exemples" : "Voir les exemples concrets (+)"}
-                            >
-                              <Plus className={cn("size-2.5 transition-transform duration-200", isExpanded && "rotate-45")} />
-                              <span>{isExpanded ? "Fermer" : "exemples"}</span>
-                            </button>
-                          </div>
-                        </td>
-
-                        {/* Rôle */}
-                        <td className="py-2.5 px-3 text-foreground font-medium align-middle">
-                          <div>{item.target}</div>
-                          <div className="text-[11px] text-muted-foreground sm:hidden mt-0.5 font-mono">
-                            Ex : {item.example}
-                          </div>
-                        </td>
-
-                        {/* Exemple (avec bouton + d'exemples) */}
-                        <td className="py-2.5 px-3 text-muted-foreground text-[11px] hidden sm:table-cell font-mono align-middle">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="truncate">{item.example}</span>
-                            <button
-                              type="button"
-                              onClick={() => toggleExpand(item.symbol)}
-                              className={cn(
-                                "shrink-0 inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium transition cursor-pointer border",
-                                isExpanded
-                                  ? "bg-primary/20 text-primary border-primary/40 font-semibold"
-                                  : "text-muted-foreground hover:text-primary hover:bg-surface-2 border-border/60",
-                              )}
-                              title="Ouvrir la boîte d'exemples détaillés"
-                            >
-                              <Plus className={cn("size-2.5 transition-transform duration-200", isExpanded && "rotate-45")} />
-                              <span>{isExpanded ? "Fermer" : "+ d'exemples"}</span>
-                            </button>
-                          </div>
-                        </td>
-
-                        {/* Bouton copier */}
-                        <td className="py-2.5 px-2 text-right align-middle">
-                          <button
-                            onClick={() => copySymbol(item.symbol)}
-                            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-surface-2 transition cursor-pointer"
-                            title="Copier le symbole"
-                          >
-                            {copiedSymbol === item.symbol ? (
-                              <Check className="size-3.5 text-emerald-400" />
-                            ) : (
-                              <Copy className="size-3.5 opacity-60 group-hover:opacity-100" />
-                            )}
-                          </button>
-                        </td>
-                      </tr>
-
-                      {/* Mini-boîte d'exemples concrets (dépliée via +) */}
-                      {isExpanded && detail && (
-                        <tr className="bg-surface-2/50 border-b border-border">
-                          <td colSpan={4} className="p-3 sm:p-4">
-                            <div className="rounded-lg border border-amber-500/30 bg-surface/95 p-3.5 sm:p-4 space-y-3 shadow-md animate-in fade-in duration-200">
-                              <div className="flex items-center justify-between border-b border-border/60 pb-2">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <code className="font-mono text-xs font-bold text-amber-300 bg-amber-500/15 px-2 py-0.5 rounded border border-amber-500/30">
-                                    {detail.symbol}
-                                  </code>
-                                  <span className="font-bold text-foreground text-xs">{detail.title}</span>
-                                  <span className="text-[10px] uppercase font-semibold text-primary bg-primary/10 border border-primary/25 px-1.5 py-0.5 rounded">
-                                    {detail.categoryLabel}
-                                  </span>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => toggleExpand(item.symbol)}
-                                  className="text-muted-foreground hover:text-foreground text-[11px] flex items-center gap-1 cursor-pointer px-1.5 py-0.5 rounded hover:bg-surface-2 transition"
-                                >
-                                  <X className="size-3.5" />
-                                  <span>Fermer</span>
-                                </button>
-                              </div>
-
-                              <p className="text-xs text-muted-foreground leading-relaxed">
-                                {detail.summary}
-                              </p>
-
-                              <div className="space-y-2">
-                                <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-amber-400">
-                                  <Sparkles className="size-3 text-amber-400" />
-                                  <span>Exemples concrets d'utilisation :</span>
-                                </div>
-                                <div className="grid gap-2 sm:grid-cols-2">
-                                  {detail.detailedExamples.map((ex, exIdx) => (
-                                    <div
-                                      key={exIdx}
-                                      className="rounded-md border border-border/80 bg-surface-2/60 p-2.5 space-y-1.5 text-xs hover:border-amber-500/40 transition-colors shadow-2xs"
-                                    >
-                                      <div className="flex items-center justify-between">
-                                        <code className="font-mono font-bold text-amber-300 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/25 text-xs">
-                                          {ex.pattern}
-                                        </code>
-                                        <button
-                                          onClick={() => copySymbol(ex.pattern)}
-                                          className="text-[10px] text-muted-foreground hover:text-amber-300 flex items-center gap-1 cursor-pointer transition"
-                                          title="Copier ce motif"
-                                        >
-                                          {copiedSymbol === ex.pattern ? (
-                                            <Check className="size-2.5 text-emerald-400" />
-                                          ) : (
-                                            <Copy className="size-2.5" />
-                                          )}
-                                          <span>copier</span>
-                                        </button>
-                                      </div>
-                                      <div className="text-[11px] font-semibold text-foreground">{ex.description}</div>
-                                      {ex.context && (
-                                        <div className="text-[10px] text-muted-foreground italic leading-tight">
-                                          {ex.context}
-                                        </div>
-                                      )}
-                                      <div className="text-[11px] text-emerald-400 flex items-center justify-between pt-1 border-t border-border/50 font-mono">
-                                        <span className="text-muted-foreground text-[10px] font-sans">Trouve :</span>
-                                        <span className="bg-emerald-500/15 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/25 font-bold">
-                                          {ex.found}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-
-                              {detail.tip && (
-                                <div className="text-[11px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded p-2.5 flex items-start gap-2 leading-relaxed">
-                                  <span className="font-bold text-xs shrink-0">💡</span>
-                                  <span>{detail.tip}</span>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-
-                {filtered.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="py-8 text-center text-muted-foreground text-xs">
-                      Aucun symbole regex ne correspond à votre recherche « {search} ».
-                    </td>
+          {/* Tableau scrollable des symboles */}
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+            <div className="rounded-lg border border-border bg-background/80 overflow-hidden shadow-xs">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-border bg-surface-2/60 text-muted-foreground uppercase tracking-wider text-[10px] font-semibold">
+                    <th className="py-2.5 px-3 w-[110px]">Symbole</th>
+                    <th className="py-2.5 px-3">Ce que ça cible / Rôle</th>
+                    <th className="py-2.5 px-3 hidden sm:table-cell">Exemple concret</th>
+                    <th className="py-2.5 px-2 text-right w-[50px]">Copier</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {filtered.map((item, idx) => (
+                    <tr
+                      key={idx}
+                      id={`cheatsheet-row-${item.symbol}`}
+                      className="hover:bg-surface-2/40 transition-colors group"
+                    >
+                      {/* Symbole seul sans bouton doublon */}
+                      <td className="py-2.5 px-3 font-mono font-bold align-middle">
+                        <button
+                          onClick={() => copySymbol(item.symbol)}
+                          className="inline-flex items-center gap-1 font-mono text-xs font-bold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/25 transition cursor-pointer"
+                          title="Cliquer pour copier ce symbole"
+                        >
+                          <span>{item.symbol}</span>
+                        </button>
+                      </td>
 
-          {/* Bloc d'aide mnémotechnique supplémentaire */}
-          <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs space-y-1.5 text-muted-foreground">
-            <div className="flex items-center gap-1.5 font-semibold text-primary">
-              <CheckCircle2 className="size-4" />
-              <span>Règle d'or pour débugger : l'échappement par antislash \</span>
+                      {/* Rôle */}
+                      <td className="py-2.5 px-3 text-foreground font-medium align-middle">
+                        <div>{item.target}</div>
+                        <div className="flex items-center justify-between gap-1 text-[11px] text-muted-foreground sm:hidden mt-1 font-mono">
+                          <span className="truncate">Ex : {item.example}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleShowDetail(item.symbol)}
+                            className="shrink-0 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium border bg-surface-2 hover:bg-surface-3 text-muted-foreground hover:text-amber-300 border-border/80"
+                          >
+                            <Plus className="size-2.5" />
+                            <span>+ d’ex</span>
+                          </button>
+                        </div>
+                      </td>
+
+                      {/* Exemple concret avec l'unique bouton + d'ex à droite */}
+                      <td className="py-2.5 px-3 text-muted-foreground text-[11px] hidden sm:table-cell font-mono align-middle">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate">{item.example}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleShowDetail(item.symbol)}
+                            className="shrink-0 inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium transition cursor-pointer border bg-surface-2 hover:bg-surface-3 text-muted-foreground hover:text-amber-300 border-border/80 shadow-2xs"
+                            title="Ouvrir la boîte d'exemples de ce symbole"
+                          >
+                            <Plus className="size-2.5" />
+                            <span>+ d’ex</span>
+                          </button>
+                        </div>
+                      </td>
+
+                      {/* Bouton copier */}
+                      <td className="py-2.5 px-2 text-right align-middle">
+                        <button
+                          onClick={() => copySymbol(item.symbol)}
+                          className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-surface-2 transition cursor-pointer"
+                          title="Copier le symbole"
+                        >
+                          {copiedSymbol === item.symbol ? (
+                            <Check className="size-3.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="size-3.5 opacity-60 group-hover:opacity-100" />
+                          )}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+
+                  {filtered.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="py-8 text-center text-muted-foreground text-xs">
+                        Aucun symbole regex ne correspond à votre recherche « {search} ».
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-            <p className="text-[11px] leading-relaxed">
-              Les symboles <code className="text-amber-300 font-mono">. * + ? ( ) [ ] {'{ }'} ^ $ | \</code> ont un super-pouvoir en regex.
-              Pour cibler le <strong>vrai caractère littéral</strong> dans votre texte, placez toujours un antislash devant :
-              <code className="text-foreground font-mono ml-1 font-semibold">\.</code> (vrai point),
-              <code className="text-foreground font-mono ml-1 font-semibold">\(</code> (vraie parenthèse),
-              <code className="text-foreground font-mono ml-1 font-semibold">\?</code> (vrai point d'interrogation).
-            </p>
+
+            {/* Bloc d'aide mnémotechnique supplémentaire */}
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs space-y-1.5 text-muted-foreground">
+              <div className="flex items-center gap-1.5 font-semibold text-primary">
+                <CheckCircle2 className="size-4" />
+                <span>Règle d'or pour débugger : l'échappement par antislash \</span>
+              </div>
+              <p className="text-[11px] leading-relaxed">
+                Les symboles <code className="text-amber-300 font-mono">. * + ? ( ) [ ] {'{ }'} ^ $ | \</code> ont un super-pouvoir en regex.
+                Pour cibler le <strong>vrai caractère littéral</strong> dans votre texte, placez toujours un antislash devant :
+                <code className="text-foreground font-mono ml-1 font-semibold">\.</code> (vrai point),
+                <code className="text-foreground font-mono ml-1 font-semibold">\(</code> (vraie parenthèse),
+                <code className="text-foreground font-mono ml-1 font-semibold">\?</code> (vrai point d'interrogation).
+              </p>
+            </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mini-boîte d'exemples autonome (si ouverte directement depuis CheatSheet) */}
+      <SymbolDetailDialog
+        symbol={localModalSymbol}
+        open={Boolean(localModalSymbol)}
+        onOpenChange={(isOpen) => !isOpen && setLocalModalSymbol(null)}
+      />
+    </>
   );
 }

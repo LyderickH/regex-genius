@@ -38,6 +38,7 @@ import { LLMControlDialog } from "@/components/regex-tool/LLMControlDialog";
 import { ExternalPromptDialog } from "@/components/regex-tool/ExternalPromptDialog";
 import { ExportOptionsDialog } from "@/components/regex-tool/ExportOptionsDialog";
 import { CheatSheetDialog } from "@/components/regex-tool/CheatSheetDialog";
+import { SymbolDetailDialog } from "@/components/regex-tool/SymbolDetailDialog";
 import { SupportedFormatsDialog } from "@/components/regex-tool/SupportedFormatsDialog";
 import { FileLoadingModal, type FileLoadingState } from "@/components/regex-tool/FileLoadingModal";
 import { localLLM } from "@/lib/llm/webllm-service";
@@ -132,10 +133,15 @@ function Index() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [cheatSheetOpen, setCheatSheetOpen] = useState(false);
   const [cheatSheetInitialSymbol, setCheatSheetInitialSymbol] = useState<string | undefined>(undefined);
+  const [symbolDetailSymbol, setSymbolDetailSymbol] = useState<string | null>(null);
 
   const handleOpenCheatSheet = useCallback((symbol?: string) => {
     setCheatSheetInitialSymbol(symbol);
     setCheatSheetOpen(true);
+  }, []);
+
+  const handleOpenSymbolDetail = useCallback((symbol: string) => {
+    setSymbolDetailSymbol(symbol);
   }, []);
   const [formatsDialogOpen, setFormatsDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<"csv" | "xlsx">("csv");
@@ -1820,6 +1826,7 @@ function detectBestSourceCol(matrix: Matrix): number {
                 onUpdateRule={(newRule) => activeId && handleUpdateRule(activeId, newRule)}
                 onResetRule={() => activeId && handleResetRule(activeId)}
                 onOpenCheatSheet={handleOpenCheatSheet}
+                onOpenSymbolDetail={handleOpenSymbolDetail}
               />
             </div>
           </div>
@@ -1852,6 +1859,16 @@ function detectBestSourceCol(matrix: Matrix): number {
           if (!isOpen) setCheatSheetInitialSymbol(undefined);
         }}
         initialSymbol={cheatSheetInitialSymbol}
+        onOpenSymbolDetail={handleOpenSymbolDetail}
+      />
+      <SymbolDetailDialog
+        symbol={symbolDetailSymbol}
+        open={Boolean(symbolDetailSymbol)}
+        onOpenChange={(isOpen) => !isOpen && setSymbolDetailSymbol(null)}
+        onOpenFullCheatSheet={() => {
+          setSymbolDetailSymbol(null);
+          setCheatSheetOpen(true);
+        }}
       />
       <SupportedFormatsDialog open={formatsDialogOpen} onOpenChange={setFormatsDialogOpen} />
 

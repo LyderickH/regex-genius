@@ -766,5 +766,22 @@ export function findSymbolDetail(rawText: string): SymbolDetail | undefined {
     return SYMBOL_DETAILS["\\"];
   }
 
-  return undefined;
+  // Texte littéral (repère fixe sans métacaractères)
+  return {
+    symbol: t,
+    title: `Texte littéral « ${t} »`,
+    category: "classes",
+    categoryLabel: "Texte littéral (repère)",
+    summary: `Ce texte sert de repère fixe dans la ligne : il doit être présent mot pour mot pour permettre l'extraction.`,
+    quickExample: `« ${t} » repère exact`,
+    detailedExamples: [
+      {
+        pattern: t,
+        description: `Cherche la séquence exacte de caractères « ${t} »`,
+        context: `Dans votre ligne de données`,
+        found: t,
+      },
+    ],
+    tip: "Si votre texte contient des caractères spéciaux (ex: . [ ] { } ( ) + * ? ^ $ | \\), ils doivent être précédés d'un antislash \\.",
+  };
 }

@@ -69,6 +69,7 @@ export function PatternPanel({
   isDelimitedMode,
   onOpenFormatsGuide,
   onOpenCheatSheet,
+  onOpenSymbolDetail,
 }: {
   column: OutputColumn | null;
   rowCount: number;
@@ -88,6 +89,7 @@ export function PatternPanel({
   isDelimitedMode?: boolean;
   onOpenFormatsGuide?: () => void;
   onOpenCheatSheet?: (symbol?: string) => void;
+  onOpenSymbolDetail?: (symbol: string) => void;
 }) {
   const [dialectId, setDialectId] = useState("excel");
   const [codeLocale, setCodeLocale] = useState<CodeLocale>("fr");
@@ -744,13 +746,15 @@ export function PatternPanel({
                       onMouseEnter={() => setHoveredIndex(i)}
                       onClick={() => {
                         setSelectedIndex(i);
-                        onOpenCheatSheet?.(s.text);
+                        if (onOpenSymbolDetail) onOpenSymbolDetail(s.text);
+                        else onOpenCheatSheet?.(s.text);
                       }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
                           setSelectedIndex(i);
-                          onOpenCheatSheet?.(s.text);
+                          if (onOpenSymbolDetail) onOpenSymbolDetail(s.text);
+                          else onOpenCheatSheet?.(s.text);
                         }
                       }}
                       className={cn(
@@ -769,36 +773,32 @@ export function PatternPanel({
               </div>
 
               {/* Barre dynamique d'explication interactive du token survolé / sélectionné */}
-              <div className="mt-2 rounded-lg border border-border/80 bg-surface-2/40 p-2.5 transition-all text-xs min-h-[58px] flex items-center">
+              <div className="mt-2 rounded-lg border border-border/80 bg-surface-2/40 p-2.5 transition-all text-xs min-h-[64px] flex flex-col justify-center gap-1.5">
                 {activeSegment ? (
-                  <div className="w-full space-y-1.5">
+                  <div className="w-full space-y-1">
+                    {/* Ligne 1 : Symbole + Catégorie + Bouton + d'ex + Désélectionner */}
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <code className="font-mono text-xs font-bold text-amber-300 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30 shrink-0">
                           {activeSegment.text}
                         </code>
-                        <span className="text-[11px] font-semibold text-foreground truncate">
-                          {activeSegment.label}
-                        </span>
-                        {selectedIndex === activeIndex && (
-                          <span className="text-[10px] text-amber-400/80 bg-amber-500/10 px-1 py-0.2 rounded border border-amber-500/20 shrink-0">
-                            figé
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="text-[10px] uppercase tracking-wider font-semibold text-primary bg-primary/10 border border-primary/25 px-1.5 py-0.5 rounded">
+                        <span className="text-[10px] uppercase tracking-wider font-semibold text-primary bg-primary/10 border border-primary/25 px-1.5 py-0.5 rounded truncate">
                           {activeSegment.categoryLabel || activeSegment.kind}
                         </span>
-                        {onOpenCheatSheet && (
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {(onOpenSymbolDetail || onOpenCheatSheet) && (
                           <button
                             type="button"
-                            onClick={() => onOpenCheatSheet(activeSegment.text)}
-                            className="inline-flex items-center gap-1 rounded bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 px-2 py-0.5 text-[10px] font-semibold text-amber-300 transition cursor-pointer"
-                            title="Ouvrir la boîte d'exemples détaillés dans la Cheat Sheet"
+                            onClick={() => {
+                              if (onOpenSymbolDetail) onOpenSymbolDetail(activeSegment.text);
+                              else onOpenCheatSheet?.(activeSegment.text);
+                            }}
+                            className="inline-flex items-center gap-1 rounded bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 px-2 py-0.5 text-[10px] font-semibold text-amber-300 transition cursor-pointer shadow-2xs"
+                            title="Ouvrir la boîte d'exemples de ce symbole"
                           >
                             <Plus className="size-2.5" />
-                            <span>Exemples</span>
+                            <span>+ d’ex</span>
                           </button>
                         )}
                         {selectedIndex !== null && (
@@ -816,9 +816,18 @@ export function PatternPanel({
                         )}
                       </div>
                     </div>
-                    <p className="text-[11px] text-muted-foreground leading-snug">
-                      {activeSegment.detail || activeSegment.label}
-                    </p>
+
+                    {/* Ligne 2 : Libellé humain */}
+                    <div className="text-[11px] font-semibold text-foreground">
+                      {activeSegment.label}
+                    </div>
+
+                    {/* Ligne 3 : Explication détaillée */}
+                    {activeSegment.detail && activeSegment.detail !== activeSegment.label && (
+                      <p className="text-[11px] text-muted-foreground leading-snug">
+                        {activeSegment.detail}
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <p className="text-[11px] text-muted-foreground/75 italic flex items-center gap-1.5">
