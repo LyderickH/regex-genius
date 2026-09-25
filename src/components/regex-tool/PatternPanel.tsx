@@ -34,12 +34,6 @@ import { describeTransform, applyRule, type Rule } from "@/lib/regex-synth/engin
 import type { OutputColumn } from "./types";
 import { LLMControlDialog } from "./LLMControlDialog";
 import { ExternalPromptDialog } from "./ExternalPromptDialog";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import type { ModelProgressReport } from "@/lib/llm/types";
 import {
   localLLM,
@@ -115,7 +109,8 @@ export function PatternPanel({
   const [llmDecrypted, setLlmDecrypted] = useState<DecryptedPatternResult | null>(null);
   const [isDecrypting, setIsDecrypting] = useState(false);
   const [showUnexpectedOptions, setShowUnexpectedOptions] = useState(false);
-  const [hoveredSegment, setHoveredSegment] = useState<Segment | null>(null);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const isDecryptingRef = useRef(false);
   const lastAnalyzedPatternRef = useRef<string | null>(null);
 
@@ -247,6 +242,8 @@ export function PatternPanel({
 
   useEffect(() => {
     setShowUnexpectedOptions(false);
+    setHoveredIndex(null);
+    setSelectedIndex(null);
     if (!currentRuleSource) {
       setLlmDecrypted(null);
       lastAnalyzedPatternRef.current = null;
@@ -302,6 +299,8 @@ export function PatternPanel({
   const isLLMRule = rule?.origin === "llm";
   const isManualRule = rule?.origin === "manual";
   const hasOriginalAuto = Boolean(rule?.originalAutoRule);
+  const activeIndex = hoveredIndex ?? selectedIndex;
+  const activeSegment = activeIndex !== null && segments[activeIndex] ? segments[activeIndex] : null;
 
   return (
     <>
@@ -728,74 +727,85 @@ export function PatternPanel({
                   </div>
                 </div>
               )}
-              <TooltipProvider delayDuration={80}>
-                <div className="break-all rounded-md border border-border bg-background p-3 font-mono text-[13px] leading-relaxed">
-                  {segments.map((s, i) => (
-                    <Tooltip key={i}>
-                      <TooltipTrigger asChild>
-                        <span
-                          onMouseEnter={() => setHoveredSegment(s)}
-                          onMouseLeave={() => setHoveredSegment((curr) => (curr === s ? null : curr))}
-                          onClick={() => setHoveredSegment(s)}
-                          className={cn(
-                            TOK_COLOR[s.kind],
-                            "cursor-help transition-all duration-150 rounded px-0.5 inline-block select-none",
-                            hoveredSegment === s
-                              ? "bg-amber-400/25 ring-1 ring-amber-400/60 shadow-xs font-bold scale-105"
-                              : "hover:bg-surface-2 hover:ring-1 hover:ring-border",
-                          )}
-                        >
-                          {s.text}
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent
-                        side="top"
-                        sideOffset={6}
-                        className="max-w-xs p-2.5 text-xs bg-surface border border-border text-foreground shadow-xl rounded-lg space-y-1"
-                      >
-                        <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-1">
-                          <code className="font-mono text-xs font-bold text-amber-300 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/25">
-                            {s.text}
-                          </code>
-                          <span className="text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 px-1.5 py-0.5 rounded">
-                            {s.categoryLabel || s.kind}
-                          </span>
-                        </div>
-                        <div className="font-semibold text-foreground text-xs">{s.label}</div>
-                        {s.detail && (
-                          <div className="text-[11px] text-muted-foreground leading-snug">{s.detail}</div>
-                        )}
-                      </TooltipContent>
-                    </Tooltip>
-                  ))}
-                </div>
-              </TooltipProvider>
+              <div
+                className="break-all rounded-md border border-border bg-background p-3 font-mono text-[13px] leading-relaxed select-none"
+                onMouseLeave={() => setHoveredIndex(null)}
+              >
+                {segments.map((s, i) => {
+                  const isActive = activeIndex === i;
+                  return (
+                    <span
+                      key={i}
+                      role="button"
+                      tabIndex={0}
+                      onMouseEnter={() => setHoveredIndex(i)}
+                      onClick={() => setSelectedIndex((curr) => (curr === i ? null : i))}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelectedIndex((curr) => (curr === i ? null : i));
+                        }
+                      }}
+                      className={cn(
+                        TOK_COLOR[s.kind],
+                        "cursor-pointer transition-all duration-150 rounded px-0.5 inline-block select-none",
+                        isActive
+                          ? "bg-amber-400/25 ring-1 ring-amber-400/70 shadow-xs font-bold scale-105"
+                          : "hover:bg-surface-2 hover:ring-1 hover:ring-border",
+                      )}
+                      title={`Cliquez pour figer l'explication : ${s.label}`}
+                    >
+                      {s.text}
+                    </span>
+                  );
+                })}
+              </div>
 
-              {/* Barre dynamique d'explication interactive du token survolé */}
-              <div className="mt-2 rounded-lg border border-border/80 bg-surface-2/40 p-2.5 transition-all text-xs min-h-[56px] flex items-center">
-                {hoveredSegment ? (
+              {/* Barre dynamique d'explication interactive du token survolé / sélectionné */}
+              <div className="mt-2 rounded-lg border border-border/80 bg-surface-2/40 p-2.5 transition-all text-xs min-h-[58px] flex items-center">
+                {activeSegment ? (
                   <div className="w-full space-y-1">
                     <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5">
-                        <code className="font-mono text-xs font-bold text-amber-300 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30">
-                          {hoveredSegment.text}
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <code className="font-mono text-xs font-bold text-amber-300 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30 shrink-0">
+                          {activeSegment.text}
                         </code>
-                        <span className="text-[11px] font-semibold text-foreground">
-                          {hoveredSegment.label}
+                        <span className="text-[11px] font-semibold text-foreground truncate">
+                          {activeSegment.label}
                         </span>
+                        {selectedIndex === activeIndex && (
+                          <span className="text-[10px] text-amber-400/80 bg-amber-500/10 px-1 py-0.2 rounded border border-amber-500/20 shrink-0">
+                            figé
+                          </span>
+                        )}
                       </div>
-                      <span className="shrink-0 text-[10px] uppercase tracking-wider font-semibold text-primary bg-primary/10 border border-primary/25 px-1.5 py-0.5 rounded">
-                        {hoveredSegment.categoryLabel || hoveredSegment.kind}
-                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-[10px] uppercase tracking-wider font-semibold text-primary bg-primary/10 border border-primary/25 px-1.5 py-0.5 rounded">
+                          {activeSegment.categoryLabel || activeSegment.kind}
+                        </span>
+                        {selectedIndex !== null && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedIndex(null);
+                              setHoveredIndex(null);
+                            }}
+                            className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-surface-2 transition cursor-pointer"
+                            title="Désélectionner"
+                          >
+                            <X className="size-3" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <p className="text-[11px] text-muted-foreground leading-snug">
-                      {hoveredSegment.detail || hoveredSegment.label}
+                      {activeSegment.detail || activeSegment.label}
                     </p>
                   </div>
                 ) : (
                   <p className="text-[11px] text-muted-foreground/75 italic flex items-center gap-1.5">
                     <Info className="size-3.5 text-primary/70 shrink-0" />
-                    <span>Survolez un élément de l'expression ci-dessus pour comprendre son rôle dans la regex.</span>
+                    <span>Survolez ou cliquez sur un élément de l'expression ci-dessus pour comprendre son rôle dans la regex.</span>
                   </p>
                 )}
               </div>
