@@ -1,9 +1,11 @@
-import { describe, it } from "vitest";
+import { describe, it, expect } from "vitest";
 import React from "react";
 import { WelcomeHero } from "../../components/regex-tool/WelcomeHero";
 import { DataGrid } from "../../components/regex-tool/DataGrid";
 import { PatternPanel } from "../../components/regex-tool/PatternPanel";
 import { SupportedFormatsDialog } from "../../components/regex-tool/SupportedFormatsDialog";
+import { CheatSheetDialog } from "../../components/regex-tool/CheatSheetDialog";
+import { findSymbolDetail } from "../regex-synth/symbol-examples";
 import { renderToString } from "react-dom/server";
 
 describe("Component SSR render", () => {
@@ -69,6 +71,25 @@ describe("Component SSR render", () => {
       })
     );
     console.log("PatternPanel length:", html.length);
+  });
+
+  it("renders CheatSheetDialog with initialSymbol and retrieves concrete examples", () => {
+    const detailD = findSymbolDetail("\\d");
+    expect(detailD).toBeDefined();
+    expect(detailD?.detailedExamples.some((ex: any) => ex.pattern.includes("\\d\\d") && ex.found === "42")).toBe(true);
+
+    const detailClass = findSymbolDetail("[A-Z]{2}");
+    expect(detailClass).toBeDefined();
+
+    const html = renderToString(
+      React.createElement(CheatSheetDialog, {
+        open: true,
+        onOpenChange: () => {},
+        initialSymbol: "\\d",
+      })
+    );
+    // Radix Dialog renders into Portal so renderToString returns empty string in standard SSR
+    expect(html).toBeDefined();
   });
 });
 

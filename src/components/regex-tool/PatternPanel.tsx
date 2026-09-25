@@ -22,6 +22,7 @@ import {
   Pencil,
   RotateCcw,
   X,
+  Plus,
   FileSpreadsheet,
   FileText,
 } from "lucide-react";
@@ -67,6 +68,7 @@ export function PatternPanel({
   onKeepOnlyTwoExamples,
   isDelimitedMode,
   onOpenFormatsGuide,
+  onOpenCheatSheet,
 }: {
   column: OutputColumn | null;
   rowCount: number;
@@ -85,6 +87,7 @@ export function PatternPanel({
   onKeepOnlyTwoExamples?: () => void;
   isDelimitedMode?: boolean;
   onOpenFormatsGuide?: () => void;
+  onOpenCheatSheet?: (symbol?: string) => void;
 }) {
   const [dialectId, setDialectId] = useState("excel");
   const [codeLocale, setCodeLocale] = useState<CodeLocale>("fr");
@@ -739,11 +742,15 @@ export function PatternPanel({
                       role="button"
                       tabIndex={0}
                       onMouseEnter={() => setHoveredIndex(i)}
-                      onClick={() => setSelectedIndex((curr) => (curr === i ? null : i))}
+                      onClick={() => {
+                        setSelectedIndex(i);
+                        onOpenCheatSheet?.(s.text);
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
-                          setSelectedIndex((curr) => (curr === i ? null : i));
+                          setSelectedIndex(i);
+                          onOpenCheatSheet?.(s.text);
                         }
                       }}
                       className={cn(
@@ -753,7 +760,7 @@ export function PatternPanel({
                           ? "bg-amber-400/25 ring-1 ring-amber-400/70 shadow-xs font-bold scale-105"
                           : "hover:bg-surface-2 hover:ring-1 hover:ring-border",
                       )}
-                      title={`Cliquez pour figer l'explication : ${s.label}`}
+                      title={`Cliquez pour voir les exemples concrets de ce symbole : ${s.text}`}
                     >
                       {s.text}
                     </span>
@@ -764,7 +771,7 @@ export function PatternPanel({
               {/* Barre dynamique d'explication interactive du token survolé / sélectionné */}
               <div className="mt-2 rounded-lg border border-border/80 bg-surface-2/40 p-2.5 transition-all text-xs min-h-[58px] flex items-center">
                 {activeSegment ? (
-                  <div className="w-full space-y-1">
+                  <div className="w-full space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <code className="font-mono text-xs font-bold text-amber-300 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30 shrink-0">
@@ -783,6 +790,17 @@ export function PatternPanel({
                         <span className="text-[10px] uppercase tracking-wider font-semibold text-primary bg-primary/10 border border-primary/25 px-1.5 py-0.5 rounded">
                           {activeSegment.categoryLabel || activeSegment.kind}
                         </span>
+                        {onOpenCheatSheet && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenCheatSheet(activeSegment.text)}
+                            className="inline-flex items-center gap-1 rounded bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 px-2 py-0.5 text-[10px] font-semibold text-amber-300 transition cursor-pointer"
+                            title="Ouvrir la boîte d'exemples détaillés dans la Cheat Sheet"
+                          >
+                            <Plus className="size-2.5" />
+                            <span>Exemples</span>
+                          </button>
+                        )}
                         {selectedIndex !== null && (
                           <button
                             type="button"
@@ -805,7 +823,7 @@ export function PatternPanel({
                 ) : (
                   <p className="text-[11px] text-muted-foreground/75 italic flex items-center gap-1.5">
                     <Info className="size-3.5 text-primary/70 shrink-0" />
-                    <span>Survolez ou cliquez sur un élément de l'expression ci-dessus pour comprendre son rôle dans la regex.</span>
+                    <span>Survolez un élément pour voir son rôle, ou cliquez dessus pour ouvrir sa boîte d'exemples concrets.</span>
                   </p>
                 )}
               </div>

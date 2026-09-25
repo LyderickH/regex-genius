@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -17,9 +17,12 @@ import {
   Compass,
   Code2,
   CheckCircle2,
+  Plus,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { findSymbolDetail } from "@/lib/regex-synth/symbol-examples";
 
 interface CheatSheetItem {
   symbol: string;
@@ -202,13 +205,46 @@ const CATEGORIES = [
 export function CheatSheetDialog({
   open,
   onOpenChange,
+  initialSymbol,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialSymbol?: string;
 }) {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [copiedSymbol, setCopiedSymbol] = useState<string | null>(null);
+  const [expandedSymbols, setExpandedSymbols] = useState<Set<string>>(new Set());
+
+  // Quand la cheat sheet s'ouvre avec un symbole ciblé (ex: clic depuis l'expression)
+  useEffect(() => {
+    if (open && initialSymbol) {
+      const detail = findSymbolDetail(initialSymbol);
+      if (detail) {
+        setActiveCategory(detail.category);
+        setSearch("");
+        setExpandedSymbols(new Set([detail.symbol]));
+        setTimeout(() => {
+          const el = document.getElementById(`cheatsheet-row-${detail.symbol}`);
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }, 180);
+      }
+    }
+  }, [open, initialSymbol]);
+
+  const toggleExpand = (sym: string) => {
+    setExpandedSymbols((prev) => {
+      const next = new Set(prev);
+      if (next.has(sym)) {
+        next.delete(sym);
+      } else {
+        next.add(sym);
+      }
+      return next;
+    });
+  };
 
   const filtered = useMemo(() => {
     return CHEAT_SHEET_DATA.filter((item) => {
@@ -249,7 +285,7 @@ export function CheatSheetDialog({
                 </span>
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                Comprendre, décrypter et débugger les expressions régulières sans se perdre dans le jargon.
+                Comprendre, décrypter et débugger les expressions régulières avec des exemples concrets en 1 clic.
               </DialogDescription>
             </div>
           </div>
@@ -296,58 +332,184 @@ export function CheatSheetDialog({
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-border bg-surface-2/60 text-muted-foreground uppercase tracking-wider text-[10px] font-semibold">
-                  <th className="py-2.5 px-3 w-[120px]">Symbole</th>
+                  <th className="py-2.5 px-3 w-[150px]">Symbole</th>
                   <th className="py-2.5 px-3">Ce que ça cible / Rôle</th>
                   <th className="py-2.5 px-3 hidden sm:table-cell">Exemple concret</th>
                   <th className="py-2.5 px-2 text-right w-[60px]">Copier</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
-                {filtered.map((item, idx) => (
-                  <tr
-                    key={idx}
-                    className="hover:bg-surface-2/40 transition-colors group"
-                  >
-                    {/* Symbole */}
-                    <td className="py-2 px-3 font-mono font-bold">
-                      <button
-                        onClick={() => copySymbol(item.symbol)}
-                        className="inline-flex items-center gap-1 font-mono text-xs font-bold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/25 transition cursor-pointer"
-                        title="Cliquer pour copier ce symbole"
-                      >
-                        <span>{item.symbol}</span>
-                      </button>
-                    </td>
-
-                    {/* Rôle */}
-                    <td className="py-2 px-3 text-foreground font-medium">
-                      <div>{item.target}</div>
-                      <div className="text-[11px] text-muted-foreground sm:hidden mt-0.5">
-                        Ex : {item.example}
-                      </div>
-                    </td>
-
-                    {/* Exemple (visible sur écran moyen et large) */}
-                    <td className="py-2 px-3 text-muted-foreground text-[11px] hidden sm:table-cell font-mono">
-                      {item.example}
-                    </td>
-
-                    {/* Bouton copier */}
-                    <td className="py-2 px-2 text-right">
-                      <button
-                        onClick={() => copySymbol(item.symbol)}
-                        className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-surface-2 transition cursor-pointer"
-                        title="Copier le symbole"
-                      >
-                        {copiedSymbol === item.symbol ? (
-                          <Check className="size-3.5 text-emerald-400" />
-                        ) : (
-                          <Copy className="size-3.5 opacity-60 group-hover:opacity-100" />
+                {filtered.map((item, idx) => {
+                  const isExpanded = expandedSymbols.has(item.symbol);
+                  const detail = findSymbolDetail(item.symbol);
+                  return (
+                    <React.Fragment key={idx}>
+                      <tr
+                        id={`cheatsheet-row-${item.symbol}`}
+                        className={cn(
+                          "hover:bg-surface-2/40 transition-colors group",
+                          isExpanded && "bg-surface-2/30",
                         )}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                      >
+                        {/* Symbole avec bouton + exemples */}
+                        <td className="py-2.5 px-3 font-mono font-bold align-middle">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <button
+                              onClick={() => copySymbol(item.symbol)}
+                              className="inline-flex items-center gap-1 font-mono text-xs font-bold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/25 transition cursor-pointer"
+                              title="Cliquer pour copier ce symbole"
+                            >
+                              <span>{item.symbol}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => toggleExpand(item.symbol)}
+                              className={cn(
+                                "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold transition cursor-pointer border",
+                                isExpanded
+                                  ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                                  : "bg-surface-2 hover:bg-surface-3 text-muted-foreground hover:text-foreground border-border/80",
+                              )}
+                              title={isExpanded ? "Fermer les exemples" : "Voir les exemples concrets (+)"}
+                            >
+                              <Plus className={cn("size-2.5 transition-transform duration-200", isExpanded && "rotate-45")} />
+                              <span>{isExpanded ? "Fermer" : "exemples"}</span>
+                            </button>
+                          </div>
+                        </td>
+
+                        {/* Rôle */}
+                        <td className="py-2.5 px-3 text-foreground font-medium align-middle">
+                          <div>{item.target}</div>
+                          <div className="text-[11px] text-muted-foreground sm:hidden mt-0.5 font-mono">
+                            Ex : {item.example}
+                          </div>
+                        </td>
+
+                        {/* Exemple (avec bouton + d'exemples) */}
+                        <td className="py-2.5 px-3 text-muted-foreground text-[11px] hidden sm:table-cell font-mono align-middle">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate">{item.example}</span>
+                            <button
+                              type="button"
+                              onClick={() => toggleExpand(item.symbol)}
+                              className={cn(
+                                "shrink-0 inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium transition cursor-pointer border",
+                                isExpanded
+                                  ? "bg-primary/20 text-primary border-primary/40 font-semibold"
+                                  : "text-muted-foreground hover:text-primary hover:bg-surface-2 border-border/60",
+                              )}
+                              title="Ouvrir la boîte d'exemples détaillés"
+                            >
+                              <Plus className={cn("size-2.5 transition-transform duration-200", isExpanded && "rotate-45")} />
+                              <span>{isExpanded ? "Fermer" : "+ d'exemples"}</span>
+                            </button>
+                          </div>
+                        </td>
+
+                        {/* Bouton copier */}
+                        <td className="py-2.5 px-2 text-right align-middle">
+                          <button
+                            onClick={() => copySymbol(item.symbol)}
+                            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-surface-2 transition cursor-pointer"
+                            title="Copier le symbole"
+                          >
+                            {copiedSymbol === item.symbol ? (
+                              <Check className="size-3.5 text-emerald-400" />
+                            ) : (
+                              <Copy className="size-3.5 opacity-60 group-hover:opacity-100" />
+                            )}
+                          </button>
+                        </td>
+                      </tr>
+
+                      {/* Mini-boîte d'exemples concrets (dépliée via +) */}
+                      {isExpanded && detail && (
+                        <tr className="bg-surface-2/50 border-b border-border">
+                          <td colSpan={4} className="p-3 sm:p-4">
+                            <div className="rounded-lg border border-amber-500/30 bg-surface/95 p-3.5 sm:p-4 space-y-3 shadow-md animate-in fade-in duration-200">
+                              <div className="flex items-center justify-between border-b border-border/60 pb-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <code className="font-mono text-xs font-bold text-amber-300 bg-amber-500/15 px-2 py-0.5 rounded border border-amber-500/30">
+                                    {detail.symbol}
+                                  </code>
+                                  <span className="font-bold text-foreground text-xs">{detail.title}</span>
+                                  <span className="text-[10px] uppercase font-semibold text-primary bg-primary/10 border border-primary/25 px-1.5 py-0.5 rounded">
+                                    {detail.categoryLabel}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpand(item.symbol)}
+                                  className="text-muted-foreground hover:text-foreground text-[11px] flex items-center gap-1 cursor-pointer px-1.5 py-0.5 rounded hover:bg-surface-2 transition"
+                                >
+                                  <X className="size-3.5" />
+                                  <span>Fermer</span>
+                                </button>
+                              </div>
+
+                              <p className="text-xs text-muted-foreground leading-relaxed">
+                                {detail.summary}
+                              </p>
+
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-amber-400">
+                                  <Sparkles className="size-3 text-amber-400" />
+                                  <span>Exemples concrets d'utilisation :</span>
+                                </div>
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                  {detail.detailedExamples.map((ex, exIdx) => (
+                                    <div
+                                      key={exIdx}
+                                      className="rounded-md border border-border/80 bg-surface-2/60 p-2.5 space-y-1.5 text-xs hover:border-amber-500/40 transition-colors shadow-2xs"
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <code className="font-mono font-bold text-amber-300 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/25 text-xs">
+                                          {ex.pattern}
+                                        </code>
+                                        <button
+                                          onClick={() => copySymbol(ex.pattern)}
+                                          className="text-[10px] text-muted-foreground hover:text-amber-300 flex items-center gap-1 cursor-pointer transition"
+                                          title="Copier ce motif"
+                                        >
+                                          {copiedSymbol === ex.pattern ? (
+                                            <Check className="size-2.5 text-emerald-400" />
+                                          ) : (
+                                            <Copy className="size-2.5" />
+                                          )}
+                                          <span>copier</span>
+                                        </button>
+                                      </div>
+                                      <div className="text-[11px] font-semibold text-foreground">{ex.description}</div>
+                                      {ex.context && (
+                                        <div className="text-[10px] text-muted-foreground italic leading-tight">
+                                          {ex.context}
+                                        </div>
+                                      )}
+                                      <div className="text-[11px] text-emerald-400 flex items-center justify-between pt-1 border-t border-border/50 font-mono">
+                                        <span className="text-muted-foreground text-[10px] font-sans">Trouve :</span>
+                                        <span className="bg-emerald-500/15 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/25 font-bold">
+                                          {ex.found}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {detail.tip && (
+                                <div className="text-[11px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded p-2.5 flex items-start gap-2 leading-relaxed">
+                                  <span className="font-bold text-xs shrink-0">💡</span>
+                                  <span>{detail.tip}</span>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
 
                 {filtered.length === 0 && (
                   <tr>

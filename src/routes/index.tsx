@@ -131,6 +131,12 @@ function Index() {
   const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [cheatSheetOpen, setCheatSheetOpen] = useState(false);
+  const [cheatSheetInitialSymbol, setCheatSheetInitialSymbol] = useState<string | undefined>(undefined);
+
+  const handleOpenCheatSheet = useCallback((symbol?: string) => {
+    setCheatSheetInitialSymbol(symbol);
+    setCheatSheetOpen(true);
+  }, []);
   const [formatsDialogOpen, setFormatsDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<"csv" | "xlsx">("csv");
   const fullSourceRef = useRef<{
@@ -1569,7 +1575,7 @@ function detectBestSourceCol(matrix: Matrix): number {
           {/* Onglet / Bouton Cheat Sheet : compact, uniquement "Cheat Sheet" */}
           <button
             type="button"
-            onClick={() => setCheatSheetOpen(true)}
+            onClick={() => handleOpenCheatSheet(undefined)}
             className="inline-flex items-center gap-1 rounded-full border border-amber-500/35 bg-amber-500/10 hover:border-amber-400 hover:bg-amber-500/20 px-2.5 py-0.5 text-[11px] font-medium text-amber-300 transition cursor-pointer shadow-xs group"
             title="Ouvrir le cheat sheet synthétique des expressions régulières"
           >
@@ -1615,7 +1621,7 @@ function detectBestSourceCol(matrix: Matrix): number {
               setPasteOpen(true);
             }}
             onStartBlank={startBlank}
-            onOpenCheatSheet={() => setCheatSheetOpen(true)}
+            onOpenCheatSheet={() => handleOpenCheatSheet(undefined)}
             onOpenFormatsGuide={() => setFormatsDialogOpen(true)}
             isOffline={isOffline}
             canInstall={canInstall}
@@ -1813,6 +1819,7 @@ function detectBestSourceCol(matrix: Matrix): number {
                 onCopyTable={copyTable}
                 onUpdateRule={(newRule) => activeId && handleUpdateRule(activeId, newRule)}
                 onResetRule={() => activeId && handleResetRule(activeId)}
+                onOpenCheatSheet={handleOpenCheatSheet}
               />
             </div>
           </div>
@@ -1838,7 +1845,14 @@ function detectBestSourceCol(matrix: Matrix): number {
       />
 
       <FileLoadingModal progress={fileLoading} />
-      <CheatSheetDialog open={cheatSheetOpen} onOpenChange={setCheatSheetOpen} />
+      <CheatSheetDialog
+        open={cheatSheetOpen}
+        onOpenChange={(isOpen) => {
+          setCheatSheetOpen(isOpen);
+          if (!isOpen) setCheatSheetInitialSymbol(undefined);
+        }}
+        initialSymbol={cheatSheetInitialSymbol}
+      />
       <SupportedFormatsDialog open={formatsDialogOpen} onOpenChange={setFormatsDialogOpen} />
 
       {headerAsk && (
