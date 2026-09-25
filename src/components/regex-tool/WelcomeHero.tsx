@@ -35,8 +35,8 @@ interface WelcomeHeroProps {
   onLoadSample2?: () => void;
   onLoadSample?: () => void;
   onLoadPreset?: (preset: BusinessPreset) => void;
-  onImportFile: (file: File) => void;
-  onOpenPaste: () => void;
+  onImportFile: (file: File, mode?: "with_delimiter" | "without_delimiter") => void;
+  onOpenPaste: (initialMode?: "with_delimiter" | "without_delimiter") => void;
   onStartBlank: () => void;
   onOpenCheatSheet?: () => void;
   isOffline?: boolean;
@@ -224,9 +224,39 @@ export function WelcomeHero({
                 <strong>.tsv</strong> ou <strong>.txt</strong> (jusqu'à 1M+ de lignes).
               </p>
             </div>
-            <div className="mt-5 flex items-center text-xs font-semibold text-primary">
-              <span>Parcourir mes fichiers</span>
-              <ArrowRight className="ml-1.5 size-4 transition-transform group-hover:translate-x-1" />
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-3">
+              <span className="flex items-center text-xs font-semibold text-primary">
+                <span>Parcourir mes fichiers</span>
+                <ArrowRight className="ml-1.5 size-4 transition-transform group-hover:translate-x-1" />
+              </span>
+              <div className="flex items-center gap-1.5 text-[11px]" onClick={(e) => e.stopPropagation()}>
+                <label className="cursor-pointer rounded-md border border-border bg-surface-2/80 px-2 py-0.5 text-muted-foreground hover:bg-surface-3 hover:text-foreground transition font-medium">
+                  Avec délimiteur
+                  <input
+                    type="file"
+                    accept=".txt,.csv,.tsv,.xlsx,.xls"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) onImportFile(file, "with_delimiter");
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                <label className="cursor-pointer rounded-md border border-border bg-surface-2/80 px-2 py-0.5 text-muted-foreground hover:bg-surface-3 hover:text-foreground transition font-medium">
+                  Sans délimiteur
+                  <input
+                    type="file"
+                    accept=".txt,.csv,.tsv,.xlsx,.xls,.log"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) onImportFile(file, "without_delimiter");
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
             </div>
           </label>
 

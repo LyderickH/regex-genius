@@ -23,6 +23,7 @@ import {
   Github,
   Globe,
   BookOpen,
+  Split,
 } from "lucide-react";
 import { usePwa } from "@/hooks/usePwa";
 import { Toaster } from "@/components/ui/sonner";
@@ -54,6 +55,8 @@ import {
   cellsToTsv,
   copyToClipboard,
   type Matrix,
+  type DelimiterMode,
+  type ParseOptions,
 } from "@/lib/data-io";
 import { AUDIT_LOGS_SAMPLE } from "@/lib/datasets/sample-audit-logs";
 
@@ -96,8 +99,16 @@ function Index() {
   const [sel, setSel] = useState<GridSel | null>(null);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
+  const [pasteDelimiterMode, setPasteDelimiterMode] = useState<DelimiterMode>("with_delimiter");
+  const [pasteDelimiter, setPasteDelimiter] = useState<string>("auto");
   const [sourceName, setSourceName] = useState<string>("Données source");
-  const [headerAsk, setHeaderAsk] = useState<{ matrix: Matrix; defaultSourceIdx: number } | null>(null);
+  const [headerAsk, setHeaderAsk] = useState<{
+    matrix: Matrix;
+    rawLinesMatrix?: Matrix;
+    defaultSourceIdx: number;
+    mode: DelimiterMode;
+    fileName?: string;
+  } | null>(null);
   const [selectedSourceColIdx, setSelectedSourceColIdx] = useState<number>(0);
   const [fileLoading, setFileLoading] = useState<FileLoadingState | null>(null);
 
@@ -114,11 +125,17 @@ function Index() {
   const [isLLMRunning, setIsLLMRunning] = useState(false);
   const [llmControlOpen, setLlmControlOpen] = useState(false);
   const [externalPromptOpen, setExternalPromptOpen] = useState(false);
+  const [importDropdownOpen, setImportDropdownOpen] = useState(false);
   const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [cheatSheetOpen, setCheatSheetOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<"csv" | "xlsx">("csv");
-  const fullSourceRef = useRef<{ file?: File; rawText?: string; totalLines: number } | null>(null);
+  const fullSourceRef = useRef<{
+    file?: File;
+    rawText?: string;
+    totalLines: number;
+    delimiterMode?: DelimiterMode;
+  } | null>(null);
   const [isForcedAll, setIsForcedAll] = useState(false);
 
   // --- Statut PWA, Mode Avion et Installation Locale
@@ -705,7 +722,7 @@ function detectBestSourceCol(matrix: Matrix): number {
     toast.success(`« ${newSourceName} » est désormais la colonne de données source !`);
   };
 
-  const handleFile = async (file: File) => {
+  const handleFile = async (file: File, preferredMode?: DelimiterMode) => {
     try {
       const sizeStr =
         file.size > 1024 * 1024
@@ -719,22 +736,33 @@ function detectBestSourceCol(matrix: Matrix): number {
         step: "Démarrage de la lecture...",
       });
 
-      const parsed = await parseFileDataset(file, 50_000, (report) => {
-        setFileLoading({
-          filename: file.name,
-          size: sizeStr,
-          percent: report.percent,
-          step: report.step,
-        });
-      });
+      const parsed = await parseFileDataset(
+        file,
+        50_000,
+        (report) => {
+          setFileLoading({
+            filename: file.name,
+            size: sizeStr,
+            percent: report.percent,
+            step: report.step,
+          });
+        },
+        { delimiterMode: preferredMode },
+      );
 
       // Petite temporisation pour laisser l'utilisateur apercevoir le 100%
       await new Promise((r) => setTimeout(r, 200));
       setFileLoading(null);
       setIsForcedAll(false);
 
+      const activeDelimiterMode = preferredMode ?? parsed.delimiterMode ?? "with_delimiter";
+
       if (parsed.isSampled) {
-        fullSourceRef.current = { file, totalLines: parsed.totalLines };
+        fullSourceRef.current = {
+          file,
+          totalLines: parsed.totalLines,
+          delimiterMode: activeDelimiterMode,
+        };
         toast.info(
           `Échantillon interactif de ${parsed.matrix.length.toLocaleString("fr-FR")} lignes chargé (sur ${parsed.totalLines.toLocaleString("fr-FR")} lignes au total). L'export pourra traiter l'intégralité du fichier.`,
           { duration: 6000 },
@@ -743,11 +771,22 @@ function detectBestSourceCol(matrix: Matrix): number {
         fullSourceRef.current = null;
       }
 
-      // Ne demander la confirmation d'en-tête QUE s'il y a plusieurs colonnes
-      if (parsed.matrix.length > 1 && (parsed.matrix[0]?.length ?? 0) > 1) {
+      if (preferredMode === "without_delimiter") {
+        loadMatrix(parsed.matrix);
+        return;
+      }
+
+      // Proposer la configuration avec option avec/sans délimiteur s'il y a plusieurs colonnes
+      if (parsed.matrix.length > 0 && (parsed.matrix[0]?.length ?? 0) > 1) {
         const bestCol = detectBestSourceCol(parsed.matrix);
         setSelectedSourceColIdx(bestCol);
-        setHeaderAsk({ matrix: parsed.matrix, defaultSourceIdx: bestCol });
+        setHeaderAsk({
+          matrix: parsed.matrix,
+          rawLinesMatrix: parsed.rawLinesMatrix,
+          defaultSourceIdx: bestCol,
+          mode: "with_delimiter",
+          fileName: file.name,
+        });
       } else {
         loadMatrix(parsed.matrix);
       }
@@ -915,11 +954,16 @@ function detectBestSourceCol(matrix: Matrix): number {
   };
 
   /** Colle un bloc Excel/TSV à partir de la cellule sélectionnée, en créant les lignes manquantes. */
-  const pasteBlock = (text: string) => {
-    const parsed = parsePastedDataset(text, 50_000);
+  const pasteBlock = (text: string, options?: ParseOptions) => {
+    const parsed = parsePastedDataset(text, 50_000, options);
     setIsForcedAll(false);
+    const activeDelimiterMode = options?.delimiterMode ?? parsed.delimiterMode ?? "with_delimiter";
     if (parsed.isSampled) {
-      fullSourceRef.current = { rawText: text, totalLines: parsed.totalLines };
+      fullSourceRef.current = {
+        rawText: text,
+        totalLines: parsed.totalLines,
+        delimiterMode: activeDelimiterMode,
+      };
       toast.info(
         `Échantillon interactif de ${parsed.matrix.length.toLocaleString("fr-FR")} lignes chargé sur ${parsed.totalLines.toLocaleString("fr-FR")} au total.`,
         { duration: 6000 },
@@ -930,6 +974,17 @@ function detectBestSourceCol(matrix: Matrix): number {
     const matrix = parsed.matrix;
     if (!matrix.length) return;
     if (rows.length === 0) {
+      if (matrix.length > 0 && (matrix[0]?.length ?? 0) > 1 && !options?.delimiterMode) {
+        const bestCol = detectBestSourceCol(matrix);
+        setSelectedSourceColIdx(bestCol);
+        setHeaderAsk({
+          matrix,
+          rawLinesMatrix: parsed.rawLinesMatrix,
+          defaultSourceIdx: bestCol,
+          mode: "with_delimiter",
+        });
+        return;
+      }
       loadMatrix(matrix);
       return;
     }
@@ -1111,6 +1166,7 @@ function detectBestSourceCol(matrix: Matrix): number {
       file: fullSourceRef.current.file,
       rawText: fullSourceRef.current.rawText,
       totalLines: fullSourceRef.current.totalLines,
+      delimiterMode: fullSourceRef.current.delimiterMode,
       header,
       columns: columns.map((c) => ({ name: c.name, rule: c.rule })),
       filename: `resultats_complet_${fullSourceRef.current.totalLines}_lignes.csv`,
@@ -1237,16 +1293,72 @@ function detectBestSourceCol(matrix: Matrix): number {
             />
           )}
 
-          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs transition hover:border-primary hover:text-primary">
-            <Upload className="size-3.5" />
-            Importer
-            <input
-              type="file"
-              accept=".txt,.csv,.tsv,.xlsx,.xls"
-              className="hidden"
-              onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-            />
-          </label>
+          {/* Bouton Importer avec options avec / sans délimiteur */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setImportDropdownOpen((prev) => !prev)}
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-foreground transition hover:border-primary hover:text-primary"
+              title="Importer des données (avec ou sans délimiteur)"
+            >
+              <Upload className="size-3.5 text-primary" />
+              <span>Importer</span>
+              <ChevronDown className="size-3 text-muted-foreground" />
+            </button>
+            {importDropdownOpen && (
+              <div className="absolute left-0 mt-1 z-50 w-64 rounded-lg border border-border bg-surface p-1 shadow-xl animate-in fade-in duration-150">
+                <label className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-foreground hover:bg-surface-2 transition text-left cursor-pointer">
+                  <Split className="size-3.5 text-primary shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold">Avec délimiteur</div>
+                    <div className="text-[11px] text-muted-foreground truncate">CSV, TSV, colonnes séparées (;, ,, \t)</div>
+                  </div>
+                  <input
+                    type="file"
+                    accept=".txt,.csv,.tsv,.xlsx,.xls"
+                    className="hidden"
+                    onChange={(e) => {
+                      setImportDropdownOpen(false);
+                      if (e.target.files?.[0]) handleFile(e.target.files[0], "with_delimiter");
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                <label className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-foreground hover:bg-surface-2 transition text-left cursor-pointer">
+                  <FileText className="size-3.5 text-amber-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold">Sans délimiteur</div>
+                    <div className="text-[11px] text-muted-foreground truncate">Ligne par ligne brute en 1 colonne</div>
+                  </div>
+                  <input
+                    type="file"
+                    accept=".txt,.csv,.tsv,.xlsx,.xls,.log"
+                    className="hidden"
+                    onChange={(e) => {
+                      setImportDropdownOpen(false);
+                      if (e.target.files?.[0]) handleFile(e.target.files[0], "without_delimiter");
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                <div className="my-1 border-t border-border" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImportDropdownOpen(false);
+                    setPasteOpen(true);
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-foreground hover:bg-surface-2 transition text-left cursor-pointer"
+                >
+                  <ClipboardPaste className="size-3.5 text-cyan-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold">Coller du texte...</div>
+                    <div className="text-[11px] text-muted-foreground truncate">Depuis le presse-papier</div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
           {rows.length > 0 && (
             <>
               <ToolbarButton
@@ -1409,7 +1521,10 @@ function detectBestSourceCol(matrix: Matrix): number {
             onLoadSample1={loadSample1}
             onLoadSample2={loadSample2}
             onImportFile={handleFile}
-            onOpenPaste={() => setPasteOpen(true)}
+            onOpenPaste={(mode) => {
+              if (mode) setPasteDelimiterMode(mode);
+              setPasteOpen(true);
+            }}
             onStartBlank={startBlank}
             onOpenCheatSheet={() => setCheatSheetOpen(true)}
             isOffline={isOffline}
@@ -1638,123 +1753,287 @@ function detectBestSourceCol(matrix: Matrix): number {
                 Configuration de l'importation
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Vérifiez les en-têtes et sélectionnez la colonne contenant le texte source brut à analyser.
+                Choisissez le mode d'importation et configurez vos colonnes.
               </p>
             </div>
 
-            {/* Sélecteur de la colonne source */}
-            <div className="rounded-lg border border-border/80 bg-surface-2/40 p-3 space-y-2">
-              <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                <span>Colonne source (texte brut à découper) :</span>
+            {/* Sélecteur Avec délimiteur / Sans délimiteur */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">
+                Option d'importation :
               </label>
-              <select
-                value={selectedSourceColIdx}
-                onChange={(e) => setSelectedSourceColIdx(Number(e.target.value))}
-                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary cursor-pointer"
-              >
-                {(headerAsk.matrix[0] ?? []).map((colHeader, idx) => {
-                  const sampleVal = headerAsk.matrix[1]?.[idx] ?? "";
-                  const isRecommended = idx === headerAsk.defaultSourceIdx;
-                  return (
-                    <option key={idx} value={idx}>
-                      Col. {idx + 1} : {colHeader || `Colonne ${idx + 1}`}
-                      {sampleVal ? ` (ex: "${sampleVal.length > 35 ? sampleVal.slice(0, 35) + "..." : sampleVal}")` : ""}
-                      {isRecommended ? " ★ Recommandé" : ""}
-                    </option>
-                  );
-                })}
-              </select>
-              <p className="text-[11px] text-muted-foreground">
-                Les autres colonnes seront traitées comme des résultats ou des exemples à déduire.
-              </p>
-            </div>
-
-            {/* Aperçu de la première ligne */}
-            <div className="space-y-1">
-              <div className="text-[11px] font-medium text-muted-foreground">
-                Aperçu de la première ligne :
-              </div>
-              <div className="truncate rounded-md border border-border bg-background p-2 font-mono text-[11px] text-muted-foreground">
-                {(headerAsk.matrix[0] ?? []).join("  |  ")}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-2 border-t border-border">
-              <span className="text-xs text-muted-foreground">
-                La 1re ligne est-elle un en-tête ?
-              </span>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <button
-                  onClick={() => {
-                    const m = headerAsk.matrix;
-                    const srcIdx = selectedSourceColIdx;
-                    setHeaderAsk(null);
-                    loadMatrix(m, undefined, srcIdx);
-                  }}
-                  className="rounded-md border border-border px-3.5 py-1.5 text-xs font-medium hover:bg-surface-2 transition cursor-pointer"
+                  type="button"
+                  onClick={() => setHeaderAsk((prev) => (prev ? { ...prev, mode: "with_delimiter" } : null))}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-lg border p-2.5 text-xs font-medium transition cursor-pointer text-left",
+                    headerAsk.mode === "with_delimiter"
+                      ? "border-primary bg-primary/10 text-primary font-semibold ring-1 ring-primary"
+                      : "border-border bg-surface-2/40 text-muted-foreground hover:bg-surface-2 hover:text-foreground",
+                  )}
                 >
-                  Non (données brutes)
+                  <Split className="size-4 shrink-0 text-primary" />
+                  <div>
+                    <div className="leading-tight">Avec délimiteur</div>
+                    <div className="text-[10px] font-normal opacity-80 mt-0.5">
+                      {headerAsk.matrix[0]?.length ?? 1} colonnes séparées
+                    </div>
+                  </div>
                 </button>
+
                 <button
-                  onClick={() => {
-                    const m = headerAsk.matrix;
-                    const srcIdx = selectedSourceColIdx;
-                    setHeaderAsk(null);
-                    loadMatrix(m.slice(1), m[0], srcIdx);
-                  }}
-                  className="rounded-md bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 shadow transition cursor-pointer"
+                  type="button"
+                  onClick={() => setHeaderAsk((prev) => (prev ? { ...prev, mode: "without_delimiter" } : null))}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-lg border p-2.5 text-xs font-medium transition cursor-pointer text-left",
+                    headerAsk.mode === "without_delimiter"
+                      ? "border-primary bg-primary/10 text-primary font-semibold ring-1 ring-primary"
+                      : "border-border bg-surface-2/40 text-muted-foreground hover:bg-surface-2 hover:text-foreground",
+                  )}
                 >
-                  Oui, ce sont des en-têtes
+                  <FileText className="size-4 shrink-0 text-amber-500" />
+                  <div>
+                    <div className="leading-tight">Sans délimiteur</div>
+                    <div className="text-[10px] font-normal opacity-80 mt-0.5">
+                      Texte brut (1 seule colonne)
+                    </div>
+                  </div>
                 </button>
               </div>
             </div>
+
+            {headerAsk.mode === "with_delimiter" ? (
+              <>
+                {/* Sélecteur de la colonne source */}
+                <div className="rounded-lg border border-border/80 bg-surface-2/40 p-3 space-y-2">
+                  <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <span>Colonne source (texte brut à découper) :</span>
+                  </label>
+                  <select
+                    value={selectedSourceColIdx}
+                    onChange={(e) => setSelectedSourceColIdx(Number(e.target.value))}
+                    className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                  >
+                    {(headerAsk.matrix[0] ?? []).map((colHeader, idx) => {
+                      const sampleVal = headerAsk.matrix[1]?.[idx] ?? "";
+                      const isRecommended = idx === headerAsk.defaultSourceIdx;
+                      return (
+                        <option key={idx} value={idx}>
+                          Col. {idx + 1} : {colHeader || `Colonne ${idx + 1}`}
+                          {sampleVal ? ` (ex: "${sampleVal.length > 35 ? sampleVal.slice(0, 35) + "..." : sampleVal}")` : ""}
+                          {isRecommended ? " ★ Recommandé" : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <p className="text-[11px] text-muted-foreground">
+                    Les autres colonnes seront traitées comme des résultats ou des exemples à déduire.
+                  </p>
+                </div>
+
+                {/* Aperçu de la première ligne */}
+                <div className="space-y-1">
+                  <div className="text-[11px] font-medium text-muted-foreground">
+                    Aperçu de la première ligne (découpée) :
+                  </div>
+                  <div className="truncate rounded-md border border-border bg-background p-2 font-mono text-[11px] text-muted-foreground">
+                    {(headerAsk.matrix[0] ?? []).join("  |  ")}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-border">
+                  <span className="text-xs text-muted-foreground">
+                    La 1re ligne est-elle un en-tête ?
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        const m = headerAsk.matrix;
+                        const srcIdx = selectedSourceColIdx;
+                        if (fullSourceRef.current) fullSourceRef.current.delimiterMode = "with_delimiter";
+                        setHeaderAsk(null);
+                        loadMatrix(m, undefined, srcIdx);
+                      }}
+                      className="rounded-md border border-border px-3.5 py-1.5 text-xs font-medium hover:bg-surface-2 transition cursor-pointer"
+                    >
+                      Non (données brutes)
+                    </button>
+                    <button
+                      onClick={() => {
+                        const m = headerAsk.matrix;
+                        const srcIdx = selectedSourceColIdx;
+                        if (fullSourceRef.current) fullSourceRef.current.delimiterMode = "with_delimiter";
+                        setHeaderAsk(null);
+                        loadMatrix(m.slice(1), m[0], srcIdx);
+                      }}
+                      className="rounded-md bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 shadow transition cursor-pointer"
+                    >
+                      Oui, ce sont des en-têtes
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="rounded-lg border border-border/80 bg-surface-2/40 p-3 space-y-1.5">
+                  <div className="text-xs font-semibold text-foreground">
+                    Import en texte brut (1 seule colonne source)
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Chaque ligne complète est conservée intacte sans être scindée par les séparateurs. Idéal pour extraire des motifs spécifiques (dates, logs, montants, emails) avec Regex Genius.
+                  </p>
+                </div>
+
+                {/* Aperçu de la première ligne brute */}
+                <div className="space-y-1">
+                  <div className="text-[11px] font-medium text-muted-foreground">
+                    Aperçu de la première ligne brute :
+                  </div>
+                  <div className="truncate rounded-md border border-border bg-background p-2 font-mono text-[11px] text-muted-foreground">
+                    {headerAsk.rawLinesMatrix?.[0]?.[0] ?? (headerAsk.matrix[0] ?? []).join(";")}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-border">
+                  <span className="text-xs text-muted-foreground">
+                    La 1re ligne est-elle un en-tête ?
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        const rawM = headerAsk.rawLinesMatrix ?? headerAsk.matrix.map((r) => [r.join(";")]);
+                        if (fullSourceRef.current) fullSourceRef.current.delimiterMode = "without_delimiter";
+                        setHeaderAsk(null);
+                        loadMatrix(rawM, undefined, 0);
+                      }}
+                      className="rounded-md border border-border px-3.5 py-1.5 text-xs font-medium hover:bg-surface-2 transition cursor-pointer"
+                    >
+                      Non (données brutes)
+                    </button>
+                    <button
+                      onClick={() => {
+                        const rawM = headerAsk.rawLinesMatrix ?? headerAsk.matrix.map((r) => [r.join(";")]);
+                        if (fullSourceRef.current) fullSourceRef.current.delimiterMode = "without_delimiter";
+                        setHeaderAsk(null);
+                        loadMatrix(rawM.slice(1), rawM[0], 0);
+                      }}
+                      className="rounded-md bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 shadow transition cursor-pointer"
+                    >
+                      Oui, c'est un en-tête
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
 
-
       {pasteOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6">
-          <div className="w-full max-w-2xl rounded-lg border border-border bg-surface p-4 shadow-2xl">
-            <div className="mb-2 text-sm font-semibold">Coller vos données</div>
-            <p className="mb-3 text-xs text-muted-foreground">
-              Une ligne par enregistrement. Si vous collez plusieurs colonnes depuis Excel, la
-              première devient la source et les suivantes vos exemples de résultat.
-            </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6 animate-in fade-in duration-150">
+          <div className="w-full max-w-2xl rounded-xl border border-border bg-surface p-5 shadow-2xl space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Coller vos données</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Une ligne par enregistrement. Choisissez si le texte doit être découpé en colonnes ou importé brut.
+              </p>
+            </div>
+
+            {/* Options de délimiteur */}
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-2/40 p-2.5">
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="font-medium text-foreground">Option :</span>
+                <div className="inline-flex rounded-md border border-border bg-background p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setPasteDelimiterMode("with_delimiter")}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition cursor-pointer",
+                      pasteDelimiterMode === "with_delimiter"
+                        ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <Split className="size-3" />
+                    <span>Avec délimiteur</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPasteDelimiterMode("without_delimiter")}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition cursor-pointer",
+                      pasteDelimiterMode === "without_delimiter"
+                        ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <FileText className="size-3" />
+                    <span>Sans délimiteur (brut)</span>
+                  </button>
+                </div>
+              </div>
+
+              {pasteDelimiterMode === "with_delimiter" && (
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className="text-muted-foreground">Séparateur :</span>
+                  <select
+                    value={pasteDelimiter}
+                    onChange={(e) => setPasteDelimiter(e.target.value)}
+                    className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                  >
+                    <option value="auto">Auto (Tabulation, ;, ,)</option>
+                    <option value=";">Point-virgule (;)</option>
+                    <option value=",">Virgule (,)</option>
+                    <option value="&#9;">Tabulation (\t)</option>
+                    <option value="|">Pipe (|)</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
             <textarea
               autoFocus
               value={pasteText}
               onChange={(e) => setPasteText(e.target.value)}
-              rows={12}
+              placeholder="Collez ici vos lignes de logs, extraits de tableau Excel, CSV..."
+              rows={10}
               className="w-full rounded-md border border-border bg-background p-3 font-mono text-[13px] outline-none focus:ring-1 focus:ring-ring"
             />
-            <div className="mt-3 flex justify-end gap-2">
-              <button
-                onClick={() => setPasteOpen(false)}
-                className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-surface-2"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={() => {
-                  const parsed = parsePastedDataset(pasteText, 50_000);
-                  if (parsed.isSampled) {
-                    fullSourceRef.current = { rawText: pasteText, totalLines: parsed.totalLines };
-                    toast.info(
-                      `Échantillon interactif de ${parsed.matrix.length.toLocaleString("fr-FR")} lignes chargé sur ${parsed.totalLines.toLocaleString("fr-FR")} au total.`,
-                      { duration: 6000 },
-                    );
-                  } else {
-                    fullSourceRef.current = null;
-                  }
-                  loadMatrix(parsed.matrix);
-                  setPasteOpen(false);
-                  setPasteText("");
-                }}
-                className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90"
-              >
-                Charger
-              </button>
+
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-xs text-muted-foreground">
+                {pasteText.trim()
+                  ? `${pasteText.trim().split(/\r?\n/).length.toLocaleString("fr-FR")} lignes détectées`
+                  : "Presse-papier prêt"}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPasteOpen(false);
+                    setPasteText("");
+                  }}
+                  className="rounded-md border border-border px-3.5 py-1.5 text-xs font-medium hover:bg-surface-2 transition cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  disabled={!pasteText.trim()}
+                  onClick={() => {
+                    pasteBlock(pasteText, {
+                      delimiterMode: pasteDelimiterMode,
+                      delimiter: pasteDelimiter,
+                    });
+                    setPasteOpen(false);
+                    setPasteText("");
+                  }}
+                  className="rounded-md bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 shadow transition cursor-pointer disabled:opacity-50"
+                >
+                  Charger
+                </button>
+              </div>
             </div>
           </div>
         </div>

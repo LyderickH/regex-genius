@@ -85,4 +85,103 @@ describe("Dataset Sampling & Full Streaming Export", () => {
     expect(progressReports.length).toBeGreaterThan(0);
     expect(progressReports[progressReports.length - 1]?.percent).toBe(100);
   });
+
+  describe("Options d'importation avec délimiteur / sans délimiteur", () => {
+    const csvContent = "2024-03-01;USER_1;OK;192.168.1.1\n2024-03-02;USER_2;FAIL;192.168.1.2\n";
+
+    it("importe sans délimiteur : conserve la ligne brute complète en 1 seule colonne", () => {
+      const parsed = parsePastedDataset(csvContent, 50000, { delimiterMode: "without_delimiter" });
+      expect(parsed.matrix.length).toBe(2);
+      expect(parsed.matrix[0]?.length).toBe(1);
+      expect(parsed.matrix[0]?.[0]).toBe("2024-03-01;USER_1;OK;192.168.1.1");
+      expect(parsed.matrix[1]?.[0]).toBe("2024-03-02;USER_2;FAIL;192.168.1.2");
+      expect(parsed.delimiterMode).toBe("without_delimiter");
+    });
+
+    it("importe avec délimiteur automatique : sépare correctement en colonnes", () => {
+      const parsed = parsePastedDataset(csvContent, 50000, { delimiterMode: "with_delimiter" });
+      expect(parsed.matrix.length).toBe(2);
+      expect(parsed.matrix[0]?.length).toBe(4);
+      expect(parsed.matrix[0]?.[0]).toBe("2024-03-01");
+      expect(parsed.matrix[0]?.[1]).toBe("USER_1");
+      expect(parsed.matrix[0]?.[2]).toBe("OK");
+      expect(parsed.matrix[0]?.[3]).toBe("192.168.1.1");
+      expect(parsed.delimiterMode).toBe("with_delimiter");
+      expect(parsed.rawLinesMatrix).toBeDefined();
+      expect(parsed.rawLinesMatrix?.[0]?.[0]).toBe("2024-03-01;USER_1;OK;192.168.1.1");
+    });
+
+    it("supporte les délimiteurs personnalisés (ex: pipe |)", () => {
+      const pipeContent = "A|B|C\n1|2|3\n";
+      const parsed = parsePastedDataset(pipeContent, 50000, {
+        delimiterMode: "with_delimiter",
+        delimiter: "|",
+      });
+      expect(parsed.matrix.length).toBe(2);
+      expect(parsed.matrix[0]).toEqual(["A", "B", "C"]);
+      expect(parsed.matrix[1]).toEqual(["1", "2", "3"]);
+    });
+
+    it("parseFileDataset supporte delimiterMode: 'without_delimiter'", async () => {
+      const { parseFileDataset } = await import("../data-io");
+      const blob = new Blob([csvContent], { type: "text/csv" });
+      const file = new File([blob], "logs.csv", { type: "text/csv" });
+
+      const parsed = await parseFileDataset(file, 50000, undefined, {
+        delimiterMode: "without_delimiter",
+      });
+      expect(parsed.matrix.length).toBe(2);
+      expect(parsed.matrix[0]?.length).toBe(1);
+      expect(parsed.matrix[0]?.[0]).toBe("2024-03-01;USER_1;OK;192.168.1.1");
+      expect(parsed.delimiterMode).toBe("without_delimiter");
+    });
+
+    it("exportFullDatasetStreaming en mode without_delimiter ne tronque pas les lignes contenant des virgules ou points-virgules", async () => {
+      const totalLines = 5;
+      const raw = "2024-03-01;USER_A;OK\n2024-03-02;USER_B;FAIL\n2024-03-03;USER_C;OK\n";
+      const header = ["Source", "User"];
+      const columns = [
+        {
+          name: "User",
+          rule: {
+            source: ";(USER_[A-Z]);",
+            flags: "",
+            transform: { strip: "none", dec: "none", casing: "none", fmt: "none" } as const,
+          },
+        },
+      ];
+
+      const originalCreateObjectURL = global.URL.createObjectURL;
+      const originalRevokeObjectURL = global.URL.revokeObjectURL;
+      let exportedBlob: Blob | null = null;
+      global.URL.createObjectURL = vi.fn((blob: Blob) => {
+        exportedBlob = blob;
+        return "blob:mock";
+      });
+      global.URL.revokeObjectURL = vi.fn();
+
+      const originalDocument = (global as any).document;
+      (global as any).document = {
+        createElement: vi.fn(() => ({
+          href: "",
+          download: "",
+          click: vi.fn(),
+        })),
+      };
+
+      await exportFullDatasetStreaming({
+        rawText: raw,
+        totalLines,
+        header,
+        columns,
+        delimiterMode: "without_delimiter",
+      });
+
+      expect(global.URL.createObjectURL).toHaveBeenCalled();
+
+      global.URL.createObjectURL = originalCreateObjectURL;
+      global.URL.revokeObjectURL = originalRevokeObjectURL;
+      (global as any).document = originalDocument;
+    });
+  });
 });
