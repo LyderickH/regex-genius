@@ -40,7 +40,8 @@ const CLASS_DESCRIPTIONS: Record<string, { label: string; category: string; deta
   "\\b": {
     label: "Frontière de mot",
     category: "Ancre de limite",
-    detail: "Marque la limite entre un mot et un caractère non-alphanumérique (évite de matcher au milieu d'un mot).",
+    detail:
+      "Marque la limite entre un mot et un caractère non-alphanumérique (évite de matcher au milieu d'un mot).",
   },
   "\\B": {
     label: "Non-frontière de mot",
@@ -161,6 +162,16 @@ export function explain(source: string, replacement?: string): Segment[] {
         );
       }
       i += 2;
+    } else if (c === "{" && source.indexOf("}", i) < 0) {
+      // « { » sans « } » : caractère littéral en JavaScript (évite une boucle infinie)
+      push(
+        c,
+        "literal",
+        "Caractère littéral « { »",
+        "Caractère",
+        "Accolade sans fermeture : cherchée telle quelle.",
+      );
+      i++;
     } else if (c === "{") {
       const j = source.indexOf("}", i);
       const text = source.slice(i, j + 1);

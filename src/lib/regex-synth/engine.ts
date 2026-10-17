@@ -129,6 +129,11 @@ function escapeClass(s: string): string {
 }
 
 /** Supprime les artefacts de synthèse illogiques comme les quantificateurs redondants {1}. */
+/** Échappe « $ » pour qu'une constante soit insérée telle quelle dans un motif de remplacement. */
+function escapeReplacement(s: string): string {
+  return s.replace(/\$/g, "$$$$");
+}
+
 export function cleanRegexSource(s: string): string {
   if (!s) return s;
   return s.replace(/(?<!\\)(?<!\{)\{1\}(?![0-9,])/g, "");
@@ -273,10 +278,11 @@ function capturePatterns(raw: string, rightChar: string | null): string[] {
   // 1. IBAN (ex: FR76 3000 6000 0112 3456 7890 189 ou DE89370400440532013000)
   const ibanNorm = rawClean.toUpperCase();
   if (/^[A-Z]{2}\d{2}[A-Z0-9]{10,32}$/.test(ibanNorm)) {
-    set.add("[A-Z]{2}\\d{2}(?:[ \\t]*\\d+)+");
-    set.add("[A-Z]{2}\\d{2}(?:[ \\t]*[A-Z0-9]+)+");
+    // Répétitions à un caractère par itération : pas de retour arrière exponentiel (ReDoS)
+    set.add("[A-Z]{2}\\d{2}(?:[ \\t]?\\d)+");
+    set.add("[A-Z]{2}\\d{2}(?:[ \\t]?[A-Z0-9])+");
     set.add("[A-Z]{2}\\d{2}[A-Z0-9\\s]{10,34}");
-    set.add("[A-Za-z]{2}\\d{2}(?:[ \\t]*\\d+)+");
+    set.add("[A-Za-z]{2}\\d{2}(?:[ \\t]?\\d)+");
   }
 
   // 2. Numéro de Sécurité Sociale NIR (13 ou 15 caractères commençant par 1 ou 2, incluant Corse 2A/2B)
@@ -884,13 +890,17 @@ export function synthesizeStructuredAnchorRule(
           }
         }
 
-        // Cas avec espaces (ex: format " | " du FEC comptable)
+        // Cas avec espaces (ex: format " | " du FEC comptable) : la valeur commence et finit
+        // par un caractère non blanc, un champ vide ne correspond donc pas (au lieu de capturer " ")
+        const pad = "\\s*";
+        const trimmedField = `([^${escapedSep}\\s][^${escapedSep}]*?)`;
+        const fieldEnd = `${pad}(?:${escapedSep}|$)`;
         if (k === 0) {
-          patterns.push(`^\\s*([^${escapedSep}]+?)\\s*(?:${escapedSep}|$)`);
+          patterns.push(`^${pad}${trimmedField}${fieldEnd}`);
         } else if (k === 1) {
-          patterns.push(`^[^${escapedSep}]*${escapedSep}\\s*([^${escapedSep}]+?)\\s*(?:${escapedSep}|$)`);
+          patterns.push(`^[^${escapedSep}]*${escapedSep}${pad}${trimmedField}${fieldEnd}`);
         } else {
-          patterns.push(`^(?:[^${escapedSep}]*${escapedSep}){${k}}\\s*([^${escapedSep}]+?)\\s*(?:${escapedSep}|$)`);
+          patterns.push(`^(?:[^${escapedSep}]*${escapedSep}){${k}}${pad}${trimmedField}${fieldEnd}`);
         }
 
         for (const pattern of patterns) {
@@ -1908,7 +1918,7 @@ export function synthesizeReplacementRule(
   if (isPrefixConst) {
     const prefixes = valid.map((ex) => ex.output.slice(0, ex.output.length - ex.input.length));
     if (new Set(prefixes).size === 1 && prefixes[0]!.length > 0) {
-      const p = prefixes[0]!;
+      const p = escapeReplacement(prefixes[0]!);
       const rule: Rule = {
         source: `^(.*)$`,
         flags: "",
@@ -1923,7 +1933,7 @@ export function synthesizeReplacementRule(
   if (isSuffixConst) {
     const suffixes = valid.map((ex) => ex.output.slice(ex.input.length));
     if (new Set(suffixes).size === 1 && suffixes[0]!.length > 0) {
-      const s = suffixes[0]!;
+      const s = escapeReplacement(suffixes[0]!);
       const rule: Rule = {
         source: `^(.*)$`,
         flags: "",
@@ -2087,11 +2097,29 @@ function capturedPart(src: string): string | null {
 }
 
 /** Regex combinée : un seul motif avec un groupe par colonne de sortie. */
+/** Nombre de groupes capturants d'une regex (0 si elle est invalide). */
+function captureGroupCount(source: string): number {
+  try {
+    return new RegExp(`${source}|`).exec("")!.length - 1;
+  } catch {
+    return 0;
+  }
+}
+
 export function combineColumns(
   inputs: string[],
   cols: { name: string; rule: Rule }[],
 ): { source: string; names: string[]; covered: number; total: number } | null {
-  const usable = cols.filter((c) => c.rule && c.rule.source);
+  // Une seule regex ne peut pas représenter un remplacement, des motifs multiples
+  // ou plusieurs groupes de capture par colonne : ces colonnes sont exclues
+  const usable = cols.filter(
+    (c) =>
+      c.rule &&
+      c.rule.source &&
+      c.rule.replacement === undefined &&
+      !c.rule.extra?.length &&
+      captureGroupCount(c.rule.source) === 1,
+  );
   if (usable.length < 2) return null;
   if (inputs.length === 0) return null;
 
@@ -2141,6 +2169,38 @@ export function combineColumns(
     .filter((c) => Number.isFinite(c.at))
     .sort((a, b) => a.at - b.at);
   if (ordered.length < 2) return null;
+
+  // valeur attendue de chaque colonne sur chaque ligne (règle de la colonne seule)
+  const expected = new Map<string, (string | undefined)[]>();
+  for (const c of ordered) {
+    const re = new RegExp(c.rule.source, c.rule.flags);
+    expected.set(c.name, rows.map((input) => firstGroup(re.exec(input))));
+  }
+
+  /**
+   * Nombre de lignes où la regex combinée redonne exactement la valeur de chaque colonne.
+   * -1 si la regex est invalide ou exposée au retour arrière catastrophique.
+   */
+  const coverage = (source: string, columns: typeof ordered): number => {
+    if (sanitizeAndCheckReDoS(source).analysis.hasCatastrophicBacktracking) return -1;
+    let re: RegExp;
+    try {
+      re = new RegExp(source);
+    } catch {
+      return -1;
+    }
+    let covered = 0;
+    rows.forEach((input, r) => {
+      const m = re.exec(input);
+      if (!m) return;
+      const ok = columns.every((c, i) => {
+        const want = expected.get(c.name)![r];
+        return want !== undefined && m[i + 1] === want;
+      });
+      if (ok) covered++;
+    });
+    return covered;
+  };
 
   const FIELD = /^\^\(\?:\[\^(.)\]\*\\?(.)\)\{(\d+)\}/;
   const fieldInfo = (src: string): { delim: string; n: number } | null => {
@@ -2218,31 +2278,13 @@ export function combineColumns(
   let best: { source: string; covered: number } | null = null;
   const fieldVariant = buildFields() ?? buildEmpirical();
   if (fieldVariant) {
-    try {
-      const re = new RegExp(fieldVariant);
-      let covered = 0;
-      for (const input of rows) {
-        const m = re.exec(input);
-        if (m && ordered.every((_, i) => m[i + 1] !== undefined)) covered++;
-      }
-      best = { source: fieldVariant, covered };
-    } catch {
-      /* variante invalide */
-    }
+    const covered = coverage(fieldVariant, ordered);
+    if (covered >= 0) best = { source: fieldVariant, covered };
   }
   for (const glue of ["[\\s\\S]*?", ".*?", ""]) {
     const source = build(glue);
-    let re: RegExp;
-    try {
-      re = new RegExp(source);
-    } catch {
-      continue;
-    }
-    let covered = 0;
-    for (const input of rows) {
-      const m = re.exec(input);
-      if (m && ordered.every((_, i) => m[i + 1] !== undefined)) covered++;
-    }
+    const covered = coverage(source, ordered);
+    if (covered < 0) continue;
     if (!best || covered > best.covered) best = { source, covered };
     if (covered === rows.length) break;
   }
@@ -2251,17 +2293,10 @@ export function combineColumns(
     return "^" + columnsList.map((c) => `(?=.*?${strip(c.rule.source, false)})`).join("");
   };
 
-  try {
-    const lookaheadSource = buildLookahead(ordered);
-    const re = new RegExp(lookaheadSource);
-    let covered = 0;
-    for (const input of rows) {
-      const m = re.exec(input);
-      if (m && ordered.every((_, i) => m[i + 1] !== undefined)) covered++;
-    }
-    if (!best || covered > best.covered) best = { source: lookaheadSource, covered };
-  } catch {
-    /* lookahead invalide */
+  const lookaheadSource = buildLookahead(ordered);
+  const lookaheadCovered = coverage(lookaheadSource, ordered);
+  if (lookaheadCovered >= 0 && (!best || lookaheadCovered > best.covered)) {
+    best = { source: lookaheadSource, covered: lookaheadCovered };
   }
 
   let selectedColumns = ordered;
@@ -2285,34 +2320,20 @@ export function combineColumns(
         // Tester les glues séquentielles sur le sous-ensemble
         for (const glue of ["[\\s\\S]*?", ".*?", ""]) {
           const subSource = sub.map((c, i) => strip(c.rule.source, i === 0)).join(glue);
-          try {
-            const re = new RegExp(subSource);
-            let covered = 0;
-            for (const input of rows) {
-              const m = re.exec(input);
-              if (m && sub.every((_, i) => m[i + 1] !== undefined)) covered++;
-            }
-            if (covered > 0 && (!best || covered > best.covered)) {
-              best = { source: subSource, covered };
-              selectedColumns = sub;
-            }
-          } catch {}
+          const covered = coverage(subSource, sub);
+          if (covered > 0 && (!best || covered > best.covered)) {
+            best = { source: subSource, covered };
+            selectedColumns = sub;
+          }
         }
 
         // Tester lookahead sur le sous-ensemble
-        try {
-          const subLookahead = buildLookahead(sub);
-          const re = new RegExp(subLookahead);
-          let covered = 0;
-          for (const input of rows) {
-            const m = re.exec(input);
-            if (m && sub.every((_, i) => m[i + 1] !== undefined)) covered++;
-          }
-          if (covered > 0 && (!best || covered > best.covered)) {
-            best = { source: subLookahead, covered };
-            selectedColumns = sub;
-          }
-        } catch {}
+        const subLookahead = buildLookahead(sub);
+        const covered = coverage(subLookahead, sub);
+        if (covered > 0 && (!best || covered > best.covered)) {
+          best = { source: subLookahead, covered };
+          selectedColumns = sub;
+        }
       }
       if (best && best.covered > 0) break;
     }

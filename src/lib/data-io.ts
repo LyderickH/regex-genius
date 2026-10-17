@@ -26,17 +26,60 @@ export interface ParsedDataset {
 /** Supprime les caractères invisibles parasites : BOM UTF-8, zero-width space, soft-hyphen */
 export function sanitizeInvisibleChars(text: string): string {
   if (!text) return "";
-  return text
-    .replace(/^\uFEFF/, "")
-    .replace(/[\u200B\u200C\u200D\u00AD]/g, "");
+  return text.replace(/^\uFEFF/, "").replace(/[\u200B\u200C\u200D\u00AD]/g, "");
 }
 
 /** Texte collé : TSV (Excel), CSV point-virgule, ou lignes simples (avec ou sans délimiteur). */
-export function parsePastedText(text: string, options?: ParseOptions): Matrix {
-  if (!text) return [];
+/** Texte nettoyé et découpé en lignes (sans la dernière ligne vide). */
+function splitLines(text: string): { cleanText: string; lines: string[] } {
   const cleanText = sanitizeInvisibleChars(text);
   const lines = cleanText.split(/\r?\n/);
   if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+  return { cleanText, lines };
+}
+
+/** PapaParse ne lit que le 1er Mo pour deviner le saut de ligne et 10 lignes pour le délimiteur. */
+const GUESS_WINDOW = 1024 * 1024;
+
+/**
+ * Même décision que « Papa.parse(texte complet) donne-t-il au moins 70 % de lignes
+ * multi-colonnes parmi les 50 premières ? », mais calculée sur un préfixe borné :
+ * le texte n'est analysé en entier que s'il est réellement multi-colonnes.
+ */
+function autoDetectIsMultiColumn(cleanText: string): boolean {
+  let prefixLen = Math.min(cleanText.length, 2 * GUESS_WINDOW);
+  let preview = 64;
+  for (;;) {
+    const isWhole = prefixLen >= cleanText.length;
+    const input = isWhole ? cleanText : cleanText.slice(0, prefixLen);
+    const res = Papa.parse<string[]>(input, { skipEmptyLines: true, preview });
+    const data = res.data;
+    // fiable si tout le texte a été vu, ou si l'analyse s'est arrêtée sur `preview`
+    // (toutes les lignes retenues sont alors complètes)
+    const reliable = isWhole || res.meta.truncated;
+    if (reliable) {
+      const exhausted = isWhole && !res.meta.truncated;
+      if (data.length >= 50 || exhausted) {
+        if (!data.length || (data[0]?.length ?? 0) <= 1) return false;
+        const multiColCount = data.slice(0, 50).filter((r) => r.length > 1).length;
+        return multiColCount >= Math.min(data.length, 50) * 0.7;
+      }
+      // trop de lignes vides filtrées : élargir la prévisualisation
+      preview *= 4;
+    } else {
+      // lignes très longues ou champ multi-ligne : agrandir le préfixe
+      prefixLen = Math.min(cleanText.length, prefixLen * 2);
+    }
+  }
+}
+
+export function parsePastedText(text: string, options?: ParseOptions): Matrix {
+  if (!text) return [];
+  const { cleanText, lines } = splitLines(text);
+  return parseLines(cleanText, lines, options);
+}
+
+function parseLines(cleanText: string, lines: string[], options?: ParseOptions): Matrix {
   if (lines.length === 0) return [];
 
   // Mode explicite sans délimiteur : texte brut conservé intact ligne par ligne
@@ -46,7 +89,10 @@ export function parsePastedText(text: string, options?: ParseOptions): Matrix {
 
   // Délimiteur explicite spécifié par l'utilisateur
   if (options?.delimiter && options.delimiter !== "auto") {
-    const parsed = Papa.parse<string[]>(cleanText, { delimiter: options.delimiter, skipEmptyLines: true });
+    const parsed = Papa.parse<string[]>(cleanText, {
+      delimiter: options.delimiter,
+      skipEmptyLines: true,
+    });
     if (parsed.data.length) {
       return (parsed.data as Matrix).map((r) => r.map((c) => (c == null ? "" : String(c))));
     }
@@ -72,26 +118,24 @@ export function parsePastedText(text: string, options?: ParseOptions): Matrix {
   }
   if (hasSemi && sampleLimit > 0) {
     const parsed = Papa.parse<string[]>(cleanText, { delimiter: ";", skipEmptyLines: true });
-    if (parsed.data.length) return (parsed.data as Matrix).map((r) => r.map((c) => (c == null ? "" : String(c))));
+    if (parsed.data.length)
+      return (parsed.data as Matrix).map((r) => r.map((c) => (c == null ? "" : String(c))));
   }
   if (hasPipe && sampleLimit > 0) {
     const parsed = Papa.parse<string[]>(cleanText, { delimiter: "|", skipEmptyLines: true });
-    if (parsed.data.length) return (parsed.data as Matrix).map((r) => r.map((c) => (c == null ? "" : String(c))));
+    if (parsed.data.length)
+      return (parsed.data as Matrix).map((r) => r.map((c) => (c == null ? "" : String(c))));
   }
   if (hasComma && sampleLimit > 0) {
     const parsed = Papa.parse<string[]>(cleanText, { delimiter: ",", skipEmptyLines: true });
-    if (parsed.data.length) return (parsed.data as Matrix).map((r) => r.map((c) => (c == null ? "" : String(c))));
+    if (parsed.data.length)
+      return (parsed.data as Matrix).map((r) => r.map((c) => (c == null ? "" : String(c))));
   }
 
-  // Si détection incertaine ou lignes hétérogènes, tester la détection automatique de PapaParse (sauf mode sans délimiteur)
-  if (options?.delimiterMode !== "without_delimiter") {
+  // Si détection incertaine ou lignes hétérogènes, détection automatique de PapaParse
+  if (autoDetectIsMultiColumn(cleanText)) {
     const parsed = Papa.parse<string[]>(cleanText, { skipEmptyLines: true });
-    if (parsed.data.length && (parsed.data[0]?.length ?? 0) > 1) {
-      const multiColCount = parsed.data.slice(0, 50).filter((r) => r.length > 1).length;
-      if (multiColCount >= Math.min(parsed.data.length, 50) * 0.7) {
-        return (parsed.data as Matrix).map((r) => r.map((c) => (c == null ? "" : String(c))));
-      }
-    }
+    return (parsed.data as Matrix).map((r) => r.map((c) => (c == null ? "" : String(c))));
   }
 
   // Pour un fichier à colonne unique (ex: 1M lignes de log/texte brut)
@@ -104,15 +148,13 @@ export function parsePastedDataset(
   maxInteractive = MAX_INTERACTIVE_ROWS,
   options?: ParseOptions,
 ): ParsedDataset {
-  const fullMatrix = parsePastedText(text, options);
+  const { cleanText, lines: rawLines } = splitLines(text ?? "");
+  const fullMatrix = text ? parseLines(cleanText, rawLines, options) : [];
   const totalLines = fullMatrix.length;
   const isSampled = totalLines > maxInteractive;
   const matrix = isSampled ? fullMatrix.slice(0, maxInteractive) : fullMatrix;
 
-  // Calcul d'un échantillon brut non découpé (raw lines) pour bascule rapide sans délimiteur
-  const clean = sanitizeInvisibleChars(text);
-  const rawLines = clean.split(/\r?\n/);
-  if (rawLines.length > 0 && rawLines[rawLines.length - 1] === "") rawLines.pop();
+  // Échantillon brut non découpé (raw lines) pour bascule rapide sans délimiteur
   const rawLimit = isSampled ? Math.min(rawLines.length, maxInteractive) : rawLines.length;
   const rawLinesMatrix = rawLines.slice(0, rawLimit).map((l) => [l]);
 
@@ -122,13 +164,14 @@ export function parsePastedDataset(
     isSampled,
     rawText: isSampled ? text : undefined,
     rawLinesMatrix,
-    delimiterMode: options?.delimiterMode ?? (matrix[0]?.length > 1 ? "with_delimiter" : "without_delimiter"),
+    delimiterMode:
+      options?.delimiterMode ?? (matrix[0]?.length > 1 ? "with_delimiter" : "without_delimiter"),
   };
 }
 
 /** Cellules seules au format tabulations (copie d'une plage). */
 export function cellsToTsv(rows: Matrix): string {
-  const cell = (v: string) => (/[\t\n"]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  const cell = (v: string) => (/[\t\r\n"]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
   return rows.map((r) => r.map(cell).join("\t")).join("\n");
 }
 
@@ -188,7 +231,11 @@ export async function parseFileDataset(
     onProgress?.({ percent: 75, step: "Extraction des données tabulaires..." });
     const sheet = wb.Sheets[wb.SheetNames[0] ?? ""];
     if (!sheet) return { matrix: [], totalLines: 0, isSampled: false };
-    const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, blankrows: false, raw: false });
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+      header: 1,
+      blankrows: false,
+      raw: false,
+    });
     onProgress?.({ percent: 90, step: "Conversion de l'échantillon interactif..." });
 
     const rawRows = rows.map((r) => (r as unknown[]).map((c) => (c == null ? "" : String(c))));
@@ -213,28 +260,35 @@ export async function parseFileDataset(
   if (typeof file.stream === "function") {
     onProgress?.({ percent: 5, step: `Lecture du fichier (${sizeMb} Mo)...` });
     const reader = file.stream().getReader();
-    const decoder = new TextDecoder("utf-8");
+    // fatal : un octet invalide en UTF-8 signale un fichier Windows-1252 / Latin-1
+    const decoder = new TextDecoder("utf-8", { fatal: true });
     let bytesRead = 0;
     const chunks: string[] = [];
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      bytesRead += value.length;
-      chunks.push(decoder.decode(value, { stream: true }));
-      const readMb = (bytesRead / (1024 * 1024)).toFixed(1);
-      const pct = Math.min(80, Math.round((bytesRead / totalBytes) * 75) + 5);
-      onProgress?.({
-        percent: pct,
-        step: `Lecture : ${readMb} Mo / ${sizeMb} Mo (${pct}%)`,
-      });
-      // Permettre le rafraîchissement régulier de l'affichage
-      if (chunks.length % 4 === 0) {
-        await new Promise((r) => setTimeout(r, 0));
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        bytesRead += value.length;
+        chunks.push(decoder.decode(value, { stream: true }));
+        const readMb = (bytesRead / (1024 * 1024)).toFixed(1);
+        const pct = Math.min(80, Math.round((bytesRead / totalBytes) * 75) + 5);
+        onProgress?.({
+          percent: pct,
+          step: `Lecture : ${readMb} Mo / ${sizeMb} Mo (${pct}%)`,
+        });
+        // Permettre le rafraîchissement régulier de l'affichage
+        if (chunks.length % 4 === 0) {
+          await new Promise((r) => setTimeout(r, 0));
+        }
       }
+      chunks.push(decoder.decode());
+      text = chunks.join("");
+    } catch (err) {
+      if (!(err instanceof TypeError)) throw err;
+      onProgress?.({ percent: 80, step: "Encodage Windows-1252 détecté, relecture..." });
+      text = new TextDecoder("windows-1252").decode(await file.arrayBuffer());
     }
-    chunks.push(decoder.decode());
-    text = chunks.join("");
   } else {
     onProgress?.({ percent: 40, step: `Lecture du fichier (${sizeMb} Mo)...` });
     text = await file.text();
@@ -248,7 +302,9 @@ export async function parseFileDataset(
   if (rawLines.length > 0 && rawLines[rawLines.length - 1] === "") rawLines.pop();
   const rawTotalLines = rawLines.length;
   const isSampledRaw = rawTotalLines > maxInteractive;
-  const rawLinesSample: Matrix = (isSampledRaw ? rawLines.slice(0, maxInteractive) : rawLines).map((l) => [l]);
+  const rawLinesSample: Matrix = (isSampledRaw ? rawLines.slice(0, maxInteractive) : rawLines).map(
+    (l) => [l],
+  );
 
   if (options?.delimiterMode === "without_delimiter") {
     onProgress?.({ percent: 100, step: "Chargement en texte brut (sans délimiteur)..." });
@@ -263,7 +319,11 @@ export async function parseFileDataset(
     };
   }
 
-  if (name.endsWith(".csv") || name.endsWith(".tsv") || options?.delimiterMode === "with_delimiter") {
+  if (
+    name.endsWith(".csv") ||
+    name.endsWith(".tsv") ||
+    options?.delimiterMode === "with_delimiter"
+  ) {
     const firstChunk = text.slice(0, 4000);
     const hasDelimiter =
       options?.delimiter !== undefined ||
@@ -274,7 +334,11 @@ export async function parseFileDataset(
 
     if (hasDelimiter) {
       onProgress?.({ percent: 88, step: "Découpage CSV structuré..." });
-      const papaConfig: Papa.ParseConfig = { skipEmptyLines: true };
+      // « ; » avant « , » : les montants français (1,5) ne doivent pas faire choisir la virgule
+      const papaConfig: Papa.ParseConfig = {
+        skipEmptyLines: true,
+        delimitersToGuess: [";", "\t", "|", ","],
+      };
       if (options?.delimiter && options.delimiter !== "auto") {
         papaConfig.delimiter = options.delimiter;
       }
@@ -317,13 +381,37 @@ function download(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+/** Seuls les nombres (montants négatifs compris) peuvent commencer par « + » ou « - » sans risque. */
+const NUMBER_RE = /^[-+]?[\d \u00a0\u202f]*\d([.,]\d+)?$/;
+
+/**
+ * Neutralise l'injection de formules dans un export CSV : une cellule commençant par
+ * = + - @ (ou tabulation / retour chariot) serait exécutée par Excel à l'ouverture.
+ */
+export function neutralizeFormula(s: string): string {
+  return /^[=+\-@\t\r]/.test(s) && !NUMBER_RE.test(s) ? `'${s}` : s;
+}
+
+/** Nombre maximal de lignes d'une feuille Excel (en-tête compris). */
+export const XLSX_MAX_ROWS = 1_048_576;
+const XLSX_MAX_CELL_LENGTH = 32_767;
+
 export function exportCsv(header: string[], rows: Matrix, filename = "resultats.csv") {
-  const csv = Papa.unparse([header, ...rows], { delimiter: ";" });
+  const safe = [header, ...rows].map((r) => r.map((c) => neutralizeFormula(c ?? "")));
+  const csv = Papa.unparse(safe, { delimiter: ";" });
   download(new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" }), filename);
 }
 
 export function exportXlsx(header: string[], rows: Matrix, filename = "resultats.xlsx") {
-  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  if (rows.length + 1 > XLSX_MAX_ROWS) {
+    // au-delà, SheetJS écrit silencieusement une feuille tronquée à 2 lignes
+    throw new Error(
+      `Excel est limité à ${XLSX_MAX_ROWS.toLocaleString("fr-FR")} lignes : utilisez l'export CSV.`,
+    );
+  }
+  const clip = (c: string) =>
+    c && c.length > XLSX_MAX_CELL_LENGTH ? c.slice(0, XLSX_MAX_CELL_LENGTH - 1) + "…" : c;
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows].map((r) => r.map(clip)));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Résultats");
   const out = XLSX.write(wb, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
@@ -359,7 +447,8 @@ export async function exportFullDatasetStreaming({
   onProgress?: (percent: number) => void;
 }): Promise<void> {
   const sep = ";";
-  const escapeCell = (s: string): string => {
+  const escapeCell = (raw: string): string => {
+    const s = neutralizeFormula(raw);
     if (s.includes(sep) || s.includes('"') || s.includes("\n") || s.includes("\r")) {
       return `"${s.replace(/"/g, '""')}"`;
     }
@@ -395,7 +484,7 @@ export async function exportFullDatasetStreaming({
   const headerLine = header.map(escapeCell).join(sep) + "\r\n";
   const chunks: string[] = ["\uFEFF", headerLine];
 
-  const sourceText = rawText ?? (file ? await file.text() : "");
+  const sourceText = sanitizeInvisibleChars(rawText ?? (file ? await file.text() : ""));
   const lines = sourceText.split(/\r?\n/);
   if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
 

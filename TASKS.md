@@ -25,7 +25,7 @@ Critère de « terminé » : `npm run build` passe, la page s'affiche sans débo
 ## Découvert en route
 - [x] Tests : vitest absent du projet (25 fichiers de tests jamais exécutables) — ajouté en devDependency + script `npm test`
 - [x] Bug : bouton « Copier la formule Excel » de l'en-tête de colonne passait `rule.pattern` (inexistant) → formule avec `undefined`
-- [ ] Perf : `million-rows-loading.test.ts` échoue même isolé (~1,6 s pour 1,2 s) — en cours d'audit
+- [x] Perf : parse 1M lignes 1,5 s → ~0,27 s (détection du délimiteur sur un préfixe, sortie identique sur 336 cas)
 - [ ] `ui/dialog.tsx` : largeur de base sans marge mobile (chaque dialogue doit surcharger)
 - [ ] Lint : `index.tsx` comptait déjà ~219 erreurs Prettier avant la refonte (fichier jamais formaté) — non corrigé pour garder le diff lisible
 - [ ] TypeScript : 95 erreurs préexistantes (`exactOptionalPropertyTypes`, indices possiblement `undefined`) — inchangé
@@ -33,7 +33,27 @@ Critère de « terminé » : `npm run build` passe, la page s'affiche sans débo
 - [ ] Prop `canInstall` de `WelcomeHero` jamais utilisée
 
 # Audit du code et de l'algorithme
-- [ ] Moteur de synthèse (`engine.ts`) : exactitude, sur-apprentissage, robustesse, performance
+- [x] Moteur de synthèse (`engine.ts`) : audité (48 cas réalistes, 18 en échec)
 - [ ] Dialectes (formules Excel/Sheets/Python…) et pipeline IA locale (sécurité ReDoS, modèle par défaut)
-- [ ] Import/export (`data-io.ts`) : CSV, injection de formules, performance 1M lignes
+- [x] Import/export (`data-io.ts`) : audité (369 sondes, 28 bugs prouvés)
 - [ ] Synthèse + corrections des bugs confirmés
+
+## Corrigé (prouvé par sonde avant/après)
+- [x] `explain()` : boucle infinie sur « { » sans « } » (regex saisie à la main → onglet figé)
+- [x] ReDoS : motif IBAN `(?:[ \t]*\d+)+` (2,7 s à 25 chiffres, 71 s à 30) → `(?:[ \t]?\d)+`
+- [x] Regex combinée : couverture vérifiée valeur par valeur, colonnes à remplacement / multi-motifs exclues, anti-ReDoS
+- [x] Champ délimité vide (« |  | ») renvoyait « » au lieu de vide
+- [x] Constante de remplacement contenant « $ » mal échappée
+- [x] Export CSV : injection de formules (= + - @) neutralisée, montants négatifs préservés
+- [x] Fichiers Windows-1252 / Latin-1 : accents relus correctement
+- [x] .csv à « ; » avec montants « 1,5 » : « ; » prioritaire sur « , »
+- [x] Export XLSX : refus explicite au-delà de 1 048 576 lignes, cellules > 32 767 caractères tronquées
+- [x] Export complet : caractères invisibles retirés comme à l'import
+- [x] Ctrl+Z : annule l'éventuelle synthèse différée ; annulation native conservée hors grille
+- [x] Copie vers Excel : « \r » seul protégé par des guillemets
+
+## Reste à décider (voir compte rendu)
+- [ ] Score de sélection du moteur (faux positifs silencieux, constantes littérales en multi-motifs)
+- [ ] Export complet : re-parse CSV correct, en-tête promu, source XLSX
+- [ ] Historique : compteur de révision, une entrée par saisie (aujourd'hui une par frappe)
+- [ ] Collage Ctrl+V : traiter le presse-papier comme du TSV

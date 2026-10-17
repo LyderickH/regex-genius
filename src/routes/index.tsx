@@ -541,6 +541,9 @@ function Index() {
   /** Restaure un état du tableau et relance la déduction. */
   const restore = useCallback(
     (snap: Snap) => {
+      // une synthèse différée lancée avant l'annulation écraserait l'état restauré
+      timers.current.forEach(clearTimeout);
+      timers.current.clear();
       restoring.current = true;
       setRows(snap.rows);
       setColumns(snap.columns);
@@ -574,6 +577,10 @@ function Index() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return;
+      // dans un champ de saisie hors grille (collage, éditeur de regex…), laisser
+      // l'annulation native ; les cellules de la grille (data-cell) gardent l'historique
+      const t = e.target as HTMLElement | null;
+      if (t?.closest("input:not([data-cell]), textarea, select, [contenteditable='true']")) return;
       const k = e.key.toLowerCase();
       if (k === "z" && !e.shiftKey) {
         e.preventDefault();
@@ -1207,8 +1214,12 @@ function detectBestSourceCol(matrix: Matrix): number {
   const executeDirectExport = (kind: "csv" | "xlsx") => {
     const header = [sourceName || "Source", ...columns.map((c) => c.name)];
     const matrix = rows.map((src, i) => [src, ...columns.map((c) => cellValue(c, i))]);
-    if (kind === "csv") exportCsv(header, matrix);
-    else exportXlsx(header, matrix);
+    try {
+      if (kind === "csv") exportCsv(header, matrix);
+      else exportXlsx(header, matrix);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "L'export a échoué");
+    }
   };
 
   const doExport = (kind: "csv" | "xlsx") => {
