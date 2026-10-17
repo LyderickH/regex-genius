@@ -130,6 +130,17 @@ function Index() {
   const [externalPromptOpen, setExternalPromptOpen] = useState(false);
   const [importDropdownOpen, setImportDropdownOpen] = useState(false);
   const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState({ left: 0, top: 0 });
+  // Le nom du modèle IA dépend du localStorage : on ne l'affiche qu'après hydratation
+  const [isHydrated, setIsHydrated] = useState(false);
+  useEffect(() => setIsHydrated(true), []);
+  const anchorMenu = (el: HTMLElement, menuWidth: number) => {
+    const r = el.getBoundingClientRect();
+    setMenuAnchor({
+      left: Math.max(8, Math.min(r.left, window.innerWidth - menuWidth - 8)),
+      top: r.bottom + 4,
+    });
+  };
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [cheatSheetOpen, setCheatSheetOpen] = useState(false);
   const [cheatSheetInitialSymbol, setCheatSheetInitialSymbol] = useState<string | undefined>(undefined);
@@ -1345,26 +1356,30 @@ function detectBestSourceCol(matrix: Matrix): number {
       <Toaster position="bottom-right" />
 
 
-      <header className="flex shrink-0 items-center gap-3 border-b border-grid-line bg-surface px-4 py-2.5">
+      <header className="flex shrink-0 items-center gap-2 border-b border-grid-line bg-surface px-3 py-2 sm:gap-3 sm:px-4">
         <button
           type="button"
           onClick={returnToWelcome}
-          className="flex items-center gap-2 text-left hover:opacity-85 transition cursor-pointer group"
+          className="flex shrink-0 cursor-pointer items-center gap-2 rounded-md text-left transition hover:opacity-85 group"
           title="Revenir au menu d'accueil"
         >
-          <Regex className="size-5 text-primary transition-transform group-hover:scale-105" />
-          <div className="leading-tight">
-            <div className="text-sm font-bold tracking-tight text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5">
-              <span>Regex Genius</span>
-              <span className="text-[9px] font-mono font-semibold uppercase px-1.5 py-0.2 rounded bg-primary/10 text-primary border border-primary/20">v1.0</span>
-            </div>
-            <div className="text-[11px] text-muted-foreground">
+          <span className="flex size-7 items-center justify-center rounded-md bg-primary-soft text-primary">
+            <Regex className="size-4" />
+          </span>
+          <span className="leading-tight">
+            <span className="flex items-baseline gap-1.5 text-sm font-semibold tracking-tight text-foreground transition-colors group-hover:text-primary">
+              <span className="whitespace-nowrap">Regex Genius</span>
+              <span className="hidden text-[11px] font-medium text-muted-foreground sm:inline">v1.0</span>
+            </span>
+            <span className="hidden text-[11px] text-muted-foreground xl:block">
               Déduction de regex par l'exemple
-            </div>
-          </div>
+            </span>
+          </span>
         </button>
 
-        <div className="ml-4 flex items-center gap-1.5">
+        <div className="h-5 w-px shrink-0 bg-border" />
+
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto py-0.5 [scrollbar-width:none]">
           {rows.length > 0 && (
             <ToolbarButton
               icon={Home}
@@ -1374,75 +1389,24 @@ function detectBestSourceCol(matrix: Matrix): number {
           )}
 
           {/* Bouton Importer avec options avec / sans délimiteur */}
-          <div className="relative" data-dropdown-container="import">
+          <div className="relative shrink-0" data-dropdown-container="import">
             <button
               type="button"
-              onClick={() =>
+              onClick={(e) => {
+                anchorMenu(e.currentTarget, 256);
                 setImportDropdownOpen((prev) => {
                   if (!prev) setExportDropdownOpen(false);
                   return !prev;
-                })
-              }
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-foreground transition hover:border-primary hover:text-primary"
+                });
+              }}
+              className={toolbarButtonClass}
               title="Importer des données (avec ou sans délimiteur)"
+              aria-expanded={importDropdownOpen}
             >
               <Upload className="size-3.5 text-primary" />
-              <span>Importer</span>
+              <span className="hidden sm:inline">Importer</span>
               <ChevronDown className="size-3 text-muted-foreground" />
             </button>
-            {importDropdownOpen && (
-              <div className="absolute left-0 mt-1 z-50 w-64 rounded-lg border border-border bg-surface p-1 shadow-xl animate-in fade-in duration-150">
-                <label className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-foreground hover:bg-surface-2 transition text-left cursor-pointer">
-                  <Split className="size-3.5 text-primary shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold">Avec délimiteur</div>
-                    <div className="text-[11px] text-muted-foreground truncate">CSV, TSV, colonnes séparées (;, ,, \t)</div>
-                  </div>
-                  <input
-                    type="file"
-                    accept=".txt,.csv,.tsv,.xlsx,.xls"
-                    className="hidden"
-                    onChange={(e) => {
-                      setImportDropdownOpen(false);
-                      if (e.target.files?.[0]) handleFile(e.target.files[0], "with_delimiter");
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
-                <label className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-foreground hover:bg-surface-2 transition text-left cursor-pointer">
-                  <FileText className="size-3.5 text-amber-500 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold">Sans délimiteur</div>
-                    <div className="text-[11px] text-muted-foreground truncate">Ligne par ligne brute en 1 colonne</div>
-                  </div>
-                  <input
-                    type="file"
-                    accept=".txt,.csv,.tsv,.xlsx,.xls,.log"
-                    className="hidden"
-                    onChange={(e) => {
-                      setImportDropdownOpen(false);
-                      if (e.target.files?.[0]) handleFile(e.target.files[0], "without_delimiter");
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
-                <div className="my-1 border-t border-border" />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setImportDropdownOpen(false);
-                    setPasteOpen(true);
-                  }}
-                  className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-foreground hover:bg-surface-2 transition text-left cursor-pointer"
-                >
-                  <ClipboardPaste className="size-3.5 text-cyan-500 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold">Coller du texte...</div>
-                    <div className="text-[11px] text-muted-foreground truncate">Depuis le presse-papier</div>
-                  </div>
-                </button>
-              </div>
-            )}
           </div>
           {rows.length > 0 && (
             <>
@@ -1453,48 +1417,24 @@ function detectBestSourceCol(matrix: Matrix): number {
               />
 
               {/* Bouton Exporter unique avec choix de format */}
-              <div className="relative" data-dropdown-container="export">
+              <div className="relative shrink-0" data-dropdown-container="export">
                 <button
                   type="button"
-                  onClick={() =>
+                  onClick={(e) => {
+                    anchorMenu(e.currentTarget, 192);
                     setExportDropdownOpen((prev) => {
                       if (!prev) setImportDropdownOpen(false);
                       return !prev;
-                    })
-                  }
-                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-foreground transition hover:border-primary hover:text-primary"
+                    });
+                  }}
+                  className={toolbarButtonClass}
                   title="Exporter vos données nettoyées et calculées"
+                  aria-expanded={exportDropdownOpen}
                 >
                   <Download className="size-3.5 text-primary" />
-                  <span>Exporter</span>
+                  <span className="hidden sm:inline">Exporter</span>
                   <ChevronDown className="size-3 text-muted-foreground" />
                 </button>
-                {exportDropdownOpen && (
-                  <div className="absolute left-0 mt-1 z-50 w-44 rounded-lg border border-border bg-surface p-1 shadow-xl animate-in fade-in duration-150">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setExportDropdownOpen(false);
-                        doExport("csv");
-                      }}
-                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-foreground hover:bg-surface-2 transition text-left cursor-pointer"
-                    >
-                      <FileText className="size-3.5 text-primary" />
-                      <span>Fichier CSV (.csv)</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setExportDropdownOpen(false);
-                        doExport("xlsx");
-                      }}
-                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-foreground hover:bg-surface-2 transition text-left cursor-pointer"
-                    >
-                      <FileSpreadsheet className="size-3.5 text-emerald-400" />
-                      <span>Classeur Excel (.xlsx)</span>
-                    </button>
-                  </div>
-                )}
               </div>
 
               {/* Bouton de bascule rapide vers les lignes brutes si importé avec délimiteur */}
@@ -1503,11 +1443,11 @@ function detectBestSourceCol(matrix: Matrix): number {
                   <button
                     type="button"
                     onClick={switchToRawLines}
-                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/15 px-2.5 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/25 transition shadow-xs"
+                    className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md border border-warn/40 bg-warn/10 px-2.5 text-xs font-medium text-warn transition hover:bg-warn/20"
                     title="Votre fichier a été découpé par délimiteur. Cliquez ici pour recharger chaque ligne brute complète dans 1 colonne et créer vos regex !"
                   >
-                    <FileText className="size-3.5 text-amber-400" />
-                    <span>Lignes brutes (sans délimiteur)</span>
+                    <FileText className="size-3.5" />
+                    <span className="hidden lg:inline">Lignes brutes</span>
                   </button>
                 )}
 
@@ -1522,84 +1462,88 @@ function detectBestSourceCol(matrix: Matrix): number {
           )}
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5">
           {/* IA locale WebGPU compacte */}
           <button
             onClick={() => setLlmControlOpen(true)}
-            className="flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-medium text-amber-300 hover:border-amber-400 hover:bg-amber-500/20 transition cursor-pointer group"
+            className={cn(toolbarButtonClass, "border-primary/30 bg-primary-soft text-foreground hover:border-primary")}
             title="IA locale embarquée dans votre navigateur (WebGPU) : 0 octet envoyé sur Internet, 100% privé"
           >
             <span className="relative flex size-1.5">
               <span className={cn(
                 "absolute inline-flex h-full w-full rounded-full opacity-75",
-                isLLMRunning ? "animate-ping bg-amber-400" : llmReport.status === "ready" ? "bg-emerald-400 animate-pulse" : "bg-amber-500"
+                isLLMRunning ? "animate-ping bg-primary" : llmReport.status === "ready" ? "bg-success" : "bg-primary"
               )} />
               <span className={cn(
                 "relative inline-flex size-1.5 rounded-full",
-                llmReport.status === "ready" ? "bg-emerald-400" : "bg-amber-400"
+                llmReport.status === "ready" ? "bg-success" : "bg-primary"
               )} />
             </span>
-            <Sparkles className="size-3 text-amber-400" />
-            <span>IA locale ({localLLM.getCurrentModelConfig().name})</span>
+            <span className="hidden md:inline">IA locale</span>
+            {isHydrated && (
+              <span className="hidden text-muted-foreground 2xl:inline">
+                {localLLM.getCurrentModelConfig().name}
+              </span>
+            )}
           </button>
 
           {/* Badge Mode Avion / Hors-ligne en direct */}
           {isOffline && (
             <div
-              className="flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-400 animate-pulse"
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-success/40 bg-success-soft px-2 text-xs font-medium text-success"
               title="Mode avion actif : aucune connexion Internet, calculs 100% locaux dans votre RAM"
             >
-              <Plane className="size-3" />
-              <span>Avion</span>
+              <Plane className="size-3.5" />
+              <span className="hidden sm:inline">Hors-ligne</span>
             </div>
           )}
 
-          {/* Bouton d'installation PWA dans le header : logo download + PC */}
+          {/* Bouton d'installation PWA dans le header */}
           {!isInstalled && (
             <button
               type="button"
               onClick={installApp}
-              className="hidden md:inline-flex items-center gap-1 rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] font-medium text-foreground hover:border-primary hover:text-primary transition cursor-pointer"
+              className={cn(toolbarButtonClass, "hidden lg:inline-flex")}
               title="Installer Regex Genius sur votre PC (PWA autonome utilisable hors-ligne)"
             >
-              <Download className="size-3 text-primary" />
-              <span>PC</span>
+              <Download className="size-3.5 text-primary" />
+              <span>Installer</span>
             </button>
           )}
 
           {isInstalled && (
             <div
-              className="hidden md:inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground"
+              className="hidden h-8 items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground lg:inline-flex"
               title="Application locale installée sur votre ordinateur"
             >
-              <Laptop className="size-3 text-primary" />
-              <span>PC</span>
+              <Laptop className="size-3.5 text-primary" />
+              <span>Installée</span>
             </div>
           )}
 
-          <div className="h-3.5 w-px bg-border/60 mx-0.5 hidden sm:block" />
-
-          {/* Onglet / Bouton Cheat Sheet : compact, uniquement "Cheat Sheet" */}
           <button
             type="button"
             onClick={() => handleOpenCheatSheet(undefined)}
-            className="inline-flex items-center gap-1 rounded-full border border-amber-500/35 bg-amber-500/10 hover:border-amber-400 hover:bg-amber-500/20 px-2.5 py-0.5 text-[11px] font-medium text-amber-300 transition cursor-pointer shadow-xs group"
+            className={toolbarButtonClass}
             title="Ouvrir le cheat sheet synthétique des expressions régulières"
+            aria-label="Cheat Sheet"
           >
-            <BookOpen className="size-3 text-amber-400 group-hover:scale-110 transition-transform" />
-            <span>Cheat Sheet</span>
+            <BookOpen className="size-3.5 text-primary" />
+            <span className="hidden sm:inline">Cheat Sheet</span>
           </button>
+
+          <div className="mx-0.5 hidden h-5 w-px bg-border md:block" />
 
           {/* Lien Portfolio */}
           <a
             href="https://lyderickh.github.io/"
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-[11px] font-medium text-foreground hover:border-primary hover:text-primary transition cursor-pointer"
+            className={cn(iconButtonClass, "hidden md:inline-flex")}
             title="Consulter le portfolio de Lydérick Henry (Data & Finance)"
+            aria-label="Portfolio"
           >
-            <Globe className="size-3 text-primary" />
-            <span>Portfolio</span>
+            <Globe className="size-4" />
           </a>
 
           {/* Lien GitHub Repo */}
@@ -1607,14 +1551,95 @@ function detectBestSourceCol(matrix: Matrix): number {
             href="https://github.com/LyderickH/regex-genius"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-[11px] font-medium text-foreground hover:border-primary hover:text-primary transition cursor-pointer"
+            className={iconButtonClass}
             title="Voir le code source sur GitHub"
+            aria-label="Code source sur GitHub"
           >
-            <Github className="size-3 text-foreground" />
-            <span className="hidden sm:inline">GitHub</span>
+            <Github className="size-4" />
           </a>
         </div>
       </header>
+
+      {/* Menus déroulants rendus hors de la barre d'outils (qui défile horizontalement sur mobile) */}
+      {importDropdownOpen && (
+        <div data-dropdown-container="import" style={{ left: menuAnchor.left, top: menuAnchor.top }} className="fixed z-50 w-64 max-w-[calc(100vw-1rem)] rounded-lg border border-border bg-popover p-1 shadow-xl animate-in fade-in duration-150">
+          <label className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-foreground hover:bg-surface-2 transition text-left cursor-pointer">
+            <Split className="size-3.5 text-primary shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold">Avec délimiteur</div>
+              <div className="text-[11px] text-muted-foreground truncate">CSV, TSV, colonnes séparées (;, ,, \t)</div>
+            </div>
+            <input
+              type="file"
+              accept=".txt,.csv,.tsv,.xlsx,.xls"
+              className="hidden"
+              onChange={(e) => {
+                setImportDropdownOpen(false);
+                if (e.target.files?.[0]) handleFile(e.target.files[0], "with_delimiter");
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <label className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-foreground hover:bg-surface-2 transition text-left cursor-pointer">
+            <FileText className="size-3.5 text-warn shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold">Sans délimiteur</div>
+              <div className="text-[11px] text-muted-foreground truncate">Ligne par ligne brute en 1 colonne</div>
+            </div>
+            <input
+              type="file"
+              accept=".txt,.csv,.tsv,.xlsx,.xls,.log"
+              className="hidden"
+              onChange={(e) => {
+                setImportDropdownOpen(false);
+                if (e.target.files?.[0]) handleFile(e.target.files[0], "without_delimiter");
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <div className="my-1 border-t border-border" />
+          <button
+            type="button"
+            onClick={() => {
+              setImportDropdownOpen(false);
+              setPasteOpen(true);
+            }}
+            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-foreground hover:bg-surface-2 transition text-left cursor-pointer"
+          >
+            <ClipboardPaste className="size-3.5 text-derived shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold">Coller du texte...</div>
+              <div className="text-[11px] text-muted-foreground truncate">Depuis le presse-papier</div>
+            </div>
+          </button>
+        </div>
+      )}
+      {rows.length > 0 && exportDropdownOpen && (
+        <div data-dropdown-container="export" style={{ left: menuAnchor.left, top: menuAnchor.top }} className="fixed z-50 w-48 max-w-[calc(100vw-1rem)] rounded-lg border border-border bg-popover p-1 shadow-xl animate-in fade-in duration-150">
+          <button
+            type="button"
+            onClick={() => {
+              setExportDropdownOpen(false);
+              doExport("csv");
+            }}
+            className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-foreground hover:bg-surface-2 transition text-left cursor-pointer"
+          >
+            <FileText className="size-3.5 text-primary" />
+            <span>Fichier CSV (.csv)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setExportDropdownOpen(false);
+              doExport("xlsx");
+            }}
+            className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-foreground hover:bg-surface-2 transition text-left cursor-pointer"
+          >
+            <FileSpreadsheet className="size-3.5 text-success" />
+            <span>Classeur Excel (.xlsx)</span>
+          </button>
+        </div>
+      )}
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         {rows.length === 0 ? (
@@ -1640,18 +1665,18 @@ function detectBestSourceCol(matrix: Matrix): number {
             {rows.length > 0 && (
               <div
                 className={cn(
-                  "flex shrink-0 items-center justify-between border-b px-4 py-1.5 text-xs backdrop-blur-xs",
+                  "flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1.5 border-b px-3 py-1.5 text-xs sm:px-4",
                   activeFailures.length > 0
-                    ? "border-amber-500/30 bg-amber-500/10"
-                    : "border-grid-line bg-surface/70",
+                    ? "border-warn/30 bg-warn/10"
+                    : "border-grid-line bg-surface",
                 )}
               >
                 {/* Section gauche : positionnée directement au-dessus des colonnes # et INPUT */}
-                <div className="flex items-center gap-2.5">
+                <div className="flex flex-wrap items-center gap-2.5">
                   {fullSourceRef.current && fullSourceRef.current.totalLines > rows.length ? (
                     <>
                       <div
-                        className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 font-mono text-[11px] font-medium text-primary shadow-xs"
+                        className="flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary-soft px-2 py-0.5 text-xs font-medium text-primary tabular-nums"
                         title="Échantillon interactif de 50 000 lignes pour une fluidité maximale. L'export traitera l'intégralité du fichier."
                       >
                         <Layers className="size-3" />
@@ -1663,28 +1688,28 @@ function detectBestSourceCol(matrix: Matrix): number {
                       <button
                         type="button"
                         onClick={forceLoadAllRows}
-                        className="group flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 px-2.5 py-0.5 text-[11px] font-medium text-amber-300 transition cursor-pointer shadow-xs"
+                        className="group flex items-center gap-1.5 rounded-md border border-warn/40 bg-warn/10 px-2 py-0.5 text-xs font-medium text-warn transition hover:bg-warn/20 cursor-pointer"
                         title="Forcer le chargement de toutes les lignes dans le navigateur (+50k lignes). Attention : cela peut saturer la mémoire vive et faire planter votre navigateur !"
                       >
-                        <AlertTriangle className="size-3 text-amber-400 shrink-0 group-hover:scale-110 transition-transform" />
+                        <AlertTriangle className="size-3 shrink-0" />
                         <span>Forcer l'affichage (+50k lignes)</span>
-                        <span className="text-[10px] text-amber-400/80 font-normal">
+                        <span className="hidden font-normal text-warn/80 lg:inline">
                           · peut planter le navigateur
                         </span>
                       </button>
                     </>
                   ) : isForcedAll ? (
                     <div
-                      className="flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 font-mono text-[11px] font-medium text-amber-300 shadow-xs"
+                      className="flex items-center gap-1.5 rounded-md border border-warn/40 bg-warn/10 px-2 py-0.5 text-xs font-medium text-warn tabular-nums"
                       title="Affichage forcé complet de toutes les lignes dans le DOM virtuel"
                     >
-                      <AlertTriangle className="size-3 text-amber-400" />
+                      <AlertTriangle className="size-3" />
                       <span>
                         {rows.length.toLocaleString("fr-FR")} lignes (+50k forcé) · {columns.length} colonne{columns.length > 1 ? "s" : ""}
                       </span>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
                       <span className="font-semibold text-foreground">
                         {rows.length.toLocaleString("fr-FR")}
                       </span>
@@ -1696,8 +1721,8 @@ function detectBestSourceCol(matrix: Matrix): number {
 
                   {/* Alerte et navigation vers les lignes non reconnues */}
                   {activeFailures.length > 0 && (
-                    <div className="flex items-center gap-2 pl-2 border-l border-amber-500/30">
-                      <span className="font-semibold text-amber-400 flex items-center gap-1.5">
+                    <div className="flex flex-wrap items-center gap-2 border-l border-warn/30 pl-2.5">
+                      <span className="flex items-center gap-1.5 font-semibold text-warn">
                         <AlertTriangle className="size-3.5" />
                         <span>
                           {activeFailures.length} ligne{activeFailures.length > 1 ? "s" : ""} non reconnue{activeFailures.length > 1 ? "s" : ""}
@@ -1711,10 +1736,10 @@ function detectBestSourceCol(matrix: Matrix): number {
                           )
                         }
                         className={cn(
-                          "rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition cursor-pointer",
+                          "rounded-md px-2 py-0.5 text-xs font-medium transition cursor-pointer",
                           displayMode === "failures_only"
-                            ? "bg-amber-500 text-amber-950 font-bold shadow-xs"
-                            : "border border-amber-500/40 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30",
+                            ? "bg-warn text-background"
+                            : "border border-warn/40 bg-warn/10 text-warn hover:bg-warn/20",
                         )}
                       >
                         {displayMode === "failures_only"
@@ -1731,7 +1756,7 @@ function detectBestSourceCol(matrix: Matrix): number {
                             toast.info(`Ligne ${targetRow + 1} ciblée`);
                           }
                         }}
-                        className="rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:border-primary transition cursor-pointer"
+                        className="rounded-md border border-border bg-surface px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:border-primary transition cursor-pointer"
                         title="Sauter à la première ligne non reconnue"
                       >
                         ↓ 1er échec
@@ -1741,12 +1766,12 @@ function detectBestSourceCol(matrix: Matrix): number {
                 </div>
 
                 {/* Section droite : sélecteur de mode ou pagination si dataset > 5000 */}
-                <div className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground tabular-nums">
                   {rows.length > 5000 && (
                     <select
                       value={displayMode}
                       onChange={(e) => setDisplayMode(e.target.value as any)}
-                      className="rounded border border-border bg-surface px-2 py-0.5 font-mono text-xs text-foreground focus:border-primary focus:outline-none cursor-pointer"
+                      className="h-7 rounded-md border border-border bg-surface-2 px-2 text-xs text-foreground focus:border-primary focus:outline-none cursor-pointer"
                     >
                       <option value="all">Toutes les lignes</option>
                       <option value="first_1000">1 000 premières lignes</option>
@@ -1764,7 +1789,7 @@ function detectBestSourceCol(matrix: Matrix): number {
                         <button
                           type="button"
                           onClick={() => setExtraCount((c) => c + 1000)}
-                          className="rounded border border-border bg-surface px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:border-primary hover:text-primary transition cursor-pointer"
+                          className="rounded-md border border-border bg-surface px-2 py-0.5 text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary transition cursor-pointer"
                         >
                           + 1 000 lignes
                         </button>
@@ -1774,7 +1799,7 @@ function detectBestSourceCol(matrix: Matrix): number {
                 </div>
               </div>
             )}
-            <div className="relative flex min-h-0 flex-1">
+            <div className="relative flex min-h-0 flex-1 flex-col md:flex-row">
               <DataGrid
                 rows={rows}
                 columns={columns}
@@ -1914,19 +1939,19 @@ function detectBestSourceCol(matrix: Matrix): number {
                   className={cn(
                     "flex items-center gap-2.5 rounded-lg border p-2.5 text-xs font-medium transition cursor-pointer text-left",
                     headerAsk.mode === "without_delimiter"
-                      ? "border-amber-500 bg-amber-500/10 text-amber-300 font-semibold ring-1 ring-amber-500"
+                      ? "border-warn bg-warn/10 text-warn font-semibold ring-1 ring-warn"
                       : "border-border bg-surface-2/40 text-muted-foreground hover:bg-surface-2 hover:text-foreground",
                   )}
                 >
-                  <FileText className="size-4 shrink-0 text-amber-400" />
+                  <FileText className="size-4 shrink-0 text-warn" />
                   <div>
                     <div className="leading-tight font-semibold flex items-center gap-1.5">
                       <span>Sans délimiteur</span>
-                      <span className="rounded bg-amber-500/20 px-1 py-0.2 text-[9px] text-amber-300 font-bold uppercase">
+                      <span className="rounded bg-warn/20 px-1 py-px text-[11px] text-warn font-semibold">
                         Recommandé Regex
                       </span>
                     </div>
-                    <div className="text-[10px] font-normal opacity-80 mt-0.5">
+                    <div className="text-[11px] font-normal opacity-80 mt-0.5">
                       Lignes brutes entières dans 1 colonne source
                     </div>
                   </div>
@@ -1945,7 +1970,7 @@ function detectBestSourceCol(matrix: Matrix): number {
                   <Split className="size-4 shrink-0 text-primary" />
                   <div>
                     <div className="leading-tight font-semibold">Avec délimiteur</div>
-                    <div className="text-[10px] font-normal opacity-80 mt-0.5">
+                    <div className="text-[11px] font-normal opacity-80 mt-0.5">
                       Découpé en {headerAsk.matrix[0]?.length ?? 1} colonnes (Tableur)
                     </div>
                   </div>
@@ -1955,8 +1980,8 @@ function detectBestSourceCol(matrix: Matrix): number {
 
             {headerAsk.mode === "with_delimiter" ? (
               <>
-                <p className="text-[11px] text-amber-400/90 leading-relaxed bg-amber-500/10 border border-amber-500/20 rounded p-2">
-                  ⚠️ <strong>Attention :</strong> en mode « Avec délimiteur », votre fichier est déjà découpé. La 1re colonne ne contiendra que son propre morceau de texte, et non la ligne complète. Pour concevoir des Regex sur vos lignes, préférez le mode <strong>« Sans délimiteur »</strong>.
+                <p className="text-[11px] text-warn/90 leading-relaxed bg-warn/10 border border-warn/20 rounded p-2">
+                  <strong>Attention :</strong> en mode « Avec délimiteur », votre fichier est déjà découpé. La 1re colonne ne contiendra que son propre morceau de texte, et non la ligne complète. Pour concevoir des Regex sur vos lignes, préférez le mode <strong>« Sans délimiteur »</strong>.
                 </p>
                 {/* Sélecteur de la colonne source */}
                 <div className="rounded-lg border border-border/80 bg-surface-2/40 p-3 space-y-2">
@@ -2232,6 +2257,13 @@ function detectBestSourceCol(matrix: Matrix): number {
   );
 }
 
+const toolbarButtonClass =
+  "inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-surface px-2.5 text-xs font-medium text-foreground transition hover:border-primary/60 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+const iconButtonClass =
+  "inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+/** Bouton de barre d'outils : icône seule sous 1280 px, libellé au-delà (libellé toujours en infobulle). */
 function ToolbarButton({
   icon: Icon,
   label,
@@ -2242,12 +2274,9 @@ function ToolbarButton({
   onClick: () => void;
 }) {
   return (
-    <button
-      onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs transition hover:border-primary hover:text-primary"
-    >
-      <Icon className="size-3.5" />
-      {label}
+    <button type="button" onClick={onClick} className={toolbarButtonClass} title={label} aria-label={label}>
+      <Icon className="size-3.5 text-muted-foreground" />
+      <span className="hidden xl:inline">{label}</span>
     </button>
   );
 }

@@ -1,9 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Sparkles,
   Upload,
   ClipboardPaste,
-  Plus,
   ShieldCheck,
   Zap,
   Split,
@@ -15,7 +14,6 @@ import {
   Plane,
   WifiOff,
   Download,
-  Laptop,
   Receipt,
   Users,
   Globe,
@@ -23,17 +21,8 @@ import {
   Github,
   BookOpen,
 } from "lucide-react";
-import {
-  HoverCard,
-  HoverCardTrigger,
-  HoverCardContent,
-} from "@/components/ui/hover-card";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { BUSINESS_PRESETS, type BusinessPreset } from "@/lib/datasets/business-presets";
 
 interface WelcomeHeroProps {
@@ -52,6 +41,8 @@ interface WelcomeHeroProps {
   onInstall?: () => void;
 }
 
+const ACCEPTED_FORMATS = [".xlsx", ".csv", ".tsv", ".txt", ".log"];
+
 export function WelcomeHero({
   onLoadSample1,
   onLoadSample2,
@@ -68,6 +59,7 @@ export function WelcomeHero({
   onInstall,
 }: WelcomeHeroProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -91,182 +83,190 @@ export function WelcomeHero({
   const handleSample1 = onLoadSample1 || onLoadSample || (() => {});
   const handleSample2 = onLoadSample2 || onLoadSample || (() => {});
 
+  const openFormatsGuide = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onOpenFormatsGuide?.();
+  };
+
   return (
     <div
+      data-welcome-hero
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`relative flex min-h-full flex-1 flex-col items-center overflow-y-auto px-4 py-8 sm:py-12 transition-colors ${
-        isDragging ? "bg-primary/5 border-2 border-dashed border-primary" : "bg-background"
+      className={`relative flex min-h-full min-w-0 flex-1 flex-col items-center overflow-x-hidden overflow-y-auto px-4 py-8 transition-colors sm:px-6 sm:py-12 ${
+        isDragging ? "border-2 border-dashed border-primary bg-primary-soft" : "bg-background"
       }`}
     >
-      {/* Halo lumineux décoratif en arrière-plan */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 h-[450px] w-[800px] rounded-full bg-gradient-to-b from-amber-500/15 via-cyan-500/10 to-transparent blur-3xl opacity-70" />
-      </div>
-
-      <div className="relative z-10 mx-auto my-auto flex w-full max-w-5xl flex-col items-center text-center">
-        {/* Badge technologique */}
-        <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-surface px-3.5 py-1.5 text-xs font-medium text-primary shadow-sm backdrop-blur-sm">
-          <Sparkles className="size-3.5 text-primary animate-pulse" />
+      <div className="mx-auto my-auto flex w-full min-w-0 max-w-5xl flex-col items-center text-center">
+        {/* Badge du haut */}
+        <div className="inline-flex max-w-full items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-muted-foreground">
+          <Sparkles className="size-3.5 shrink-0 text-primary" />
           <span>Synthèse d'expressions régulières par l'exemple</span>
         </div>
 
         {/* Titre principal */}
-        <h1 className="mt-5 text-3xl font-extrabold tracking-tight sm:text-4xl md:text-5xl lg:text-6xl text-foreground max-w-4xl leading-tight">
-          Extrayez vos données,{" "}
-          <span className="bg-gradient-to-r from-amber-400 via-amber-200 to-cyan-400 bg-clip-text text-transparent">
-            sans écrire de Regex
-          </span>
+        <h1 className="mt-5 max-w-4xl text-3xl font-bold leading-tight tracking-tight text-foreground text-balance sm:text-4xl md:text-5xl">
+          Extrayez vos données, sans écrire de <span className="text-primary">Regex</span>
         </h1>
 
-        {/* Mini-badges interactifs : C'est quoi une Regex + Pense-bête (Cheat Sheet) */}
-        <div className="mt-3.5 flex flex-wrap items-center justify-center gap-2.5">
+        {/* Sous-titre */}
+        <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+          À la manière de la « Colonne à partir d'exemples » de Power Query et Excel : donnez 1 ou 2
+          exemples attendus, Regex Genius déduit instantanément l'expression régulière optimale et
+          remplit tout votre tableau.
+        </p>
+
+        {/* Aide : C'est quoi une Regex + pense-bête */}
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs">
           <HoverCard openDelay={80} closeDelay={150}>
             <HoverCardTrigger asChild>
               <button
                 type="button"
-                className="group inline-flex items-center gap-2 rounded-full border border-primary/30 bg-surface/80 px-3.5 py-1 text-xs font-medium text-muted-foreground shadow-xs backdrop-blur-sm transition-all hover:border-primary/60 hover:bg-surface-2 hover:text-foreground cursor-help"
+                className="inline-flex cursor-help items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1 font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:bg-surface-2 hover:text-foreground"
               >
-                <HelpCircle className="size-3.5 text-primary transition-transform group-hover:scale-110" />
+                <HelpCircle className="size-3.5 text-primary" />
                 <span>
                   C'est quoi une <strong className="text-foreground">Regex</strong> ?
                 </span>
-                <span className="rounded-full bg-primary/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-primary">
-                  Explication 30s
-                </span>
+                <span className="text-muted-foreground/80">· explication en 30 s</span>
               </button>
             </HoverCardTrigger>
             <HoverCardContent
               align="center"
               side="bottom"
               sideOffset={10}
-              className="z-50 w-96 max-w-[calc(100vw-2rem)] rounded-2xl border border-border/90 bg-surface/98 p-5 text-foreground shadow-2xl backdrop-blur-2xl text-left tracking-normal font-sans"
+              className="z-50 w-96 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface p-5 text-left font-sans tracking-normal text-foreground shadow-xl"
             >
               <div className="flex items-start gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-cyan-500 text-slate-950 font-bold shadow-sm">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary-soft text-primary">
                   <Sparkles className="size-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-foreground">
+                  <h3 className="text-sm font-semibold text-foreground">
                     C'est quoi une « Regex » ?
                   </h3>
-                  <p className="text-[11px] text-muted-foreground font-medium">
+                  <p className="text-[11px] font-medium text-muted-foreground">
                     Expression Régulière · Regular Expression
                   </p>
                 </div>
               </div>
 
               <div className="mt-3.5 space-y-3 text-xs leading-relaxed text-muted-foreground">
-                <p className="text-foreground/90 leading-normal">
-                  C'est une <strong>formule de recherche textuelle avancée</strong> permettant de détecter, extraire ou vérifier des motifs précis (emails, dates, montants, numéros de facture) perdus dans des blocs de texte brut.
+                <p className="leading-normal text-foreground/90">
+                  C'est une <strong>formule de recherche textuelle avancée</strong> permettant de
+                  détecter, extraire ou vérifier des motifs précis (emails, dates, montants, numéros
+                  de facture) perdus dans des blocs de texte brut.
                 </p>
 
-                <div className="rounded-xl border border-border/80 bg-surface-2/80 p-3">
-                  <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground mb-1.5">
+                <div className="rounded-md border border-border bg-surface-2 p-3">
+                  <div className="mb-1.5 flex items-center justify-between gap-2 text-[11px] font-semibold text-muted-foreground">
                     <span>Syntaxe manuelle classique :</span>
-                    <span className="text-[10px] text-amber-400 font-medium">Complexe & cryptique</span>
+                    <span className="font-medium text-warn">Complexe et cryptique</span>
                   </div>
-                  <code className="block rounded bg-background/90 px-2.5 py-1.5 font-mono text-[11px] text-amber-300 break-all select-all border border-border/50">
+                  <code className="block select-all break-all rounded border border-border bg-background px-2.5 py-1.5 font-mono text-[11px] text-primary">
                     (?&lt;=FAC-)\d&#123;4&#125;-[A-Z0-9]+(?=\s*\|)
                   </code>
                 </div>
 
-                <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 text-foreground">
-                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-primary mb-1">
-                    <CheckCircle2 className="size-3.5 text-primary" />
+                <div className="rounded-md border border-primary/30 bg-primary-soft p-3 text-foreground">
+                  <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-primary">
+                    <CheckCircle2 className="size-3.5" />
                     <span>La solution Regex Genius :</span>
                   </div>
-                  <p className="text-xs text-muted-foreground leading-normal">
-                    <strong>Vous n'avez rien à apprendre.</strong> Saisissez simplement 1 ou 2 exemples attendus dans votre colonne, et l'outil calcule la formule optimale instantanément pour Excel, Google Sheets, Power Query ou Python !
+                  <p className="text-xs leading-normal text-muted-foreground">
+                    <strong className="text-foreground">Vous n'avez rien à apprendre.</strong>{" "}
+                    Saisissez simplement 1 ou 2 exemples attendus dans votre colonne, et l'outil
+                    calcule la formule optimale instantanément pour Excel, Google Sheets, Power
+                    Query ou Python.
                   </p>
                 </div>
               </div>
             </HoverCardContent>
           </HoverCard>
 
-          {/* Bouton Cheat Sheet compact */}
           {onOpenCheatSheet && (
             <button
               type="button"
               onClick={onOpenCheatSheet}
-              className="group inline-flex items-center gap-1.5 rounded-full border border-amber-500/35 bg-gradient-to-r from-amber-500/15 to-amber-500/5 px-2.5 py-0.5 text-[11px] font-medium text-amber-300 shadow-xs backdrop-blur-sm transition-all hover:border-amber-400 hover:bg-amber-500/25 cursor-pointer"
-              title="Ouvrir le cheat sheet condensé des regex"
+              className="inline-flex items-center gap-1.5 font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+              title="Ouvrir le pense-bête condensé des regex"
             >
-              <BookOpen className="size-3 text-amber-400 transition-transform group-hover:scale-110" />
-              <span>Cheat Sheet</span>
+              <BookOpen className="size-3.5" />
+              <span>Pense-bête regex</span>
             </button>
           )}
         </div>
 
-        {/* Sous-titre */}
-        <p className="mt-4 max-w-2xl text-sm sm:text-base text-muted-foreground leading-relaxed">
-          À la manière de la « Colonne à partir d'exemples » de Power Query et Excel :
-          donnez 1 ou 2 exemples attendus, Regex Genius déduit instantanément l'expression régulière
-          optimale et remplit tout votre tableau.
-        </p>
-
-        {/* Grille des 2 actions principales d'ingestion */}
-        <div className="mt-8 grid w-full grid-cols-1 gap-4 sm:grid-cols-2 text-left">
-          {/* Action 1 : Importer un fichier */}
-          <label className="group relative flex cursor-pointer flex-col justify-between rounded-2xl border border-primary/30 bg-surface/90 p-6 shadow-md transition-all duration-200 hover:-translate-y-1 hover:border-primary hover:bg-surface hover:shadow-primary/10">
+        {/* Deux actions principales */}
+        <div className="mt-8 grid w-full min-w-0 grid-cols-1 gap-4 text-left sm:grid-cols-2">
+          {/* Action 1 : Importer un fichier (primaire) */}
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="flex min-w-0 cursor-pointer flex-col rounded-lg border border-primary/60 bg-surface p-5 transition-colors hover:border-primary hover:bg-surface-2 sm:p-6"
+          >
             <input
+              ref={fileInputRef}
               type="file"
               accept=".txt,.csv,.tsv,.xlsx,.xls,.log"
               className="hidden"
+              onClick={(e) => e.stopPropagation()}
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) onImportFile(file);
+                e.target.value = "";
               }}
             />
-            <div>
-              <div className="flex size-12 items-center justify-center rounded-xl bg-primary/20 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-                <Upload className="size-6" />
-              </div>
-              <h2 className="mt-4 text-base font-bold text-foreground">Importer vos données</h2>
-              <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                Glissez-déposez ou parcourez un fichier <strong>.xlsx</strong>, <strong>.csv</strong>,{" "}
-                <strong>.tsv</strong>, <strong>.txt</strong> ou <strong>.log</strong> (jusqu'à 1M+ de lignes).
-              </p>
-
-              {onOpenFormatsGuide && (
-                <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[10px] uppercase font-bold text-muted-foreground/80 tracking-wider">Formats :</span>
-                  {[".CSV", ".XLSX", ".TXT", ".LOG", "Ctrl+V"].map((ext) => (
-                    <span
-                      key={ext}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        onOpenFormatsGuide();
-                      }}
-                      className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 transition cursor-pointer"
-                      title={`Voir les détails et structure pour le format ${ext}`}
-                    >
-                      {ext}
-                    </span>
-                  ))}
+            <div className="flex size-10 items-center justify-center rounded-md bg-primary-soft text-primary">
+              <Upload className="size-5" />
+            </div>
+            <h2 className="mt-4 text-base font-semibold text-foreground">Importer vos données</h2>
+            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+              Glissez-déposez un fichier ici ou parcourez vos dossiers, jusqu'à plus d'un million de
+              lignes.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+              <span>Formats acceptés :</span>
+              {ACCEPTED_FORMATS.map((ext) =>
+                onOpenFormatsGuide ? (
                   <button
+                    key={ext}
                     type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      onOpenFormatsGuide();
-                    }}
-                    className="text-[11px] font-medium text-cyan-400 hover:underline ml-1"
+                    onClick={openFormatsGuide}
+                    className="rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-foreground/90 transition-colors hover:border-derived/50 hover:text-derived"
+                    title={`Voir les détails et la structure du format ${ext}`}
                   >
-                    Guide détaillé →
+                    {ext}
                   </button>
-                </div>
+                ) : (
+                  <span
+                    key={ext}
+                    className="rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-foreground/90"
+                  >
+                    {ext}
+                  </span>
+                ),
               )}
             </div>
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-3">
-              <span className="flex items-center text-xs font-semibold text-primary">
+
+            <div className="mt-auto flex flex-wrap items-center gap-2 pt-5">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  fileInputRef.current?.click();
+                }}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+              >
                 <span>Parcourir mes fichiers</span>
-                <ArrowRight className="ml-1.5 size-4 transition-transform group-hover:translate-x-1" />
-              </span>
-              <div className="flex items-center gap-1.5 text-[11px]" onClick={(e) => e.stopPropagation()}>
-                <label className="cursor-pointer rounded-md border border-border bg-surface-2/80 px-2 py-0.5 text-muted-foreground hover:bg-surface-3 hover:text-foreground transition font-medium">
+                <ArrowRight className="size-4" />
+              </button>
+              <div
+                className="flex flex-wrap items-center gap-1.5 text-xs"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <label className="cursor-pointer rounded-md border border-border px-2 py-1.5 font-medium text-muted-foreground transition-colors hover:bg-surface-3 hover:text-foreground">
                   Avec délimiteur
                   <input
                     type="file"
@@ -279,7 +279,7 @@ export function WelcomeHero({
                     }}
                   />
                 </label>
-                <label className="cursor-pointer rounded-md border border-border bg-surface-2/80 px-2 py-0.5 text-muted-foreground hover:bg-surface-3 hover:text-foreground transition font-medium">
+                <label className="cursor-pointer rounded-md border border-border px-2 py-1.5 font-medium text-muted-foreground transition-colors hover:bg-surface-3 hover:text-foreground">
                   Sans délimiteur
                   <input
                     type="file"
@@ -294,45 +294,44 @@ export function WelcomeHero({
                 </label>
               </div>
             </div>
-          </label>
+          </div>
 
-          {/* Action 2 : Tableau vierge / Coller du texte */}
+          {/* Action 2 : Coller du texte / Grille vide */}
           <div
             onClick={onStartBlank}
-            className="group relative flex flex-col justify-between rounded-2xl border border-border bg-surface/80 p-6 transition-all duration-200 hover:-translate-y-1 hover:border-primary/50 hover:bg-surface hover:shadow-md text-left cursor-pointer"
+            className="flex min-w-0 cursor-pointer flex-col rounded-lg border border-border bg-surface p-5 text-left transition-colors hover:border-primary/40 hover:bg-surface-2 sm:p-6"
           >
-            <div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex size-12 items-center justify-center rounded-xl border border-border bg-surface-2 text-foreground transition-colors group-hover:border-primary/30 group-hover:text-primary">
-                    <ClipboardPaste className="size-6" />
-                  </div>
-                  <div className="flex size-12 items-center justify-center rounded-xl border border-border bg-surface-2 text-foreground transition-colors group-hover:border-primary/30 group-hover:text-primary">
-                    <Plus className="size-6" />
-                  </div>
-                </div>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-400">
-                  <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Ctrl+V actif partout
-                </span>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex size-10 items-center justify-center rounded-md bg-surface-2 text-foreground">
+                <ClipboardPaste className="size-5" />
               </div>
-              <h2 className="mt-4 text-base font-bold text-foreground">Coller du texte ou Grille vierge</h2>
-              <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                Faites <strong>Ctrl+V</strong> n'importe où sur l'écran pour importer vos données instantanément (depuis Excel, CSV ou bloc-notes), ou démarrez sur une grille vide.
-              </p>
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-success/30 bg-success-soft px-2 py-0.5 text-[11px] font-medium text-success">
+                <span className="size-1.5 rounded-full bg-success" />
+                Ctrl+V actif partout
+              </span>
             </div>
-            <div className="mt-5 flex flex-wrap items-center gap-2">
+            <h2 className="mt-4 text-base font-semibold text-foreground">
+              Coller du texte ou partir d'une grille vide
+            </h2>
+            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+              Faites{" "}
+              <kbd className="rounded border border-border bg-surface-2 px-1 font-mono text-[11px] text-foreground">
+                Ctrl+V
+              </kbd>{" "}
+              n'importe où sur l'écran pour importer vos données (depuis Excel, un CSV ou le
+              bloc-notes), ou démarrez sur une grille vide.
+            </p>
+            <div className="mt-auto flex flex-wrap items-center gap-2 pt-5">
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onOpenPaste();
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20 transition"
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-3.5 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary/50 hover:bg-surface-3"
               >
-                <ClipboardPaste className="size-3.5" />
+                <ClipboardPaste className="size-4 text-primary" />
                 <span>Coller du texte</span>
-                <kbd className="text-[10px] font-mono text-primary/80">Ctrl+V</kbd>
               </button>
               <button
                 type="button"
@@ -340,29 +339,31 @@ export function WelcomeHero({
                   e.stopPropagation();
                   onStartBlank();
                 }}
-                className="inline-flex items-center rounded-lg bg-surface-2 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-3 transition"
+                className="inline-flex items-center rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-3 hover:text-foreground"
               >
-                <span>Grille vide</span>
+                Grille vide
               </button>
             </div>
           </div>
         </div>
 
-        {/* Encart explicatif rapide des formats et structure attendue */}
-        <div className="mt-4 flex w-full flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-2xl border border-cyan-500/30 bg-gradient-to-r from-cyan-950/20 via-surface to-surface p-4 text-left shadow-sm">
-          <div className="flex items-start gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-cyan-500/15 text-cyan-400 font-bold border border-cyan-500/30">
-              <FileSpreadsheet className="size-5" />
+        {/* Structure attendue */}
+        <div className="mt-4 flex w-full min-w-0 flex-col items-start justify-between gap-3 rounded-lg border border-border bg-surface p-4 text-left sm:flex-row sm:items-center">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-derived-soft text-derived">
+              <FileSpreadsheet className="size-4.5" />
             </div>
-            <div>
-              <div className="text-xs font-bold text-foreground flex items-center gap-2">
-                <span>Structure attendue : 1 colonne Source brute + 1 ou 2 exemples souhaités</span>
-                <span className="rounded bg-emerald-500/20 px-1.5 py-0.2 text-[10px] font-semibold text-emerald-300">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold text-foreground">
+                <span>Structure attendue : 1 colonne source brute + 1 ou 2 exemples souhaités</span>
+                <span className="rounded-md bg-success-soft px-1.5 py-0.5 text-[11px] font-medium text-success">
                   Zéro prise de tête
                 </span>
               </div>
-              <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
-                Importez vos lignes brutes (logs, factures, exports). Remplissez simplement <strong>1 ou 2 exemples</strong> sur la colonne résultat : Regex Genius calcule la formule et génère tout le reste.
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                Importez vos lignes brutes (logs, factures, exports). Remplissez simplement{" "}
+                <strong className="text-foreground">1 ou 2 exemples</strong> sur la colonne résultat
+                : Regex Genius calcule la formule et génère tout le reste.
               </p>
             </div>
           </div>
@@ -370,7 +371,7 @@ export function WelcomeHero({
             <button
               type="button"
               onClick={onOpenFormatsGuide}
-              className="inline-flex items-center gap-1.5 shrink-0 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20 transition cursor-pointer self-stretch sm:self-auto justify-center"
+              className="inline-flex shrink-0 items-center justify-center gap-1.5 self-stretch rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-derived/50 hover:bg-surface-2 sm:self-auto"
             >
               <span>Explication des formats</span>
               <ArrowRight className="size-3.5" />
@@ -378,39 +379,37 @@ export function WelcomeHero({
           )}
         </div>
 
-        {/* Séparateur & En-tête des modèles métiers */}
-        <div className="mt-10 flex w-full items-center justify-between gap-4 border-t border-border/60 pt-6 text-left">
+        {/* Cas d'usage métier */}
+        <div className="mt-10 flex w-full flex-col gap-2 border-t border-border pt-6 text-left sm:flex-row sm:items-end sm:justify-between sm:gap-4">
           <div>
-            <div className="inline-flex items-center gap-1.5 text-xs font-bold text-foreground">
-              <Sparkles className="size-3.5 text-primary" />
-              <span>Ou essayez en 1 clic sur un cas d'usage métier :</span>
-            </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
+            <h2 className="text-sm font-semibold text-foreground">
+              Ou essayez en 1 clic sur un cas d'usage métier
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
               Ces modèles chargent des données réelles et déduisent les expressions immédiatement.
             </p>
           </div>
           <button
             type="button"
             onClick={handleSample2}
-            className="hidden sm:inline-flex items-center gap-1 text-[11px] font-medium text-cyan-400 hover:underline cursor-pointer"
+            className="inline-flex shrink-0 items-center gap-1.5 self-start text-xs font-medium text-derived underline-offset-4 hover:underline sm:self-auto"
             title="Charger le dataset volumétrique de 1 138 logs d'audit"
           >
-            <Database className="size-3" />
-            <span>Grand dataset (1 138 logs) →</span>
+            <Database className="size-3.5" />
+            <span>Grand dataset (1 138 logs)</span>
           </button>
         </div>
 
-        {/* Grille des 4 cas d'usage métiers */}
-        <div className="mt-3 grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 text-left">
+        <div className="mt-3 grid w-full min-w-0 grid-cols-1 gap-3 text-left sm:grid-cols-2 lg:grid-cols-4">
           {BUSINESS_PRESETS.map((preset) => {
             const Icon =
               preset.id === "fec"
                 ? Receipt
                 : preset.id === "rh"
-                ? Users
-                : preset.id === "web"
-                ? Globe
-                : Landmark;
+                  ? Users
+                  : preset.id === "web"
+                    ? Globe
+                    : Landmark;
             return (
               <button
                 key={preset.id}
@@ -423,103 +422,92 @@ export function WelcomeHero({
                   }
                 }}
                 title={`${preset.title} (${preset.category}) : ${preset.description}`}
-                className="group relative flex flex-col justify-between rounded-xl border border-border/70 bg-surface/60 p-4 transition-all duration-200 hover:-translate-y-1 hover:border-primary/50 hover:bg-surface hover:shadow-md text-left cursor-pointer min-h-[160px]"
+                className="group flex h-full min-w-0 cursor-pointer flex-col rounded-lg border border-border bg-surface p-4 text-left transition-colors hover:border-primary/50 hover:bg-surface-2"
               >
-                <div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex size-9 items-center justify-center rounded-lg bg-surface-2 text-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
-                      <Icon className="size-4.5" />
-                    </div>
-                    <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                      {preset.category}
-                    </span>
+                <div className="flex w-full items-center justify-between gap-2">
+                  <div className="flex size-8 items-center justify-center rounded-md bg-surface-2 text-foreground transition-colors group-hover:bg-primary-soft group-hover:text-primary">
+                    <Icon className="size-4" />
                   </div>
-                  <h3 className="mt-3 text-xs font-bold text-foreground group-hover:text-primary transition-colors">
-                    {preset.title}
-                  </h3>
-                  <TooltipProvider delayDuration={120}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <p
-                          className="mt-1 text-[11px] text-muted-foreground leading-normal line-clamp-2 group-hover:line-clamp-none transition-all duration-200"
-                          title={preset.description}
-                        >
-                          {preset.description}
-                        </p>
-                      </TooltipTrigger>
-                      <TooltipContent
-                        side="top"
-                        sideOffset={8}
-                        className="z-50 max-w-[280px] bg-popover/98 text-foreground border border-border/80 shadow-2xl p-2.5 text-xs rounded-xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150"
-                      >
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                          <span className="font-semibold text-primary text-[11px]">{preset.title}</span>
-                          <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[9px] text-muted-foreground">{preset.category}</span>
-                        </div>
-                        <p className="text-foreground/90 text-[11px] leading-relaxed">{preset.description}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                  <span className="truncate rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    {preset.category}
+                  </span>
                 </div>
-                <div className="mt-3 flex items-center text-[11px] font-semibold text-primary">
+                <h3 className="mt-3 text-sm font-semibold text-foreground">{preset.title}</h3>
+                <TooltipProvider delayDuration={120}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <p className="mt-1 line-clamp-2 text-xs leading-normal text-muted-foreground">
+                        {preset.description}
+                      </p>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="top"
+                      sideOffset={8}
+                      className="z-50 max-w-[280px] rounded-md border border-border bg-popover p-2.5 text-xs text-foreground shadow-xl"
+                    >
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-semibold text-primary">
+                          {preset.title}
+                        </span>
+                        <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                          {preset.category}
+                        </span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-foreground/90">
+                        {preset.description}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <div className="mt-auto flex items-center pt-3 text-xs font-medium text-primary">
                   <span>Essayer ce cas</span>
-                  <ArrowRight className="ml-1 size-3 transition-transform group-hover:translate-x-1" />
+                  <ArrowRight className="ml-1 size-3.5" />
                 </div>
               </button>
             );
           })}
         </div>
 
-        {/* Bannière Défi Mode Avion (Hors-ligne immédiat dans le navigateur) */}
+        {/* Bannière mode avion */}
         <div
-          className={`mt-8 w-full rounded-2xl border p-5 backdrop-blur-md transition-all duration-300 text-left ${
-            isOffline
-              ? "border-emerald-500/70 bg-gradient-to-r from-emerald-950/40 via-surface to-emerald-950/30 shadow-xl shadow-emerald-950/50"
-              : "border-primary/30 bg-gradient-to-r from-amber-500/10 via-surface/80 to-cyan-500/10 shadow-md"
+          className={`mt-8 w-full min-w-0 rounded-lg border bg-surface p-4 text-left transition-colors sm:p-5 ${
+            isOffline ? "border-success/60" : "border-border"
           }`}
         >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-start gap-3.5">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+            <div className="flex min-w-0 items-start gap-3">
               <div
-                className={`flex size-11 shrink-0 items-center justify-center rounded-xl transition-colors ${
-                  isOffline
-                    ? "bg-emerald-500/20 text-emerald-400"
-                    : "bg-primary/20 text-primary"
+                className={`flex size-9 shrink-0 items-center justify-center rounded-md ${
+                  isOffline ? "bg-success-soft text-success" : "bg-surface-2 text-foreground"
                 }`}
               >
-                {isOffline ? (
-                  <WifiOff className="size-6 animate-pulse" />
-                ) : (
-                  <Plane className="size-6" />
-                )}
+                {isOffline ? <WifiOff className="size-4.5" /> : <Plane className="size-4.5" />}
               </div>
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-bold text-foreground">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="text-sm font-semibold text-foreground">
                     {isOffline
-                      ? "✈️ Défi relevé : Mode avion actif !"
-                      : "✈️ Défi Confidentialité : Testez en Mode Avion"}
+                      ? "Défi relevé : mode avion actif"
+                      : "Défi confidentialité : testez en mode avion"}
                   </span>
                   <span
-                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide ${
+                    className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-medium ${
                       isOffline
-                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                        : "bg-surface-2 text-muted-foreground border border-border"
+                        ? "border-success/30 bg-success-soft text-success"
+                        : "border-border bg-surface-2 text-muted-foreground"
                     }`}
                   >
                     <span
-                      className={`size-2 rounded-full ${
-                        isOffline
-                          ? "bg-emerald-400 animate-ping"
-                          : "bg-amber-400"
-                      }`}
+                      className={`size-1.5 rounded-full ${isOffline ? "bg-success" : "bg-warn"}`}
                     />
                     <span>
-                      {isOffline ? "0 Réseau · 100% Local en RAM" : "Fonctionne déjà sans connexion"}
+                      {isOffline
+                        ? "0 réseau · 100 % local en RAM"
+                        : "Fonctionne déjà sans connexion"}
                     </span>
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground leading-relaxed max-w-2xl">
+                <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">
                   {isOffline ? (
                     <span className="text-foreground">
                       <strong>Zéro octet ne quitte votre machine.</strong> Toutes les déductions
@@ -528,23 +516,25 @@ export function WelcomeHero({
                     </span>
                   ) : (
                     <span>
-                      <strong>Inutile d'installer quoi que ce soit :</strong> coupez simplement votre Wi-Fi
-                      ou activez le mode avion sur votre PC. Grâce au Service Worker, cette page continue
-                      immédiatement de fonctionner à 100% dans cet onglet, sans aucun accès réseau.
+                      <strong className="text-foreground">
+                        Inutile d'installer quoi que ce soit :
+                      </strong>{" "}
+                      coupez simplement votre Wi-Fi ou activez le mode avion sur votre PC. Grâce au
+                      Service Worker, cette page continue immédiatement de fonctionner à 100 % dans
+                      cet onglet, sans aucun accès réseau.
                     </span>
                   )}
                 </p>
               </div>
             </div>
 
-            {/* Bouton d'installation facultatif clairement séparé */}
             {!isInstalled && (
-              <div className="flex shrink-0 sm:flex-col sm:items-end justify-between items-center gap-1 border-t sm:border-t-0 sm:border-l border-border/60 pt-3 sm:pt-0 sm:pl-4">
-                <span className="text-[10px] text-muted-foreground">Optionnel :</span>
+              <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border pt-3 sm:flex-col sm:items-end sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
+                <span className="text-[11px] text-muted-foreground">Optionnel</span>
                 <button
                   type="button"
                   onClick={onInstall}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-foreground hover:border-primary hover:text-primary transition cursor-pointer"
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-surface-2 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-primary/50 hover:bg-surface-3"
                   title="Installer comme application autonome sur votre bureau Windows"
                 >
                   <Download className="size-3.5 text-primary" />
@@ -555,61 +545,52 @@ export function WelcomeHero({
           </div>
         </div>
 
-        {/* Badges de garanties & caractéristiques */}
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-6 text-xs text-muted-foreground">
+        {/* Garanties */}
+        <div className="mt-8 grid w-full grid-cols-1 gap-x-6 gap-y-2 text-left text-xs text-muted-foreground sm:flex sm:flex-wrap sm:items-center sm:justify-center">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="size-4 text-emerald-400" />
-            <span>100% privé dans votre navigateur</span>
+            <ShieldCheck className="size-4 shrink-0 text-success" />
+            <span>100 % privé dans votre navigateur</span>
           </div>
           <div className="flex items-center gap-2">
-            <Zap className="size-4 text-amber-400" />
+            <Zap className="size-4 shrink-0 text-primary" />
             <span>Calcul instantané multithreadé</span>
           </div>
           <div className="flex items-center gap-2">
-            <Split className="size-4 text-cyan-400" />
+            <Split className="size-4 shrink-0 text-derived" />
             <span>Extraction multi-colonnes</span>
           </div>
           <div className="flex items-center gap-2">
-            <FileSpreadsheet className="size-4 text-emerald-400" />
+            <FileSpreadsheet className="size-4 shrink-0 text-success" />
             <span>Copier-coller Excel fluide</span>
           </div>
         </div>
 
-        {/* Pied de page : liens Portfolio & Repo GitHub */}
-        <footer className="mt-12 flex flex-wrap items-center justify-center gap-4 sm:gap-6 border-t border-border/50 pt-6 text-xs text-muted-foreground">
-          <div className="flex items-center gap-1.5">
-            <span>Créé par</span>
+        {/* Pied de page */}
+        <footer className="mt-12 flex w-full flex-wrap items-center justify-center gap-x-4 gap-y-2 border-t border-border pt-6 text-xs text-muted-foreground">
+          <span>
+            Créé par{" "}
             <a
               href="https://lyderickh.github.io/"
               target="_blank"
               rel="noopener noreferrer"
-              className="font-semibold text-foreground hover:text-primary transition inline-flex items-center gap-1"
+              className="font-medium text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
+              title="Portfolio de Lydérick Henry"
             >
-              <Globe className="size-3.5 text-primary" />
-              <span>Lydérick Henry</span>
+              Lydérick Henry (portfolio)
             </a>
-          </div>
-          <span className="text-border hidden sm:inline">•</span>
-          <a
-            href="https://lyderickh.github.io/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
-          >
-            <span>Mon Portfolio</span>
-          </a>
-          <span className="text-border hidden sm:inline">•</span>
+          </span>
+          <span className="hidden text-border sm:inline">·</span>
           <a
             href="https://github.com/LyderickH/regex-genius"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 font-medium text-foreground/80 hover:text-foreground transition"
+            className="inline-flex items-center gap-1.5 font-medium text-foreground/80 transition-colors hover:text-foreground"
           >
             <Github className="size-3.5" />
             <span>Code source GitHub</span>
           </a>
-          <span className="text-border hidden sm:inline">•</span>
-          <span className="opacity-80">100% Client-Side & Open Source</span>
+          <span className="hidden text-border sm:inline">·</span>
+          <span>100 % client-side et open source</span>
         </footer>
       </div>
     </div>
