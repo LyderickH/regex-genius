@@ -18,12 +18,22 @@ Critère de « terminé » : `npm run build` passe, la page s'affiche sans débo
 - [x] Toast aux couleurs du thème sombre
 - [x] Corriger l'erreur d'hydratation (nom du modèle IA différent serveur / client)
 - [x] Accueil (`WelcomeHero.tsx`) : hiérarchie simplifiée, retrait des doublons
-- [ ] Panneau de motif + grille (`PatternPanel.tsx`, `DataGrid.tsx`)
-- [ ] Dialogues (`*Dialog.tsx`, `FileLoadingModal.tsx`)
-- [ ] Vérification : build, lint, tests, captures desktop/mobile
+- [x] Panneau de motif + grille (`PatternPanel.tsx`, `DataGrid.tsx`)
+- [x] Dialogues (`*Dialog.tsx`, `FileLoadingModal.tsx`)
+- [x] Vérification : build, lint, tests, captures desktop/mobile
 
 ## Découvert en route
+- [x] Tests : vitest absent du projet (25 fichiers de tests jamais exécutables) — ajouté en devDependency + script `npm test`
+- [x] Bug : bouton « Copier la formule Excel » de l'en-tête de colonne passait `rule.pattern` (inexistant) → formule avec `undefined`
+- [ ] Perf : `million-rows-loading.test.ts` échoue même isolé (~1,6 s pour 1,2 s) — en cours d'audit
+- [ ] `ui/dialog.tsx` : largeur de base sans marge mobile (chaque dialogue doit surcharger)
 - [ ] Lint : `index.tsx` comptait déjà ~219 erreurs Prettier avant la refonte (fichier jamais formaté) — non corrigé pour garder le diff lisible
 - [ ] TypeScript : 95 erreurs préexistantes (`exactOptionalPropertyTypes`, indices possiblement `undefined`) — inchangé
 - [x] Carte « Importer » de l'accueil : `<label>` imbriqués (HTML invalide) remplacés par une `div` + ref
 - [ ] Prop `canInstall` de `WelcomeHero` jamais utilisée
+
+# Audit du code et de l'algorithme
+- [ ] Moteur de synthèse (`engine.ts`) : exactitude, sur-apprentissage, robustesse, performance
+- [ ] Dialectes (formules Excel/Sheets/Python…) et pipeline IA locale (sécurité ReDoS, modèle par défaut)
+- [ ] Import/export (`data-io.ts`) : CSV, injection de formules, performance 1M lignes
+- [ ] Synthèse + corrections des bugs confirmés

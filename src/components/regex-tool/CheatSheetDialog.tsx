@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { SymbolDetailDialog } from "./SymbolDetailDialog";
 
 interface CheatSheetItem {
@@ -182,7 +183,8 @@ const CHEAT_SHEET_DATA: CheatSheetItem[] = [
   {
     symbol: "\\",
     target: "Antislash d'échappement",
-    example: "Retire le pouvoir spécial des symboles : \\. = un vrai point, \\( = vraie parenthèse, \\? = vrai ?",
+    example:
+      "Retire le pouvoir spécial des symboles : \\. = un vrai point, \\( = vraie parenthèse, \\? = vrai ?",
     category: "groups",
   },
   {
@@ -250,40 +252,41 @@ export function CheatSheetDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden bg-surface border-border">
+        <DialogContent className="flex max-h-[85vh] w-[calc(100vw-2rem)] max-w-3xl flex-col gap-0 overflow-hidden rounded-lg border-border bg-surface p-0">
           {/* En-tête */}
-          <DialogHeader className="p-4 sm:p-5 border-b border-border/80 bg-surface-2/40">
-            <div className="flex items-center gap-2.5">
-              <div className="flex size-9 items-center justify-center rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400">
+          <DialogHeader className="space-y-0 border-b border-border px-5 py-4 text-left">
+            <div className="flex items-start gap-3 pr-8">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-md border border-primary/25 bg-primary-soft text-primary">
                 <BookOpen className="size-5" />
               </div>
-              <div>
-                <DialogTitle className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
-                  <span>Pense-bête Regex condensé (Cheat Sheet)</span>
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded-full">
+              <div className="min-w-0 space-y-1">
+                <DialogTitle className="flex flex-wrap items-center gap-2 text-base font-semibold leading-tight text-foreground">
+                  <span>Pense-bête Regex (Cheat Sheet)</span>
+                  <span className="rounded-md border border-primary/25 bg-primary-soft px-1.5 py-0.5 text-[11px] font-medium text-primary">
                     95 % des cas
                   </span>
                 </DialogTitle>
-                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                  Comprendre, décrypter et débugger les expressions régulières avec des exemples concrets en 1 clic.
+                <DialogDescription className="text-sm text-muted-foreground">
+                  Comprendre, décrypter et débugger les expressions régulières avec des exemples
+                  concrets en 1 clic.
                 </DialogDescription>
               </div>
             </div>
 
             {/* Barre de recherche */}
-            <div className="relative mt-3">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <div className="relative mt-4">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Rechercher un symbole (ex: \\d, +, ?, ^, parenthèse, chiffre)..."
-                className="w-full rounded-md border border-border bg-background py-1.5 pl-9 pr-4 text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="Rechercher un symbole (ex: \d, +, ?, ^, parenthèse, chiffre)..."
+                className="w-full rounded-md border border-border bg-background py-2 pl-9 pr-4 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
 
             {/* Onglets des catégories */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pt-2.5 no-scrollbar">
+            <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto pt-3">
               {CATEGORIES.map((cat) => {
                 const Icon = cat.icon;
                 const isActive = activeCategory === cat.id;
@@ -292,9 +295,9 @@ export function CheatSheetDialog({
                     key={cat.id}
                     onClick={() => setActiveCategory(cat.id)}
                     className={cn(
-                      "flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition cursor-pointer",
+                      "flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition",
                       isActive
-                        ? "bg-primary text-primary-foreground shadow-xs font-semibold"
+                        ? "bg-primary font-semibold text-primary-foreground"
                         : "text-muted-foreground hover:bg-surface-2 hover:text-foreground",
                     )}
                   >
@@ -307,15 +310,17 @@ export function CheatSheetDialog({
           </DialogHeader>
 
           {/* Tableau scrollable des symboles */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-            <div className="rounded-lg border border-border bg-background/80 overflow-hidden shadow-xs">
-              <table className="w-full text-left text-xs border-collapse">
+          <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+            <div className="overflow-hidden rounded-lg border border-border bg-background/80">
+              <table className="w-full table-fixed border-collapse text-left text-xs">
                 <thead>
-                  <tr className="border-b border-border bg-surface-2/60 text-muted-foreground uppercase tracking-wider text-[10px] font-semibold">
-                    <th className="py-2.5 px-3 w-[110px]">Symbole</th>
-                    <th className="py-2.5 px-3">Ce que ça cible / Rôle</th>
-                    <th className="py-2.5 px-3 hidden sm:table-cell">Exemple concret</th>
-                    <th className="py-2.5 px-2 text-right w-[50px]">Copier</th>
+                  <tr className="border-b border-border bg-surface-2/60 text-xs font-semibold text-muted-foreground">
+                    <th className="w-[108px] px-3 py-2.5 font-semibold sm:w-[120px]">Symbole</th>
+                    <th className="px-3 py-2.5 font-semibold">Ce que ça cible / rôle</th>
+                    <th className="hidden w-[42%] px-3 py-2.5 font-semibold sm:table-cell">
+                      Exemple concret
+                    </th>
+                    <th className="w-[60px] px-2 py-2.5 text-right font-semibold">Copier</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
@@ -323,14 +328,14 @@ export function CheatSheetDialog({
                     <tr
                       key={idx}
                       id={`cheatsheet-row-${item.symbol}`}
-                      className="hover:bg-surface-2/40 transition-colors group"
+                      className="group transition-colors hover:bg-surface-2/40"
                     >
                       {/* Symbole cliquable pour ouvrir la mini-boîte */}
-                      <td className="py-2.5 px-3 font-mono font-bold align-middle">
+                      <td className="px-3 py-2.5 align-middle">
                         <button
                           type="button"
                           onClick={() => handleShowDetail(item.symbol)}
-                          className="inline-flex items-center gap-1 font-mono text-xs font-bold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/25 transition cursor-pointer"
+                          className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-primary/25 bg-primary-soft px-2 py-0.5 font-mono text-xs font-semibold text-primary transition hover:border-primary/50"
                           title="Cliquer pour ouvrir la boîte d'exemples de ce symbole"
                         >
                           <span>{item.symbol}</span>
@@ -338,46 +343,46 @@ export function CheatSheetDialog({
                       </td>
 
                       {/* Rôle */}
-                      <td className="py-2.5 px-3 text-foreground font-medium align-middle">
+                      <td className="px-3 py-2.5 align-middle font-medium text-foreground">
                         <div>{item.target}</div>
-                        <div className="flex items-center justify-between gap-1 text-[11px] text-muted-foreground sm:hidden mt-1 font-mono">
-                          <span className="truncate">Ex : {item.example}</span>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground sm:hidden">
+                          <span className="max-w-full truncate font-mono">{item.example}</span>
                           <button
                             type="button"
                             onClick={() => handleShowDetail(item.symbol)}
-                            className="shrink-0 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium border bg-surface-2 hover:bg-surface-3 text-muted-foreground hover:text-amber-300 border-border/80"
+                            className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground transition hover:bg-surface-3 hover:text-foreground"
                           >
-                            <Plus className="size-2.5" />
+                            <Plus className="size-3" />
                             <span>Exemples</span>
                           </button>
                         </div>
                       </td>
 
                       {/* Exemple concret avec l'unique bouton Exemples à droite */}
-                      <td className="py-2.5 px-3 text-muted-foreground text-[11px] hidden sm:table-cell font-mono align-middle">
+                      <td className="hidden px-3 py-2.5 align-middle text-[11px] text-muted-foreground sm:table-cell">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="truncate">{item.example}</span>
+                          <span className="min-w-0 truncate font-mono">{item.example}</span>
                           <button
                             type="button"
                             onClick={() => handleShowDetail(item.symbol)}
-                            className="shrink-0 inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium transition cursor-pointer border bg-surface-2 hover:bg-surface-3 text-muted-foreground hover:text-amber-300 border-border/80 shadow-2xs"
+                            className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition hover:bg-surface-3 hover:text-foreground"
                             title="Ouvrir la boîte d'exemples de ce symbole"
                           >
-                            <Plus className="size-2.5" />
+                            <Plus className="size-3" />
                             <span>Exemples</span>
                           </button>
                         </div>
                       </td>
 
                       {/* Bouton copier */}
-                      <td className="py-2.5 px-2 text-right align-middle">
+                      <td className="px-2 py-2.5 text-right align-middle">
                         <button
                           onClick={() => copySymbol(item.symbol)}
-                          className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-surface-2 transition cursor-pointer"
+                          className="cursor-pointer rounded-md p-1 text-muted-foreground transition hover:bg-surface-2 hover:text-foreground"
                           title="Copier le symbole"
                         >
                           {copiedSymbol === item.symbol ? (
-                            <Check className="size-3.5 text-emerald-400" />
+                            <Check className="size-3.5 text-success" />
                           ) : (
                             <Copy className="size-3.5 opacity-60 group-hover:opacity-100" />
                           )}
@@ -388,7 +393,7 @@ export function CheatSheetDialog({
 
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="py-8 text-center text-muted-foreground text-xs">
+                      <td colSpan={4} className="py-8 text-center text-xs text-muted-foreground">
                         Aucun symbole regex ne correspond à votre recherche « {search} ».
                       </td>
                     </tr>
@@ -398,19 +403,31 @@ export function CheatSheetDialog({
             </div>
 
             {/* Bloc d'aide mnémotechnique supplémentaire */}
-            <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs space-y-1.5 text-muted-foreground">
+            <div className="space-y-1.5 rounded-lg border border-primary/20 bg-primary-soft p-3 text-xs text-muted-foreground">
               <div className="flex items-center gap-1.5 font-semibold text-primary">
-                <CheckCircle2 className="size-4" />
+                <CheckCircle2 className="size-4 shrink-0" />
                 <span>Règle d'or pour débugger : l'échappement par antislash \</span>
               </div>
-              <p className="text-[11px] leading-relaxed">
-                Les symboles <code className="text-amber-300 font-mono">. * + ? ( ) [ ] {'{ }'} ^ $ | \</code> ont un super-pouvoir en regex.
-                Pour cibler le <strong>vrai caractère littéral</strong> dans votre texte, placez toujours un antislash devant :
-                <code className="text-foreground font-mono ml-1 font-semibold">\.</code> (vrai point),
-                <code className="text-foreground font-mono ml-1 font-semibold">\(</code> (vraie parenthèse),
-                <code className="text-foreground font-mono ml-1 font-semibold">\?</code> (vrai point d'interrogation).
+              <p className="leading-relaxed">
+                Les symboles{" "}
+                <code className="font-mono text-primary">. * + ? ( ) [ ] {"{ }"} ^ $ | \</code> ont
+                un super-pouvoir en regex. Pour cibler le <strong>vrai caractère littéral</strong>{" "}
+                dans votre texte, placez toujours un antislash devant :
+                <code className="ml-1 font-mono font-semibold text-foreground">\.</code> (vrai
+                point),
+                <code className="ml-1 font-mono font-semibold text-foreground">\(</code> (vraie
+                parenthèse),
+                <code className="ml-1 font-mono font-semibold text-foreground">\?</code> (vrai point
+                d'interrogation).
               </p>
             </div>
+          </div>
+
+          {/* Pied */}
+          <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
+            <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+              Fermer
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
