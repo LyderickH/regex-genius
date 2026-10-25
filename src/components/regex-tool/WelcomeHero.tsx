@@ -20,19 +20,12 @@ import {
   Globe,
   Landmark,
   Github,
-  BookOpen,
 } from "lucide-react";
 import {
   HoverCard,
   HoverCardTrigger,
   HoverCardContent,
 } from "@/components/ui/hover-card";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { BUSINESS_PRESETS, type BusinessPreset } from "@/lib/datasets/business-presets";
 
 interface WelcomeHeroProps {
@@ -59,7 +52,6 @@ export function WelcomeHero({
   onImportFile,
   onOpenPaste,
   onStartBlank,
-  onOpenCheatSheet,
   onOpenFormatsGuide,
   isOffline = false,
   canInstall = false,
@@ -100,13 +92,8 @@ export function WelcomeHero({
       }`}
     >
       <div className="relative mx-auto flex w-full max-w-5xl flex-col items-start text-left">
-        {/* Sur-titre */}
-        <p className="text-sm font-semibold text-primary">
-          Synthèse d'expressions régulières par l'exemple
-        </p>
-
         {/* Titre principal */}
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl md:text-[2.5rem] text-foreground max-w-4xl leading-tight">
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl md:text-[2.5rem] text-foreground max-w-4xl leading-tight">
           Extrayez vos données, sans écrire de Regex
         </h1>
 
@@ -117,7 +104,7 @@ export function WelcomeHero({
           optimale et remplit tout votre tableau.
         </p>
 
-        {/* Liens d'aide : C'est quoi une Regex + Pense-bête (Cheat Sheet) */}
+        {/* Lien d'aide : C'est quoi une Regex (le Cheat Sheet est dans l'en-tête) */}
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
           <HoverCard openDelay={80} closeDelay={150}>
             <HoverCardTrigger asChild>
@@ -178,19 +165,6 @@ export function WelcomeHero({
               </div>
             </HoverCardContent>
           </HoverCard>
-
-          {/* Bouton Cheat Sheet compact */}
-          {onOpenCheatSheet && (
-            <button
-              type="button"
-              onClick={onOpenCheatSheet}
-              className="group inline-flex items-center gap-1.5 font-medium text-primary cursor-pointer"
-              title="Ouvrir le cheat sheet condensé des regex"
-            >
-              <BookOpen className="size-4" />
-              <span className="underline underline-offset-4 decoration-primary/40 group-hover:decoration-primary">Cheat Sheet</span>
-            </button>
-          )}
         </div>
 
         {/* Grille des 2 actions principales d'ingestion */}
@@ -212,40 +186,30 @@ export function WelcomeHero({
                 Importer vos données
               </h2>
               <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">
-                Glissez-déposez ou parcourez un fichier <strong>.xlsx</strong>, <strong>.csv</strong>,{" "}
-                <strong>.tsv</strong>, <strong>.txt</strong> ou <strong>.log</strong> (jusqu'à 1M+ de lignes).
+                Glissez-déposez ou parcourez un fichier, jusqu'à 1M+ de lignes.
               </p>
 
-              {onOpenFormatsGuide && (
-                <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
-                  <span className="text-xs font-semibold text-muted-foreground">Formats :</span>
-                  {[".CSV", ".XLSX", ".TXT", ".LOG", "Ctrl+V"].map((ext) => (
-                    <span
-                      key={ext}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        onOpenFormatsGuide();
-                      }}
-                      className="rounded-sm border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] font-medium text-foreground hover:border-primary hover:text-primary transition cursor-pointer"
-                      title={`Voir les détails et structure pour le format ${ext}`}
-                    >
-                      {ext}
-                    </span>
-                  ))}
-                  <button
-                    type="button"
+              {/* Formats acceptés, listés une seule fois ; chaque format ouvre le guide */}
+              <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs font-semibold text-muted-foreground">Formats :</span>
+                {[".xlsx", ".csv", ".tsv", ".txt", ".log"].map((ext) => (
+                  <span
+                    key={ext}
                     onClick={(e) => {
+                      if (!onOpenFormatsGuide) return;
                       e.preventDefault();
                       e.stopPropagation();
                       onOpenFormatsGuide();
                     }}
-                    className="text-xs font-medium text-primary hover:underline ml-1"
+                    className={`rounded-sm border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] font-medium text-foreground ${
+                      onOpenFormatsGuide ? "hover:border-primary hover:text-primary transition cursor-pointer" : ""
+                    }`}
+                    title={onOpenFormatsGuide ? `Voir les détails et structure pour le format ${ext}` : undefined}
                   >
-                    Guide détaillé →
-                  </button>
-                </div>
-              )}
+                    {ext}
+                  </span>
+                ))}
+              </div>
             </div>
             <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
               <span className="inline-flex items-center rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground group-hover:bg-primary/90">
@@ -289,16 +253,10 @@ export function WelcomeHero({
             className="group relative flex flex-col justify-between rounded-md border border-border bg-surface p-6 transition-colors hover:border-input text-left cursor-pointer"
           >
             <div>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
-                  <ClipboardPaste className="size-4 text-muted-foreground" />
-                  Coller du texte ou Grille vierge
-                </h2>
-                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-500">
-                  <CheckCircle2 className="size-3.5" />
-                  Ctrl+V actif partout
-                </span>
-              </div>
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                <ClipboardPaste className="size-4 text-muted-foreground" />
+                Coller du texte ou Grille vierge
+              </h2>
               <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">
                 Faites <strong>Ctrl+V</strong> n'importe où sur l'écran pour importer vos données instantanément (depuis Excel, CSV ou bloc-notes), ou démarrez sur une grille vide.
               </p>
@@ -314,7 +272,6 @@ export function WelcomeHero({
               >
                 <ClipboardPaste className="size-3.5" />
                 <span>Coller du texte</span>
-                <kbd className="text-[10px] font-mono text-primary/80">Ctrl+V</kbd>
               </button>
               <button
                 type="button"
@@ -336,14 +293,9 @@ export function WelcomeHero({
           <div className="flex items-start gap-3">
             <FileSpreadsheet className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
             <div>
-              <div className="text-sm font-semibold text-foreground flex flex-wrap items-center gap-x-2">
-                <span>Structure attendue : 1 colonne Source brute + 1 ou 2 exemples souhaités</span>
-                <span className="text-xs font-medium text-muted-foreground">
-                  · Zéro prise de tête
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                Importez vos lignes brutes (logs, factures, exports). Remplissez simplement <strong>1 ou 2 exemples</strong> sur la colonne résultat : Regex Genius calcule la formule et génère tout le reste.
+              <div className="text-sm font-semibold text-foreground">Structure attendue</div>
+              <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">
+                Une colonne <strong>Source</strong> avec vos lignes brutes (logs, factures, exports), et une colonne résultat où vous saisissez vos exemples.
               </p>
             </div>
           </div>
@@ -402,8 +354,7 @@ export function WelcomeHero({
                     handleSample1();
                   }
                 }}
-                title={`${preset.title} (${preset.category}) : ${preset.description}`}
-                className="group relative flex flex-col justify-between rounded-md border border-border bg-surface p-4 transition-colors hover:border-primary text-left cursor-pointer min-h-[150px]"
+                className="group relative flex flex-col rounded-md border border-border bg-surface p-4 transition-colors hover:border-primary text-left cursor-pointer"
               >
                 <div>
                   <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -415,33 +366,9 @@ export function WelcomeHero({
                   <h3 className="mt-3 text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
                     {preset.title}
                   </h3>
-                  <TooltipProvider delayDuration={120}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <p
-                          className="mt-1 text-xs text-muted-foreground leading-normal line-clamp-2 group-hover:line-clamp-none"
-                          title={preset.description}
-                        >
-                          {preset.description}
-                        </p>
-                      </TooltipTrigger>
-                      <TooltipContent
-                        side="top"
-                        sideOffset={8}
-                        className="z-50 max-w-[280px] bg-popover text-foreground border border-border shadow-md p-2.5 text-xs rounded-md animate-in fade-in duration-150"
-                      >
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                          <span className="font-semibold text-primary text-[11px]">{preset.title}</span>
-                          <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[9px] text-muted-foreground">{preset.category}</span>
-                        </div>
-                        <p className="text-foreground/90 text-[11px] leading-relaxed">{preset.description}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-                <div className="mt-3 flex items-center text-xs font-semibold text-primary">
-                  <span>Essayer ce cas</span>
-                  <ArrowRight className="ml-1 size-3" />
+                  <p className="mt-1 text-xs text-muted-foreground leading-normal line-clamp-2 group-hover:line-clamp-none group-focus-visible:line-clamp-none">
+                    {preset.description}
+                  </p>
                 </div>
               </button>
             );
@@ -464,30 +391,10 @@ export function WelcomeHero({
                 <Plane className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
               )}
               <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-semibold text-foreground">
-                    {isOffline
-                      ? "Défi relevé : Mode avion actif !"
-                      : "Défi Confidentialité : Testez en Mode Avion"}
-                  </span>
-                  <span
-                    className={`inline-flex items-center gap-1.5 rounded-sm px-1.5 py-0.5 text-xs font-medium ${
-                      isOffline
-                        ? "text-emerald-500 border border-emerald-500"
-                        : "text-muted-foreground border border-border"
-                    }`}
-                  >
-                    <span
-                      className={`size-1.5 rounded-full ${
-                        isOffline
-                          ? "bg-emerald-500"
-                          : "bg-amber-500"
-                      }`}
-                    />
-                    <span>
-                      {isOffline ? "0 Réseau · 100% Local en RAM" : "Fonctionne déjà sans connexion"}
-                    </span>
-                  </span>
+                <div className="text-sm font-semibold text-foreground">
+                  {isOffline
+                    ? "Défi relevé : Mode avion actif !"
+                    : "Défi Confidentialité : Testez en Mode Avion"}
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground leading-relaxed max-w-2xl">
                   {isOffline ? (
@@ -539,10 +446,6 @@ export function WelcomeHero({
             <Split className="size-4" />
             <span>Extraction multi-colonnes</span>
           </div>
-          <div className="flex items-center gap-2">
-            <FileSpreadsheet className="size-4" />
-            <span>Copier-coller Excel fluide</span>
-          </div>
         </div>
 
         {/* Pied de page : liens Portfolio & Repo GitHub */}
@@ -553,20 +456,11 @@ export function WelcomeHero({
               href="https://lyderickh.github.io/"
               target="_blank"
               rel="noopener noreferrer"
-              className="font-semibold text-foreground hover:text-primary transition inline-flex items-center gap-1"
+              className="font-semibold text-primary hover:underline inline-flex items-center gap-1"
             >
               <span>Lydérick Henry</span>
             </a>
           </div>
-          <span className="text-border hidden sm:inline">•</span>
-          <a
-            href="https://lyderickh.github.io/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
-          >
-            <span>Mon Portfolio</span>
-          </a>
           <span className="text-border hidden sm:inline">•</span>
           <a
             href="https://github.com/LyderickH/regex-genius"
@@ -575,10 +469,8 @@ export function WelcomeHero({
             className="inline-flex items-center gap-1.5 font-medium text-foreground/80 hover:text-foreground transition"
           >
             <Github className="size-3.5" />
-            <span>Code source GitHub</span>
+            <span>Code source GitHub (open source)</span>
           </a>
-          <span className="text-border hidden sm:inline">•</span>
-          <span className="opacity-80">100% Client-Side & Open Source</span>
         </footer>
       </div>
     </div>
