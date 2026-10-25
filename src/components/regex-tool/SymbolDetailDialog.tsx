@@ -5,7 +5,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Sparkles, Copy, Check, BookOpen, X } from "lucide-react";
+import { Cpu, Copy, Check, BookOpen, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { findSymbolDetail } from "@/lib/regex-synth/symbol-examples";
@@ -36,7 +36,7 @@ export function SymbolDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden bg-surface border-border shadow-2xl z-[70]">
+      <DialogContent className="max-w-lg max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden bg-surface border-border shadow-md z-[70]">
         {/* En-tête de la mini-boîte */}
         <DialogHeader className="p-4 border-b border-border/80 bg-surface-2/50">
           <div className="flex items-center justify-between gap-3">
@@ -49,7 +49,7 @@ export function SymbolDetailDialog({
                   {detail.title}
                 </DialogTitle>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-[10px] uppercase font-semibold text-primary bg-primary/10 border border-primary/25 px-1.5 py-0.2 rounded">
+                  <span className="text-[10px] font-semibold text-primary bg-primary/10 border border-primary/25 px-1.5 py-0.2 rounded">
                     {detail.categoryLabel}
                   </span>
                 </div>
@@ -67,8 +67,8 @@ export function SymbolDetailDialog({
 
           {/* Grille d'exemples concrets */}
           <div className="space-y-2">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-amber-400">
-              <Sparkles className="size-3 text-amber-400" />
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-400">
+              <Cpu className="size-3 text-amber-400" />
               <span>Exemples concrets d'utilisation :</span>
             </div>
 
@@ -119,7 +119,6 @@ export function SymbolDetailDialog({
           {/* Astuce si disponible */}
           {detail.tip && (
             <div className="text-[11px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5 flex items-start gap-2 leading-relaxed">
-              <span className="font-bold text-xs shrink-0">💡</span>
               <span>{detail.tip}</span>
             </div>
           )}

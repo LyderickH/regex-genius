@@ -12,7 +12,7 @@ import {
   ClipboardPaste,
   CheckCircle2,
   AlertTriangle,
-  Sparkles,
+  Cpu,
   ArrowRight,
   Info,
 } from "lucide-react";
@@ -25,10 +25,10 @@ interface SupportedFormatsDialogProps {
 export function SupportedFormatsDialog({ open, onOpenChange }: SupportedFormatsDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto border-border/80 bg-surface/98 p-6 text-foreground shadow-2xl backdrop-blur-xl font-sans">
+      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto border-border/80 bg-surface/98 p-6 text-foreground shadow-md font-sans">
         <DialogHeader className="text-left space-y-2">
           <div className="flex items-center gap-2.5">
-            <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-cyan-500 text-slate-950 font-bold shadow-sm">
+            <div className="flex size-9 items-center justify-center rounded-xl text-slate-950 font-bold shadow-sm bg-surface">
               <FileSpreadsheet className="size-5" />
             </div>
             <div>
@@ -45,7 +45,7 @@ export function SupportedFormatsDialog({ open, onOpenChange }: SupportedFormatsD
         {/* Le concept clé en 30 secondes */}
         <div className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4 text-left">
           <div className="flex items-center gap-2 text-xs font-bold text-primary mb-1.5">
-            <Sparkles className="size-4" />
+            <Cpu className="size-4" />
             <span>Le principe clé de Regex Genius (Ne pas se faire piéger) :</span>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">
@@ -69,7 +69,7 @@ export function SupportedFormatsDialog({ open, onOpenChange }: SupportedFormatsD
               </div>
               <div className="grid grid-cols-2 py-1.5 items-center bg-emerald-500/5">
                 <span className="text-foreground truncate pr-2">VIR EMIS PIECE FACT-45120 6 300,00 €</span>
-                <span className="text-emerald-400 font-bold">FACT-45120 <span className="text-[10px] font-sans font-normal text-emerald-400/80">✨ Auto-déduit par la Regex !</span></span>
+                <span className="text-emerald-400 font-bold">FACT-45120 <span className="text-[10px] font-sans font-normal text-emerald-400/80">Auto-déduit par la Regex !</span></span>
               </div>
             </div>
           </div>
@@ -77,7 +77,7 @@ export function SupportedFormatsDialog({ open, onOpenChange }: SupportedFormatsD
 
         {/* Grille des 4 grands formats supportés */}
         <div className="mt-4 space-y-3 text-left">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          <h4 className="text-xs font-bold text-muted-foreground">
             Types de fichiers pris en charge :
           </h4>
 
@@ -97,7 +97,7 @@ export function SupportedFormatsDialog({ open, onOpenChange }: SupportedFormatsD
                 Idéal pour les logs serveur (Apache, Nginx), traces applicatives, exports bancaires ou blocs de texte brut.
               </p>
               <div className="text-[10px] text-amber-400/90 font-medium">
-                👉 Recommandé : import automatique en 1 colonne brute.
+                Recommandé : import automatique en 1 colonne brute.
               </div>
             </div>
 
@@ -162,7 +162,7 @@ export function SupportedFormatsDialog({ open, onOpenChange }: SupportedFormatsD
           <p className="text-muted-foreground">
             Si vous importez un tableau où <strong>toutes les lignes contiennent déjà le résultat</strong>, Regex Genius pensera que vous voulez lui imposer des centaines d'exemples stricts au lieu de lui laisser déduire la formule.
             <br />
-            👉 <strong>Laissez la colonne de résultat vide</strong>, sauf sur les 1 ou 2 premières lignes !
+            <strong>Laissez la colonne de résultat vide</strong>, sauf sur les 1 ou 2 premières lignes !
           </p>
         </div>
 

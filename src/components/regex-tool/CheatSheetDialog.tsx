@@ -17,7 +17,7 @@ import {
   Code2,
   CheckCircle2,
   Plus,
-  Sparkles,
+  Cpu,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -198,7 +198,7 @@ const CATEGORIES = [
   { id: "classes", label: "1. Que chercher ? (Classes)", icon: Code2 },
   { id: "quantifiers", label: "2. Combien de fois ? (Quantificateurs)", icon: Clock },
   { id: "anchors", label: "3. Où chercher ? (Ancres)", icon: Compass },
-  { id: "groups", label: "4. Groupes & Échappement", icon: Sparkles },
+  { id: "groups", label: "4. Groupes & Échappement", icon: Cpu },
 ] as const;
 
 export function CheatSheetDialog({
@@ -260,7 +260,7 @@ export function CheatSheetDialog({
               <div>
                 <DialogTitle className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
                   <span>Pense-bête Regex condensé (Cheat Sheet)</span>
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded-full">
+                  <span className="text-[10px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded-sm">
                     95 % des cas
                   </span>
                 </DialogTitle>
@@ -311,7 +311,7 @@ export function CheatSheetDialog({
             <div className="rounded-lg border border-border bg-background/80 overflow-hidden shadow-xs">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="border-b border-border bg-surface-2/60 text-muted-foreground uppercase tracking-wider text-[10px] font-semibold">
+                  <tr className="border-b border-border bg-surface-2/60 text-muted-foreground text-[10px] font-semibold">
                     <th className="py-2.5 px-3 w-[110px]">Symbole</th>
                     <th className="py-2.5 px-3">Ce que ça cible / Rôle</th>
                     <th className="py-2.5 px-3 hidden sm:table-cell">Exemple concret</th>

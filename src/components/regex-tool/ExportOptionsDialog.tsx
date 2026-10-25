@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, Download, Sparkles, Layers, FileSpreadsheet, CheckCircle2, Loader2, ArrowRight } from "lucide-react";
+import { X, Download, Cpu, Layers, FileSpreadsheet, CheckCircle2, Loader2, ArrowRight } from "lucide-react";
 import type { OutputColumn } from "./types";
 
 interface ExportOptionsDialogProps {
@@ -42,8 +42,8 @@ export function ExportOptionsDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-      <div className="relative flex w-full max-w-xl flex-col rounded-xl border border-border bg-surface shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 animate-in fade-in duration-200">
+      <div className="relative flex w-full max-w-xl flex-col rounded-xl border border-border bg-surface shadow-md overflow-hidden">
         {/* En-tête */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4 bg-surface-2/40">
           <div className="flex items-center gap-3">
@@ -101,7 +101,7 @@ export function ExportOptionsDialog({
                   Traitement de {totalLines.toLocaleString("fr-FR")} lignes : {progress}%
                 </div>
               </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-border">
+              <div className="h-2 w-full overflow-hidden rounded-sm bg-border">
                 <div
                   className="h-full bg-primary transition-all duration-200"
                   style={{ width: `${progress}%` }}
@@ -118,10 +118,10 @@ export function ExportOptionsDialog({
               >
                 <div className="flex w-full items-center justify-between">
                   <div className="flex items-center gap-2 font-semibold text-foreground text-sm">
-                    <Sparkles className="size-4 text-primary" />
+                    <Cpu className="size-4 text-primary" />
                     <span>Appliquer et exporter l'intégralité ({totalLines.toLocaleString("fr-FR")} lignes)</span>
                   </div>
-                  <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground uppercase tracking-wider">
+                  <span className="rounded-sm bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
                     Recommandé
                   </span>
                 </div>

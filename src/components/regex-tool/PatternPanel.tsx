@@ -6,7 +6,6 @@ import {
   CircleCheck,
   ChevronRight,
   PanelLeft,
-  Sparkles,
   Settings2,
   CheckCircle2,
   ShieldCheck,
@@ -285,7 +284,7 @@ export function PatternPanel({
           <PanelLeft className="size-4" />
         </button>
         <div className="mt-3 flex-1 [writing-mode:vertical-rl]">
-          <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="text-[11px] text-muted-foreground">
             Motif déduit{column ? ` — ${column.name}` : ""}
           </span>
         </div>
@@ -312,7 +311,7 @@ export function PatternPanel({
       <aside className="flex w-[380px] shrink-0 flex-col overflow-y-auto border-l border-grid-line bg-surface custom-scrollbar">
         <div className="flex items-center justify-between border-b border-grid-line px-4 py-3">
           <div className="min-w-0">
-            <div className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+            <div className="text-[11px] text-muted-foreground">
               Motif déduit
             </div>
             <div className="mt-0.5 truncate text-sm font-semibold">{column.name}</div>
@@ -342,7 +341,7 @@ export function PatternPanel({
               className="flex w-full items-center justify-between rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/20 transition cursor-pointer"
             >
               <div className="flex items-center gap-2">
-                <Sparkles className="size-3.5 text-primary" />
+                <Cpu className="size-3.5 text-primary" />
                 <span>Obtenir la regex pour toutes les colonnes ({combined.names.length})</span>
               </div>
               <ChevronDown className={cn("size-3.5 transition-transform", showCombined && "rotate-180")} />
@@ -350,7 +349,7 @@ export function PatternPanel({
             {showCombined && (
               <div className="mt-2.5 rounded-lg border border-border bg-background p-3 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                  <span className="text-[10px] font-mono text-muted-foreground">
                     1 seul passage extrait {combined.names.length} colonnes
                   </span>
                   <button
@@ -411,7 +410,7 @@ export function PatternPanel({
             {isAllFilledWithExamples && onKeepOnlyTwoExamples && (
               <div className="rounded-lg border border-primary/40 bg-primary/10 p-3.5 space-y-2 text-left animate-in fade-in duration-200">
                 <div className="flex items-center gap-2 text-xs font-bold text-primary">
-                  <Sparkles className="size-4 shrink-0" />
+                  <Cpu className="size-4 shrink-0" />
                   <span>Toutes vos lignes sont remplies ({examples} exemples) !</span>
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed">
@@ -423,7 +422,7 @@ export function PatternPanel({
                     onClick={onKeepOnlyTwoExamples}
                     className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 transition shadow"
                   >
-                    <Sparkles className="size-3.5" />
+                    <Cpu className="size-3.5" />
                     <span>Ne garder que 2 exemples et auto-compléter</span>
                   </button>
                   {onOpenFormatsGuide && (
@@ -450,7 +449,7 @@ export function PatternPanel({
                 </p>
                 {examples > 0 && !valuesNotInSource && (
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    💡 <strong>Astuce :</strong> Vérifiez que la colonne à gauche marquée <strong>[Source]</strong> contient bien le texte à découper. Si le texte brut se trouve dans une autre colonne, cliquez sur le bouton <span className="font-mono text-primary">⭰</span> sur son en-tête pour la définir comme source.
+                    <strong>Astuce :</strong> Vérifiez que la colonne à gauche marquée <strong>[Source]</strong> contient bien le texte à découper. Si le texte brut se trouve dans une autre colonne, cliquez sur le bouton <span className="font-mono text-primary">⭰</span> sur son en-tête pour la définir comme source.
                   </p>
                 )}
               </div>
@@ -469,7 +468,7 @@ export function PatternPanel({
             {examples > 0 && onTriggerLLM && (
               <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3.5 space-y-2.5">
                 <div className="flex items-center gap-2 text-xs font-semibold text-amber-400">
-                  <Sparkles className="size-4" />
+                  <Cpu className="size-4" />
                   <span>Activer le fallback IA locale</span>
                 </div>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -484,7 +483,7 @@ export function PatternPanel({
                       <span>{llmReport?.text || "Synthèse LLM locale en cours..."}</span>
                     </div>
                     {llmReport && (llmReport.status === "downloading" || llmReport.status === "loading") && (
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
+                      <div className="h-1.5 w-full overflow-hidden rounded-sm bg-border">
                         <div
                           className="h-full bg-amber-500 transition-all duration-300"
                           style={{ width: `${llmReport.progressPercent}%` }}
@@ -497,7 +496,7 @@ export function PatternPanel({
                     onClick={onTriggerLLM}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 px-3 py-2 text-xs font-semibold transition"
                   >
-                    <Sparkles className="size-3.5" />
+                    <Cpu className="size-3.5" />
                     Synthétiser avec le LLM local (privé)
                   </button>
                 )}
@@ -536,7 +535,7 @@ export function PatternPanel({
               <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-3 text-xs space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-1.5 font-semibold text-amber-400">
-                    <Sparkles className="size-3.5" /> ✦ Généré par IA locale
+                    <Cpu className="size-3.5" /> Généré par IA locale
                   </span>
                   <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-400">
                     <CheckCircle2 className="size-3" /> ✓ Regex vérifiée
@@ -575,7 +574,7 @@ export function PatternPanel({
                   <ShieldAlert className="size-4 shrink-0 text-rose-400" />
                   <div className="text-[11px]">
                     <span>Sécurité ReDoS : </span>
-                    <strong className="uppercase">{rule.llmMetadata.securityRisk}</strong>
+                    <strong className="">{rule.llmMetadata.securityRisk}</strong>
                     <span> — Risque de backtracking catastrophique</span>
                   </div>
                 </div>
@@ -584,7 +583,7 @@ export function PatternPanel({
             <div>
               <div className="mb-2 flex items-center justify-between gap-1 flex-wrap">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground font-semibold">
+                  <span className="text-[11px] text-muted-foreground font-semibold">
                     Expression
                   </span>
                   {isManualRule ? (
@@ -782,7 +781,7 @@ export function PatternPanel({
                         <code className="font-mono text-xs font-bold text-amber-300 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30 shrink-0">
                           {activeSegment.text}
                         </code>
-                        <span className="text-[10px] uppercase tracking-wider font-semibold text-primary bg-primary/10 border border-primary/25 px-1.5 py-0.5 rounded truncate">
+                        <span className="text-[10px] font-semibold text-primary bg-primary/10 border border-primary/25 px-1.5 py-0.5 rounded truncate">
                           {activeSegment.categoryLabel || activeSegment.kind}
                         </span>
                       </div>
@@ -844,7 +843,7 @@ export function PatternPanel({
                       {rule.replacement}
                     </code>
                   </div>
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-cyan-400/90 bg-cyan-500/20 px-1.5 py-0.5 rounded">
+                  <span className="text-[10px] font-semibold text-cyan-400/90 bg-cyan-500/20 px-1.5 py-0.5 rounded">
                     Substitution
                   </span>
                 </div>
@@ -864,7 +863,7 @@ export function PatternPanel({
                   {rule.extra.map((alt, i) => (
                     <div key={i}>
                       <div className="mb-1 flex items-center justify-between">
-                        <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+                        <span className="text-[11px] text-muted-foreground">
                           Motif {i + 2}
                         </span>
                         <button
@@ -939,7 +938,7 @@ export function PatternPanel({
                         className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 py-1.5 px-2 text-xs font-medium text-amber-300 transition cursor-pointer"
                         title="Demander à l'IA locale de déduire une autre regex"
                       >
-                        <Sparkles className="size-3 text-amber-400" />
+                        <Cpu className="size-3 text-amber-400" />
                         <span>Alternative IA locale</span>
                       </button>
                       <button
@@ -954,7 +953,7 @@ export function PatternPanel({
                     </div>
                   )}
                   <p className="text-[10px] text-muted-foreground/70 italic">
-                    💡 Astuce : saisir un exemple supplémentaire dans une autre cellule affine aussi directement la règle.
+                    Astuce : saisir un exemple supplémentaire dans une autre cellule affine aussi directement la règle.
                   </p>
                 </div>
               )}
@@ -962,7 +961,7 @@ export function PatternPanel({
 
             {column.failures.length > 0 && (
               <div>
-                <div className="mb-1.5 text-[11px] uppercase tracking-[0.15em] text-warn">
+                <div className="mb-1.5 text-[11px] text-warn">
                   Pourquoi ces lignes échouent
                 </div>
                 <p className="mb-2 text-xs text-muted-foreground">
@@ -994,7 +993,7 @@ export function PatternPanel({
               <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-3 space-y-2.5">
                 <div className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-1.5 font-semibold text-amber-300">
-                    <Sparkles className="size-3.5 text-amber-400" />
+                    <Cpu className="size-3.5 text-amber-400" />
                     <span>Résoudre les {column.failures.length} échec{column.failures.length > 1 ? "s" : ""}</span>
                   </div>
                   <span className="text-[10px] text-muted-foreground">Assistance IA</span>
@@ -1010,7 +1009,7 @@ export function PatternPanel({
                       <span>{llmReport?.text || "Synthèse LLM locale en cours..."}</span>
                     </div>
                     {llmReport && (llmReport.status === "downloading" || llmReport.status === "loading") && (
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
+                      <div className="h-1.5 w-full overflow-hidden rounded-sm bg-border">
                         <div
                           className="h-full bg-amber-500 transition-all duration-300"
                           style={{ width: `${llmReport.progressPercent}%` }}
@@ -1027,7 +1026,7 @@ export function PatternPanel({
                         className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 px-2 py-1.5 text-xs font-semibold transition cursor-pointer"
                         title="Demander à l'IA locale (WebGPU) de chercher une regex couvrant toutes les lignes"
                       >
-                        <Sparkles className="size-3.5" />
+                        <Cpu className="size-3.5" />
                         <span>IA locale (WebGPU)</span>
                       </button>
                     )}
@@ -1047,7 +1046,7 @@ export function PatternPanel({
 
             <div className="space-y-2.5">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground font-semibold">
+                <span className="text-[11px] text-muted-foreground font-semibold">
                   Lecture du motif
                 </span>
                 {!llmDecrypted && (
@@ -1058,7 +1057,7 @@ export function PatternPanel({
                     className="flex items-center gap-1.5 rounded-md border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 px-2 py-0.5 text-[10px] text-purple-300 font-semibold transition cursor-pointer disabled:opacity-50 shadow-xs"
                     title="Demander à l'IA locale (WebLLM / WebGPU) d'analyser le motif"
                   >
-                    <Sparkles className={cn("size-2.5 text-purple-400", isDecrypting && "animate-spin text-purple-300")} />
+                    <Cpu className={cn("size-2.5 text-purple-400", isDecrypting && "animate-spin text-purple-300")} />
                     <span>{isDecrypting ? (llmReport?.text || "Analyse IA...") : "Expliquer avec l'IA"}</span>
                   </button>
                 )}
@@ -1070,7 +1069,7 @@ export function PatternPanel({
                     <span className="truncate">{llmReport.text || "Chargement du modèle..."}</span>
                     <span className="font-mono font-semibold">{Math.round(llmReport.progressPercent)}%</span>
                   </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
+                  <div className="h-1.5 w-full overflow-hidden rounded-sm bg-border">
                     <div
                       className="h-full bg-purple-500 transition-all duration-300"
                       style={{ width: `${llmReport.progressPercent}%` }}
@@ -1088,7 +1087,7 @@ export function PatternPanel({
                   </div>
                   {(llmDecrypted || rule.llmMetadata?.explanation) && (
                     <span className="text-[10px] text-purple-300 bg-purple-500/15 border border-purple-500/30 px-1.5 py-0.2 rounded font-medium flex items-center gap-1">
-                      <Sparkles className="size-2.5" />
+                      <Cpu className="size-2.5" />
                       Rédigé par IA locale
                     </span>
                   )}
@@ -1122,7 +1121,7 @@ export function PatternPanel({
 
             <div>
               <div className="mb-2 flex items-center justify-between">
-                <div className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground font-semibold">
+                <div className="text-[11px] text-muted-foreground font-semibold">
                   Pour votre outil
                 </div>
                 {/* Sélecteur FR / EN */}
@@ -1213,7 +1212,7 @@ export function PatternPanel({
                           La formule renvoie <code className="rounded bg-rose-500/15 border border-rose-500/30 px-1 py-0.5 font-mono text-rose-300 font-semibold">#NOM?</code> sur Excel 2016, 2019 ou 2021.
                         </p>
                         <p className="text-[11px] leading-relaxed pt-1 border-t border-border/40 text-muted-foreground/90">
-                          💡 <strong>Sans Office 365 :</strong> {onCopyTable ? (
+                          <strong>Sans Office 365 :</strong> {onCopyTable ? (
                             <button
                               type="button"
                               onClick={onCopyTable}
