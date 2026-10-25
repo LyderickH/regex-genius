@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Plus, Trash2, AlertTriangle, Sparkles, ArrowLeftToLine, AlertCircle, ClipboardCopy, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, Cpu, ArrowLeftToLine, AlertCircle, ClipboardCopy, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { cellValue, type OutputColumn } from "./types";
 import { DIALECTS } from "@/lib/regex-synth/dialects";
@@ -428,12 +428,12 @@ export function DataGrid({
         <div className="grid-cell sticky left-0 z-40 bg-surface-2 px-2 py-2 text-center font-mono text-muted-foreground">
           #
         </div>
-        <div className="grid-cell relative flex items-center justify-between px-3 py-1.5 font-semibold tracking-wide text-foreground">
+        <div className="grid-cell relative flex items-center justify-between px-3 py-1.5 font-semibold text-foreground">
           <div className="flex items-center gap-1.5 min-w-0 pr-2">
             <span className="truncate" title={sourceName || "Données source"}>
               {sourceName || "Données source"}
             </span>
-            <span className="shrink-0 rounded bg-primary/20 px-1 py-0.5 text-[9px] font-mono text-primary font-bold uppercase tracking-wider">
+            <span className="shrink-0 rounded bg-primary/20 px-1 py-0.5 text-[9px] font-mono text-primary font-bold">
               Source
             </span>
           </div>
@@ -455,7 +455,7 @@ export function DataGrid({
               className="min-w-0 flex-1 bg-transparent font-semibold text-foreground outline-none"
             />
             {col.pending ? (
-              <Sparkles className="size-3.5 shrink-0 animate-pulse text-primary" />
+              <Cpu className="size-3.5 shrink-0 text-primary" />
             ) : col.rule ? (
               col.matched === rows.length ? (
                 <span
@@ -567,13 +567,13 @@ export function DataGrid({
                 aria-label="Ajouter une colonne"
                 title="Ajouter une colonne"
               >
-                <Plus className="size-4 transition-transform group-hover:scale-125" />
+                <Plus className="size-4 transition-transform" />
               </button>
             </TooltipTrigger>
             <TooltipContent
               side="bottom"
               sideOffset={4}
-              className="z-50 bg-popover text-foreground border border-border shadow-lg text-xs font-semibold py-1 px-2.5"
+              className="z-50 bg-popover text-foreground border border-border shadow-md text-xs font-semibold py-1 px-2.5"
             >
               Ajouter une colonne
             </TooltipContent>
@@ -706,7 +706,7 @@ export function DataGrid({
                                 ? "1er exemple attendu…"
                                 : visualRow === 1
                                   ? "(Optionnel) 2e exemple…"
-                                  : "✨ Sera calculé par la Regex…"
+                                  : "Sera calculé par la Regex…"
                           }
                           className={cn(
                             "h-full w-full bg-transparent px-2.5 font-mono text-[13px] outline-none placeholder:text-muted-foreground/50 focus:bg-primary/15",
@@ -758,8 +758,8 @@ export function DataGrid({
 
       {/* Barre flottante d'exemple rapide sur surlignage souris */}
       {sourceSelection && activeId && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 rounded-full border border-primary/40 bg-surface-2/95 px-4 py-2 text-xs shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-2">
-          <Sparkles className="size-4 text-primary animate-pulse shrink-0" />
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 rounded-sm border border-primary/40 bg-surface-2/95 px-4 py-2 text-xs shadow-md animate-in slide-in-from-bottom-2">
+          <Cpu className="size-4 text-primary shrink-0" />
           <span className="text-muted-foreground">
             Sélection : <strong className="font-mono text-foreground font-semibold">"{sourceSelection.text}"</strong>
           </span>
@@ -769,15 +769,15 @@ export function DataGrid({
               onChangeCell(activeId, sourceSelection.row, sourceSelection.text);
               setSourceSelection(null);
             }}
-            className="ml-1 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground shadow-xs hover:bg-primary/90 transition cursor-pointer active:scale-95"
+            className="ml-1 rounded-sm bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground shadow-xs hover:bg-primary/90 transition cursor-pointer active:scale-95"
             title="Remplir la colonne active avec le texte surligné sans risquer d'erreur de frappe"
           >
-            ✨ Définir comme exemple (Ligne {sourceSelection.row + 1})
+            Définir comme exemple (Ligne {sourceSelection.row + 1})
           </button>
           <button
             type="button"
             onClick={() => setSourceSelection(null)}
-            className="rounded-full p-1 text-muted-foreground hover:text-foreground transition cursor-pointer"
+            className="rounded-sm p-1 text-muted-foreground hover:text-foreground transition cursor-pointer"
             title="Fermer"
           >
             ✕
@@ -790,7 +790,7 @@ export function DataGrid({
         className={cn(
           "pointer-events-none absolute top-0 bottom-0 right-0 z-30 w-16 transition-opacity duration-300",
           "bg-gradient-to-l from-background/95 via-background/40 to-transparent",
-          "shadow-[inset_-14px_0_18px_-8px_rgba(0,0,0,0.85)]",
+          "shadow-[inset_-14px_0_18px_-8px_rgba(0,0,0,0.12)]",
           canScrollRight ? "opacity-100" : "opacity-0"
         )}
         aria-hidden="true"

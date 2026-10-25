@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  Sparkles,
   Cpu,
   ShieldCheck,
   CheckCircle2,
@@ -66,8 +65,8 @@ export function LLMControlDialog({ open, onClose }: LLMControlDialogProps) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-      <div className="relative w-full max-w-lg rounded-xl border border-border bg-surface p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4">
+      <div className="relative w-full max-w-lg rounded-xl border border-border bg-surface p-6 shadow-md">
         <button
           onClick={onClose}
           className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground transition hover:bg-surface-2 hover:text-foreground"
@@ -77,7 +76,7 @@ export function LLMControlDialog({ open, onClose }: LLMControlDialogProps) {
 
         <div className="flex items-center gap-2.5">
           <div className="flex size-9 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20">
-            <Sparkles className="size-5" />
+            <Cpu className="size-5" />
           </div>
           <div>
             <h2 className="text-base font-semibold">Moteur IA Locale (Fallback)</h2>
@@ -99,7 +98,7 @@ export function LLMControlDialog({ open, onClose }: LLMControlDialogProps) {
 
         {/* Sélection du modèle */}
         <div className="mt-5 space-y-2">
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          <label className="text-xs font-semibold text-muted-foreground">
             Sélectionner un modèle
           </label>
           <div className="grid gap-2">
@@ -182,7 +181,7 @@ export function LLMControlDialog({ open, onClose }: LLMControlDialogProps) {
 
           {(report.status === "downloading" || report.status === "loading") && (
             <div className="space-y-1">
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
+              <div className="h-1.5 w-full overflow-hidden rounded-sm bg-border">
                 <div
                   className="h-full bg-primary transition-all duration-300"
                   style={{ width: `${report.progressPercent}%` }}

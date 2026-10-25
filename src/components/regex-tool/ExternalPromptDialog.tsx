@@ -87,8 +87,8 @@ export function ExternalPromptDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-      <div className="relative flex max-h-[92vh] w-full max-w-3xl flex-col rounded-xl border border-border bg-surface shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 animate-in fade-in duration-200">
+      <div className="relative flex max-h-[92vh] w-full max-w-3xl flex-col rounded-xl border border-border bg-surface shadow-md overflow-hidden">
         {/* En-tête */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4 bg-surface-2/40">
           <div className="flex items-center gap-3">
@@ -100,7 +100,7 @@ export function ExternalPromptDialog({
                 <h3 className="text-sm font-semibold text-foreground">
                   Prompt pour votre propre IA
                 </h3>
-                <span className="rounded-full bg-purple-500/15 border border-purple-500/30 px-2 py-0.5 text-[10px] font-medium text-purple-300">
+                <span className="rounded-sm bg-purple-500/15 border border-purple-500/30 px-2 py-0.5 text-[10px] font-medium text-purple-300">
                   ChatGPT · Claude · Gemini
                 </span>
               </div>
@@ -123,7 +123,7 @@ export function ExternalPromptDialog({
           {/* BOUTONS D'OUVERTURE DIRECTE */}
           <div className="rounded-xl border border-purple-500/30 bg-purple-500/5 p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-purple-300 flex items-center gap-1.5">
                 <ExternalLink className="size-3.5" />
                 Ouvrir directement votre IA :
               </span>

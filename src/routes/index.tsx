@@ -8,7 +8,7 @@ import {
   FileText,
   Trash2,
   Regex,
-  Sparkles,
+  Cpu,
   Plus,
   ArrowUpToLine,
   Bot,
@@ -390,7 +390,7 @@ function Index() {
                 : c,
             ),
           );
-          toast.success("⚙ Règle déduite par le moteur algorithmique.", { id: "llm-status" });
+          toast.success("Règle déduite par le moteur algorithmique.", { id: "llm-status" });
         } else {
           setColumns((cols) =>
             cols.map((c) => (c.id === colId ? { ...c, pending: false } : c)),
@@ -1105,7 +1105,7 @@ function detectBestSourceCol(matrix: Matrix): number {
 
     const totalStr = sourceInfo.totalLines.toLocaleString("fr-FR");
     const ok = window.confirm(
-      `⚠️ ATTENTION : RISQUE DE PLANTAGE DU NAVIGATEUR\n\nVous êtes sur le point de charger l'intégralité des ${totalStr} lignes dans le tableau interactif.\n\nL'affichage de plus de 50 000 lignes dans le navigateur consomme une quantité considérable de mémoire RAM et PEUT FAIRE PLANTER OU FIGER VOTRE NAVIGATEUR.\n\nVoulez-vous quand même forcer l'affichage de toutes les lignes ?`,
+      `ATTENTION : RISQUE DE PLANTAGE DU NAVIGATEUR\n\nVous êtes sur le point de charger l'intégralité des ${totalStr} lignes dans le tableau interactif.\n\nL'affichage de plus de 50 000 lignes dans le navigateur consomme une quantité considérable de mémoire RAM et PEUT FAIRE PLANTER OU FIGER VOTRE NAVIGATEUR.\n\nVoulez-vous quand même forcer l'affichage de toutes les lignes ?`,
     );
     if (!ok) return;
 
@@ -1345,20 +1345,20 @@ function detectBestSourceCol(matrix: Matrix): number {
       <Toaster position="bottom-right" />
 
 
-      <header className="flex shrink-0 items-center gap-3 border-b border-grid-line bg-surface px-4 py-2.5">
+      <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-surface px-4 py-2.5">
         <button
           type="button"
           onClick={returnToWelcome}
           className="flex items-center gap-2 text-left hover:opacity-85 transition cursor-pointer group"
           title="Revenir au menu d'accueil"
         >
-          <Regex className="size-5 text-primary transition-transform group-hover:scale-105" />
+          <Regex className="size-5 text-primary transition-transform" />
           <div className="leading-tight">
             <div className="text-sm font-bold tracking-tight text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5">
               <span>Regex Genius</span>
-              <span className="text-[9px] font-mono font-semibold uppercase px-1.5 py-0.2 rounded bg-primary/10 text-primary border border-primary/20">v1.0</span>
+              <span className="text-[10px] font-medium text-muted-foreground">v1.0</span>
             </div>
-            <div className="text-[11px] text-muted-foreground">
+            <div className="hidden sm:block text-[11px] text-muted-foreground">
               Déduction de regex par l'exemple
             </div>
           </div>
@@ -1391,7 +1391,7 @@ function detectBestSourceCol(matrix: Matrix): number {
               <ChevronDown className="size-3 text-muted-foreground" />
             </button>
             {importDropdownOpen && (
-              <div className="absolute left-0 mt-1 z-50 w-64 rounded-lg border border-border bg-surface p-1 shadow-xl animate-in fade-in duration-150">
+              <div className="absolute left-0 mt-1 z-50 w-64 rounded-lg border border-border bg-surface p-1 shadow-md animate-in fade-in duration-150">
                 <label className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-foreground hover:bg-surface-2 transition text-left cursor-pointer">
                   <Split className="size-3.5 text-primary shrink-0" />
                   <div className="flex-1 min-w-0">
@@ -1470,7 +1470,7 @@ function detectBestSourceCol(matrix: Matrix): number {
                   <ChevronDown className="size-3 text-muted-foreground" />
                 </button>
                 {exportDropdownOpen && (
-                  <div className="absolute left-0 mt-1 z-50 w-44 rounded-lg border border-border bg-surface p-1 shadow-xl animate-in fade-in duration-150">
+                  <div className="absolute left-0 mt-1 z-50 w-44 rounded-lg border border-border bg-surface p-1 shadow-md animate-in fade-in duration-150">
                     <button
                       type="button"
                       onClick={() => {
@@ -1503,10 +1503,10 @@ function detectBestSourceCol(matrix: Matrix): number {
                   <button
                     type="button"
                     onClick={switchToRawLines}
-                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/15 px-2.5 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/25 transition shadow-xs"
+                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-primary px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary/5 transition"
                     title="Votre fichier a été découpé par délimiteur. Cliquez ici pour recharger chaque ligne brute complète dans 1 colonne et créer vos regex !"
                   >
-                    <FileText className="size-3.5 text-amber-400" />
+                    <FileText className="size-3.5" />
                     <span>Lignes brutes (sans délimiteur)</span>
                   </button>
                 )}
@@ -1526,27 +1526,27 @@ function detectBestSourceCol(matrix: Matrix): number {
           {/* IA locale WebGPU compacte */}
           <button
             onClick={() => setLlmControlOpen(true)}
-            className="flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-medium text-amber-300 hover:border-amber-400 hover:bg-amber-500/20 transition cursor-pointer group"
+            className="flex items-center gap-1.5 rounded-sm border border-border bg-surface px-2.5 py-1 text-[11px] font-medium text-foreground hover:border-primary hover:text-primary transition cursor-pointer"
             title="IA locale embarquée dans votre navigateur (WebGPU) : 0 octet envoyé sur Internet, 100% privé"
           >
             <span className="relative flex size-1.5">
               <span className={cn(
                 "absolute inline-flex h-full w-full rounded-full opacity-75",
-                isLLMRunning ? "animate-ping bg-amber-400" : llmReport.status === "ready" ? "bg-emerald-400 animate-pulse" : "bg-amber-500"
+                isLLMRunning ? "animate-pulse bg-amber-400" : llmReport.status === "ready" ? "bg-emerald-400" : "bg-amber-500"
               )} />
               <span className={cn(
                 "relative inline-flex size-1.5 rounded-full",
                 llmReport.status === "ready" ? "bg-emerald-400" : "bg-amber-400"
               )} />
             </span>
-            <Sparkles className="size-3 text-amber-400" />
-            <span>IA locale ({localLLM.getCurrentModelConfig().name})</span>
+            <Cpu className="size-3 text-muted-foreground" />
+            <span>IA locale<span className="hidden sm:inline"> ({localLLM.getCurrentModelConfig().name})</span></span>
           </button>
 
           {/* Badge Mode Avion / Hors-ligne en direct */}
           {isOffline && (
             <div
-              className="flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-400 animate-pulse"
+              className="flex items-center gap-1.5 rounded-sm border border-emerald-500 px-2 py-1 text-[11px] font-medium text-emerald-500"
               title="Mode avion actif : aucune connexion Internet, calculs 100% locaux dans votre RAM"
             >
               <Plane className="size-3" />
@@ -1559,7 +1559,7 @@ function detectBestSourceCol(matrix: Matrix): number {
             <button
               type="button"
               onClick={installApp}
-              className="hidden md:inline-flex items-center gap-1 rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] font-medium text-foreground hover:border-primary hover:text-primary transition cursor-pointer"
+              className="hidden md:inline-flex items-center gap-1 rounded-sm border border-border bg-surface px-2 py-1 text-[11px] font-medium text-foreground hover:border-primary hover:text-primary transition cursor-pointer"
               title="Installer Regex Genius sur votre PC (PWA autonome utilisable hors-ligne)"
             >
               <Download className="size-3 text-primary" />
@@ -1583,10 +1583,10 @@ function detectBestSourceCol(matrix: Matrix): number {
           <button
             type="button"
             onClick={() => handleOpenCheatSheet(undefined)}
-            className="inline-flex items-center gap-1 rounded-full border border-amber-500/35 bg-amber-500/10 hover:border-amber-400 hover:bg-amber-500/20 px-2.5 py-0.5 text-[11px] font-medium text-amber-300 transition cursor-pointer shadow-xs group"
+            className="inline-flex items-center gap-1 rounded-sm border border-border bg-surface hover:border-primary hover:text-primary px-2.5 py-1 text-[11px] font-medium text-foreground transition cursor-pointer"
             title="Ouvrir le cheat sheet synthétique des expressions régulières"
           >
-            <BookOpen className="size-3 text-amber-400 group-hover:scale-110 transition-transform" />
+            <BookOpen className="size-3 text-muted-foreground" />
             <span>Cheat Sheet</span>
           </button>
 
@@ -1595,7 +1595,7 @@ function detectBestSourceCol(matrix: Matrix): number {
             href="https://lyderickh.github.io/"
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-[11px] font-medium text-foreground hover:border-primary hover:text-primary transition cursor-pointer"
+            className="hidden sm:inline-flex items-center gap-1.5 rounded-sm border border-border bg-surface px-2.5 py-1 text-[11px] font-medium text-foreground hover:border-primary hover:text-primary transition cursor-pointer"
             title="Consulter le portfolio de Lydérick Henry (Data & Finance)"
           >
             <Globe className="size-3 text-primary" />
@@ -1607,7 +1607,7 @@ function detectBestSourceCol(matrix: Matrix): number {
             href="https://github.com/LyderickH/regex-genius"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-[11px] font-medium text-foreground hover:border-primary hover:text-primary transition cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-sm border border-border bg-surface px-2.5 py-1 text-[11px] font-medium text-foreground hover:border-primary hover:text-primary transition cursor-pointer"
             title="Voir le code source sur GitHub"
           >
             <Github className="size-3 text-foreground" />
@@ -1640,7 +1640,7 @@ function detectBestSourceCol(matrix: Matrix): number {
             {rows.length > 0 && (
               <div
                 className={cn(
-                  "flex shrink-0 items-center justify-between border-b px-4 py-1.5 text-xs backdrop-blur-xs",
+                  "flex shrink-0 items-center justify-between border-b px-4 py-1.5 text-xs",
                   activeFailures.length > 0
                     ? "border-amber-500/30 bg-amber-500/10"
                     : "border-grid-line bg-surface/70",
@@ -1651,7 +1651,7 @@ function detectBestSourceCol(matrix: Matrix): number {
                   {fullSourceRef.current && fullSourceRef.current.totalLines > rows.length ? (
                     <>
                       <div
-                        className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 font-mono text-[11px] font-medium text-primary shadow-xs"
+                        className="flex items-center gap-1.5 rounded-sm border border-primary/30 bg-primary/10 px-2.5 py-0.5 font-mono text-[11px] font-medium text-primary shadow-xs"
                         title="Échantillon interactif de 50 000 lignes pour une fluidité maximale. L'export traitera l'intégralité du fichier."
                       >
                         <Layers className="size-3" />
@@ -1663,10 +1663,10 @@ function detectBestSourceCol(matrix: Matrix): number {
                       <button
                         type="button"
                         onClick={forceLoadAllRows}
-                        className="group flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 px-2.5 py-0.5 text-[11px] font-medium text-amber-300 transition cursor-pointer shadow-xs"
+                        className="group flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 px-2.5 py-0.5 text-[11px] font-medium text-amber-300 transition cursor-pointer shadow-xs"
                         title="Forcer le chargement de toutes les lignes dans le navigateur (+50k lignes). Attention : cela peut saturer la mémoire vive et faire planter votre navigateur !"
                       >
-                        <AlertTriangle className="size-3 text-amber-400 shrink-0 group-hover:scale-110 transition-transform" />
+                        <AlertTriangle className="size-3 text-amber-400 shrink-0 transition-transform" />
                         <span>Forcer l'affichage (+50k lignes)</span>
                         <span className="text-[10px] text-amber-400/80 font-normal">
                           · peut planter le navigateur
@@ -1675,7 +1675,7 @@ function detectBestSourceCol(matrix: Matrix): number {
                     </>
                   ) : isForcedAll ? (
                     <div
-                      className="flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 font-mono text-[11px] font-medium text-amber-300 shadow-xs"
+                      className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 font-mono text-[11px] font-medium text-amber-300 shadow-xs"
                       title="Affichage forcé complet de toutes les lignes dans le DOM virtuel"
                     >
                       <AlertTriangle className="size-3 text-amber-400" />
@@ -1711,7 +1711,7 @@ function detectBestSourceCol(matrix: Matrix): number {
                           )
                         }
                         className={cn(
-                          "rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition cursor-pointer",
+                          "rounded-sm px-2.5 py-0.5 text-[11px] font-semibold transition cursor-pointer",
                           displayMode === "failures_only"
                             ? "bg-amber-500 text-amber-950 font-bold shadow-xs"
                             : "border border-amber-500/40 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30",
@@ -1875,11 +1875,11 @@ function detectBestSourceCol(matrix: Matrix): number {
 
       {headerAsk && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6 animate-in fade-in duration-150 backdrop-blur-xs"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6 animate-in fade-in duration-150"
           onClick={() => setHeaderAsk(null)}
         >
           <div
-            className="relative w-full max-w-xl rounded-xl border border-border bg-surface p-5 shadow-2xl space-y-4"
+            className="relative w-full max-w-xl rounded-xl border border-border bg-surface p-5 shadow-md space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4">
@@ -1922,7 +1922,7 @@ function detectBestSourceCol(matrix: Matrix): number {
                   <div>
                     <div className="leading-tight font-semibold flex items-center gap-1.5">
                       <span>Sans délimiteur</span>
-                      <span className="rounded bg-amber-500/20 px-1 py-0.2 text-[9px] text-amber-300 font-bold uppercase">
+                      <span className="rounded bg-amber-500/20 px-1 py-0.2 text-[9px] text-amber-300 font-bold">
                         Recommandé Regex
                       </span>
                     </div>
@@ -1956,7 +1956,7 @@ function detectBestSourceCol(matrix: Matrix): number {
             {headerAsk.mode === "with_delimiter" ? (
               <>
                 <p className="text-[11px] text-amber-400/90 leading-relaxed bg-amber-500/10 border border-amber-500/20 rounded p-2">
-                  ⚠️ <strong>Attention :</strong> en mode « Avec délimiteur », votre fichier est déjà découpé. La 1re colonne ne contiendra que son propre morceau de texte, et non la ligne complète. Pour concevoir des Regex sur vos lignes, préférez le mode <strong>« Sans délimiteur »</strong>.
+                  <strong>Attention :</strong> en mode « Avec délimiteur », votre fichier est déjà découpé. La 1re colonne ne contiendra que son propre morceau de texte, et non la ligne complète. Pour concevoir des Regex sur vos lignes, préférez le mode <strong>« Sans délimiteur »</strong>.
                 </p>
                 {/* Sélecteur de la colonne source */}
                 <div className="rounded-lg border border-border/80 bg-surface-2/40 p-3 space-y-2">
@@ -1975,7 +1975,7 @@ function detectBestSourceCol(matrix: Matrix): number {
                         <option key={idx} value={idx}>
                           Col. {idx + 1} : {colHeader || `Colonne ${idx + 1}`}
                           {sampleVal ? ` (ex: "${sampleVal.length > 35 ? sampleVal.slice(0, 35) + "..." : sampleVal}")` : ""}
-                          {isRecommended ? " ★ Recommandé" : ""}
+                          {isRecommended ? " · Recommandé" : ""}
                         </option>
                       );
                     })}
@@ -2099,14 +2099,14 @@ function detectBestSourceCol(matrix: Matrix): number {
 
       {pasteOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6 animate-in fade-in duration-150 backdrop-blur-xs"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6 animate-in fade-in duration-150"
           onClick={() => {
             setPasteOpen(false);
             setPasteText("");
           }}
         >
           <div
-            className="relative w-full max-w-2xl rounded-xl border border-border bg-surface p-5 shadow-2xl space-y-4"
+            className="relative w-full max-w-2xl rounded-xl border border-border bg-surface p-5 shadow-md space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4">
